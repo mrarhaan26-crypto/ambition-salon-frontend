@@ -639,6 +639,11 @@ import {
           <div class="drawer-error" *ngIf="dropConfirmError">{{ dropConfirmError }}</div>
         </div>
       </div>
+
+      <div class="drag-ghost" *ngIf="dragGhostVisible" [style.left.px]="dragGhostX" [style.top.px]="dragGhostY">
+        <strong>{{ dragGhostBooking?.client?.fullName || dragGhostBooking?.title || 'Booking' }}</strong>
+        <span>{{ formatTime(dragGhostBooking?.startTime || '') }}-{{ formatTime(dragGhostBooking?.endTime || '') }}</span>
+      </div>
     </section>
   `,
   styles: [`
@@ -748,6 +753,9 @@ import {
     .calendar-dragging .dv-bookings-layer .booking-chip{pointer-events:none}
     .dv-staff-col.drag-over-slot{background:#f8faff}
     .dv-staff-col.drag-over-slot .dv-staff-header{background:#eef2ff}
+    .drag-ghost{position:fixed;pointer-events:none;z-index:55;background:white;border:1px solid #d1d5db;border-left:3px solid #6366f1;border-radius:8px;padding:6px 12px;font-size:11px;display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 20px rgba(0,0,0,.14);opacity:.88;transform:translate(-50%,-50%);max-width:200px;white-space:nowrap}
+    .drag-ghost strong{font-size:11px;font-weight:700;color:#0b0b0b;overflow:hidden;text-overflow:ellipsis}
+    .drag-ghost span{font-size:10px;color:#374151;overflow:hidden;text-overflow:ellipsis}
     .week-view{background:white;border:1px solid #e5e7eb;border-radius:20px;overflow:hidden}
     .week-header{display:grid;grid-template-columns:repeat(7,1fr);background:#f9fafb;border-bottom:1px solid #e5e7eb}
     .week-day-header{padding:14px 8px;text-align:center;cursor:pointer;border-right:1px solid #e5e7eb;transition:background .15s}
@@ -1175,6 +1183,11 @@ export class CalendarComponent {
   dropTargetHour: number | null = null;
   dropTargetMinute = 0;
   private previousDropTarget: HTMLElement | null = null;
+
+  dragGhostVisible = false;
+  dragGhostX = 0;
+  dragGhostY = 0;
+  dragGhostBooking: CalendarBooking | null = null;
 
   showDropConfirm = false;
   dropConfirmBooking: CalendarBooking | null = null;
@@ -1737,6 +1750,8 @@ export class CalendarComponent {
     this.dragStartY = event.clientY;
     this.dragBooking = booking;
     this.dragDidMove = false;
+    this.dragGhostBooking = booking;
+    this.dragGhostVisible = false;
     this.dropTargetStaffId = null;
     this.dropTargetResourceId = null;
     this.dropTargetHour = null;
@@ -1752,6 +1767,9 @@ export class CalendarComponent {
     const dy = Math.abs(event.clientY - this.dragStartY);
     if (dx <= 5 && dy <= 5) return;
     this.dragDidMove = true;
+    this.dragGhostVisible = true;
+    this.dragGhostX = event.clientX;
+    this.dragGhostY = event.clientY;
     event.preventDefault();
     const el = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
     if (!el) return;
@@ -1817,6 +1835,8 @@ export class CalendarComponent {
     const booking = this.dragBooking;
     this.dragBooking = null;
     this.dragDidMove = false;
+    this.dragGhostVisible = false;
+    this.dragGhostBooking = null;
     if (!didDrag) return;
     event.preventDefault();
     this.dragLockClick = true;
@@ -1874,6 +1894,8 @@ export class CalendarComponent {
       error: (e) => {
         this.dropConfirmBusy = false;
         this.dropConfirmError = this.extractCalendarError(e);
+        this.dragGhostVisible = false;
+        this.dragGhostBooking = null;
       },
     });
   }
@@ -1884,6 +1906,8 @@ export class CalendarComponent {
     this.dropConfirmPayload = {};
     this.dropConfirmBusy = false;
     this.dropConfirmError = '';
+    this.dragGhostVisible = false;
+    this.dragGhostBooking = null;
   }
 
   staffInitials(staff: Staff): string {
