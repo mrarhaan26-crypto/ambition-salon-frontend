@@ -165,6 +165,74 @@ import { ServicesService } from '../services/services.service';
           </div>
         </div>
 
+
+        <div class="panel sales-history-panel">
+          <div class="panel-title">
+            <div>
+              <h2>Sales History</h2>
+              <p>Filter all POS sales by date, status, and payment method.</p>
+            </div>
+            <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
+          </div>
+
+          <div class="history-filters">
+            <label>
+              <span>From</span>
+              <input type="date" [(ngModel)]="salesFilters.from">
+            </label>
+            <label>
+              <span>To</span>
+              <input type="date" [(ngModel)]="salesFilters.to">
+            </label>
+            <label>
+              <span>Status</span>
+              <select [(ngModel)]="salesFilters.status">
+                <option value="">All</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="REFUNDED">Refunded</option>
+              </select>
+            </label>
+            <label>
+              <span>Payment</span>
+              <select [(ngModel)]="salesFilters.paymentMethod">
+                <option value="">All</option>
+                <option value="CASH">Cash</option>
+                <option value="CARD">Card</option>
+                <option value="UPI">UPI</option>
+                <option value="WALLET">Wallet</option>
+              </select>
+            </label>
+            <button class="checkout-btn" (click)="loadSalesHistory()">Apply</button>
+            <button class="add-btn" (click)="clearSalesFilters()">Clear</button>
+          </div>
+
+          <div class="loading mini-loading" *ngIf="salesLoading">
+            <div class="spinner"></div>
+            <span>Loading sales...</span>
+          </div>
+
+          <div class="checkout-error" *ngIf="salesError">{{ salesError }}</div>
+
+          <div class="empty" *ngIf="!salesLoading && salesHistory.length === 0">
+            <p>No sales found for selected filters.</p>
+          </div>
+
+          <div class="history-list" *ngIf="!salesLoading && salesHistory.length > 0">
+            <div class="history-row" *ngFor="let sale of salesHistory">
+              <div>
+                <strong>{{ sale.client?.fullName || 'Walk-in' }}</strong>
+                <span>{{ sale.createdAt | date:'MMM dd, yyyy h:mm a' }}</span>
+              </div>
+              <div>
+                <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
+                <small>{{ sale.paymentMethod || 'CASH' }}</small>
+              </div>
+              <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
+              <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
+            </div>
+          </div>
+        </div>
+
         <div class="drawer-backdrop" *ngIf="selectedSale" (click)="closeReceipt()"></div>
 
         <aside class="receipt-drawer" *ngIf="selectedSale">
@@ -284,6 +352,15 @@ import { ServicesService } from '../services/services.service';
     .sale-status.refunded{color:#dc2626}
     .receipt-link{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer}
     .empty{padding:22px;text-align:center;color:#6b7280;background:#f8fafc;border-radius:16px}
+    .sales-history-panel{margin-top:18px}
+    .history-filters{display:grid;grid-template-columns:repeat(4,1fr) auto auto;gap:10px;align-items:end;margin-bottom:16px}
+    .mini-loading{padding:18px}
+    .history-list{display:grid;gap:10px}
+    .history-row{display:grid;grid-template-columns:1fr 120px 95px 80px;gap:12px;align-items:center;padding:13px;border:1px solid #eef2f7;border-radius:16px;background:#fbfdff}
+    .history-row strong{display:block;font-size:14px}
+    .history-row span{font-size:12px;color:#6b7280}
+    .history-row b{display:block;text-align:right}
+    .history-row small{display:block;text-align:right;color:#6b7280;font-size:11px}
     .drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.32);z-index:50}
     .receipt-drawer{position:fixed;top:0;right:0;width:min(460px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:22px;overflow:auto;display:grid;gap:16px;align-content:start}
     .drawer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -308,6 +385,7 @@ import { ServicesService } from '../services/services.service';
     .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
     .refund-btn:disabled{opacity:.55;cursor:not-allowed}
     @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}}
     @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid{grid-template-columns:1fr}}
   `]
 })
@@ -335,6 +413,11 @@ export class PosComponent {
   checkoutBusy = false;
   checkoutSuccess = false;
   checkoutError = '';
+
+  salesHistory: any[] = [];
+  salesLoading = false;
+  salesError = '';
+  salesFilters: any = { from: '', to: '', status: '', paymentMethod: '' };
 
   selectedSale: any = null;
   saleDetailLoading = false;
@@ -422,6 +505,32 @@ export class PosComponent {
     return this.taxableAmount() + this.taxAmount();
   }
 
+  loadSalesHistory() {
+    this.salesLoading = true;
+    this.salesError = '';
+
+    const query: any = {};
+    if (this.salesFilters.from) query.from = this.salesFilters.from;
+    if (this.salesFilters.to) query.to = this.salesFilters.to;
+    if (this.salesFilters.status) query.status = this.salesFilters.status;
+
+    this.api.getSales(query).subscribe({
+      next: (sales) => {
+        const payment = this.salesFilters.paymentMethod;
+        this.salesHistory = payment ? (sales || []).filter((sale: any) => sale.paymentMethod === payment) : (sales || []);
+        this.salesLoading = false;
+      },
+      error: (err) => {
+        this.salesError = err?.error?.message || 'Sales history could not be loaded.';
+        this.salesLoading = false;
+      },
+    });
+  }
+
+  clearSalesFilters() {
+    this.salesFilters = { from: '', to: '', status: '', paymentMethod: '' };
+    this.loadSalesHistory();
+  }
   viewReceipt(sale: any) {
     this.selectedSale = sale;
     this.saleDetailLoading = true;
@@ -527,3 +636,4 @@ export class PosComponent {
     });
   }
 }
+
