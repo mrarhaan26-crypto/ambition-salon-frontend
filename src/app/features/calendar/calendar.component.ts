@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnDestroy } from '@angular/core';
+import { Component, inject, OnDestroy, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
@@ -148,8 +148,11 @@ import {
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
                           [ngStyle]="getBookingBlockStyle(b)"
+                          tabindex="0" role="button"
+                          [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
-                          (click)="openDrawer(b); $event.stopPropagation()">
+                          (click)="openDrawer(b); $event.stopPropagation()"
+                          (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                         </div>
@@ -223,12 +226,15 @@ import {
                         [class.dv-hour-row-alt]="hi % 2 === 1"
                         (click)="openCreateBookingFromResource(resource, hour)"></div>
                       <div class="dv-bookings-layer">
-                        <div class="booking-chip" *ngFor="let b of getAllResourceBookings(resource.id)"
+                         <div class="booking-chip" *ngFor="let b of getAllResourceBookings(resource.id)"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
                           [ngStyle]="getBookingBlockStyle(b)"
+                          tabindex="0" role="button"
+                          [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
-                          (click)="openDrawer(b); $event.stopPropagation()">
+                          (click)="openDrawer(b); $event.stopPropagation()"
+                          (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                         </div>
@@ -245,12 +251,15 @@ import {
                         [class.dv-hour-row-alt]="hi % 2 === 1"
                         (click)="openCreateBookingUnassigned(hour)"></div>
                       <div class="dv-bookings-layer">
-                        <div class="booking-chip" *ngFor="let b of getAllUnassignedBookings()"
+                         <div class="booking-chip" *ngFor="let b of getAllUnassignedBookings()"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
                           [ngStyle]="getBookingBlockStyle(b)"
+                          tabindex="0" role="button"
+                          [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
-                          (click)="openDrawer(b); $event.stopPropagation()">
+                          (click)="openDrawer(b); $event.stopPropagation()"
+                          (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                         </div>
@@ -314,7 +323,10 @@ import {
               <ng-container *ngIf="getBookingsForDate(day.date).length > 0; else emptyDay">
                 <div class="week-booking" *ngFor="let b of getBookingsForDate(day.date)"
                   [class]="'status-' + (b.status || '').toLowerCase()"
-                  (click)="openDrawer(b); $event.stopPropagation()">
+                  tabindex="0" role="button"
+                  [attr.aria-label]="getBookingAriaLabel(b)"
+                  (click)="openDrawer(b); $event.stopPropagation()"
+                  (keydown)="openBookingFromKeyboard($event, b)">
                   <strong>{{ b.client?.fullName || 'Client' }}</strong>
                   <span>{{ b.title }}</span>
                   <small>{{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</small>
@@ -352,7 +364,10 @@ import {
               <div class="month-preview-list" *ngIf="getBookingsForDate(day.date).length > 0">
                 <div class="month-preview-chip" *ngFor="let b of getMonthPreviewBookings(day.date)"
                   [class]="'status-' + (b.status || '').toLowerCase()"
-                  (click)="openDrawer(b); $event.stopPropagation()">
+                  tabindex="0" role="button"
+                  [attr.aria-label]="getBookingAriaLabel(b)"
+                  (click)="openDrawer(b); $event.stopPropagation()"
+                  (keydown)="openBookingFromKeyboard($event, b)">
                   <span class="mp-time">{{ formatTime(b.startTime) }}</span>
                   <span class="mp-title">{{ b.client?.fullName || b.title }}</span>
                 </div>
@@ -735,6 +750,9 @@ import {
     .booking-chip.status-checked_in{background:#f3e8ff;border-left:3px solid #7c3aed}
     .booking-chip strong{display:block;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .booking-chip span{display:none}
+    .booking-chip{transition:transform .12s ease,box-shadow .12s ease}
+    @media(hover:hover){.booking-chip:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.06)}}
+    .booking-chip:active{transform:scale(.97)}
     .dv-staff-body{position:relative}
     .dv-bookings-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
     .dv-bookings-layer .booking-chip{pointer-events:auto;position:absolute;overflow:hidden;z-index:1;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:3px solid #d1d5db;display:flex;flex-direction:column;gap:1px;min-height:18px}
@@ -745,12 +763,17 @@ import {
     .dv-bookings-layer .booking-chip.status-checked_in{background:#f3e8ff;border-left-color:#7c3aed}
     .dv-bookings-layer .booking-chip strong{display:block;font-size:10px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
     .dv-bookings-layer .booking-chip span{display:block;font-size:9px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+    .dv-bookings-layer .booking-chip{transition:transform .12s ease,box-shadow .12s ease}
+    @media(hover:hover){.dv-bookings-layer .booking-chip:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.08);z-index:2}}
+    .dv-bookings-layer .booking-chip:active{transform:scale(.97)}
+    .booking-chip:focus-visible,.week-booking:focus-visible,.month-preview-chip:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:6px}
+    .dv-bookings-layer .booking-chip:focus-visible{outline:2px solid #6366f1;outline-offset:1px;z-index:3}
     .current-time-line{position:absolute;left:0;right:0;height:2px;background:#ef4444;z-index:5;pointer-events:none}
     .current-time-label{position:absolute;right:4px;top:-8px;background:#ef4444;color:white;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;pointer-events:none;line-height:1.4}
     .dv-bookings-layer .booking-chip{touch-action:none;cursor:grab}
     .dv-bookings-layer .booking-chip.dragging-booking{opacity:.35;pointer-events:none;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.12)}
     .calendar-dragging{cursor:grabbing!important;-webkit-user-select:none;user-select:none}
-    .calendar-dragging .dv-bookings-layer .booking-chip{pointer-events:none}
+    .calendar-dragging .dv-bookings-layer .booking-chip{pointer-events:none;transform:none!important;box-shadow:none!important}
     .dv-staff-col.drag-over-slot{background:#f8faff}
     .dv-staff-col.drag-over-slot .dv-staff-header{background:#eef2ff}
     .drag-ghost{position:fixed;pointer-events:none;z-index:55;background:white;border:1px solid #d1d5db;border-left:3px solid #6366f1;border-radius:8px;padding:6px 12px;font-size:11px;display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 20px rgba(0,0,0,.14);opacity:.88;transform:translate(-50%,-50%);max-width:200px;white-space:nowrap}
@@ -1218,6 +1241,36 @@ export class CalendarComponent {
   ngOnInit() { this.load(); this.startAutoRefresh(); }
   ngOnDestroy() { this.stopAutoRefresh(); }
 
+  @HostListener('document:keydown', ['$event'])
+  handleCalendarShortcut(event: KeyboardEvent): void {
+    if (this.shouldIgnoreCalendarShortcut(event)) return;
+    if (this.dragBooking) return;
+    const key = event.key;
+    if (key === 'Escape') {
+      if (this.showDropConfirm) { this.cancelDropReschedule(); event.preventDefault(); return; }
+      if (this.showWalkin) { this.closeWalkin(); event.preventDefault(); return; }
+      if (this.showCreate) { this.closeCreate(); event.preventDefault(); return; }
+      if (this.drawerBooking) { this.closeDrawer(); event.preventDefault(); return; }
+      return;
+    }
+    if ((event.target as HTMLElement)?.closest?.('[role="dialog"], [role="alertdialog"], .drawer, .drawer-overlay')) return;
+    switch (key) {
+      case 'ArrowLeft': this.prev(); event.preventDefault(); break;
+      case 'ArrowRight': this.next(); event.preventDefault(); break;
+      case 't': case 'T': this.goToday(); event.preventDefault(); break;
+      case 'd': case 'D': this.setView('day'); event.preventDefault(); break;
+      case 'w': case 'W': this.setView('week'); event.preventDefault(); break;
+      case 'm': case 'M': this.setView('month'); event.preventDefault(); break;
+    }
+  }
+
+  private shouldIgnoreCalendarShortcut(event: KeyboardEvent): boolean {
+    const target = event.target as HTMLElement;
+    if (!target) return false;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+  }
+
   setView(v: 'day' | 'week' | 'month') { this.view = v; this.load(); }
   goToday() { this.currentDate = new Date(); this.load(); }
 
@@ -1522,6 +1575,17 @@ export class CalendarComponent {
   }
 
   openDrawer(b: CalendarBooking) { if (this.dragLockClick) { this.dragLockClick = false; return; } this.drawerBooking = b; this.drawerBusy = false; this.drawerError = ''; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.cancelReason = ''; this.cancelCustomReason = ''; }
+  openBookingFromKeyboard(event: KeyboardEvent, booking: CalendarBooking): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.openDrawer(booking);
+  }
+  getBookingAriaLabel(b: CalendarBooking): string {
+    const client = b.client?.fullName || 'Client';
+    const time = `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}`;
+    return `Booking: ${client}, ${b.title}, ${time}`;
+  }
   closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; }
 
   canCancel(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
@@ -1971,6 +2035,7 @@ export class CalendarComponent {
   }
 
   closeWalkin() { this.showWalkin = false; this.walkinError = ''; }
+  closeCreate() { this.showCreate = false; this.createBusy = false; this.createError = ''; }
 
   onWalkinServiceChange() {
     const svcId = this.walkinForm.serviceId;
