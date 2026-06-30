@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BookingsService, BookingQueryParams } from './bookings.service';
-import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingServiceFormLine, BookingStatus } from './bookings.models';
+import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingServiceFormLine, BookingStatus, ClientOption, StaffOption, BranchOption, ServiceOption } from './bookings.models';
 
 @Component({
   selector: 'app-bookings',
@@ -176,20 +176,57 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
           </div>
           <div class="drawer-body">
             <div class="create-form">
-              <input [(ngModel)]="createForm.clientId" placeholder="Client ID">
-              <input [(ngModel)]="createForm.staffId" placeholder="Staff ID">
-              <input [(ngModel)]="createForm.title" placeholder="Title">
-              <input [(ngModel)]="createForm.startTime" type="datetime-local">
-              <input [(ngModel)]="createForm.branchId" placeholder="Branch ID">
-              <div class="create-services">
-                <div class="svc-row" *ngFor="let s of createForm.services; let i = index">
-                  <input [(ngModel)]="s.name" placeholder="Service name" style="flex:1">
-                  <input [(ngModel)]="s.durationMin" type="number" placeholder="Min" style="width:70px">
-                  <input [(ngModel)]="s.price" type="number" step="0.01" placeholder="Price" style="width:90px">
-                  <button class="remove-btn" (click)="removeService(i)">x</button>
+              <label class="form-label">Client *</label>
+              <select [(ngModel)]="createForm.clientId" class="form-select" [class.field-error]="formErrors.clientId">
+                <option value="">— Select Client —</option>
+                <option *ngFor="let c of clients" [value]="c.id">{{ c.fullName }} <ng-container *ngIf="c.phone">— {{ c.phone }}</ng-container></option>
+              </select>
+              <span class="field-msg" *ngIf="formErrors.clientId">{{ formErrors.clientId }}</span>
+
+              <label class="form-label">Staff *</label>
+              <select [(ngModel)]="createForm.staffId" class="form-select" [class.field-error]="formErrors.staffId">
+                <option value="">— Select Staff —</option>
+                <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }} <ng-container *ngIf="s.specialization">— {{ s.specialization }}</ng-container></option>
+              </select>
+              <span class="field-msg" *ngIf="formErrors.staffId">{{ formErrors.staffId }}</span>
+
+              <label class="form-label">Branch *</label>
+              <select [(ngModel)]="createForm.branchId" class="form-select" [class.field-error]="formErrors.branchId">
+                <option value="">— Select Branch —</option>
+                <option *ngFor="let b of branches" [value]="b.id">{{ b.name }} <ng-container *ngIf="b.city">— {{ b.city }}</ng-container></option>
+              </select>
+              <span class="field-msg" *ngIf="formErrors.branchId">{{ formErrors.branchId }}</span>
+
+              <label class="form-label">Title</label>
+              <input [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input">
+
+              <label class="form-label">Start Time *</label>
+              <input [(ngModel)]="createForm.startTime" type="datetime-local" class="form-input" [class.field-error]="formErrors.startTime">
+              <span class="field-msg" *ngIf="formErrors.startTime">{{ formErrors.startTime }}</span>
+
+              <label class="form-label">Services *</label>
+              <div class="svc-picker">
+                <select #svcSelect class="form-select" (change)="addCatalogService(svcSelect.value); svcSelect.value = ''">
+                  <option value="">— Add Service from Catalog —</option>
+                  <option *ngFor="let sv of catalogServices" [value]="sv.id" [disabled]="isServiceAdded(sv.id)">{{ sv.name }} ({{ sv.durationMin }} min — {{ sv.price | currency }})</option>
+                </select>
+              </div>
+              <div class="create-services" *ngIf="createForm.services.length > 0">
+                <div class="svc-card" *ngFor="let s of createForm.services; let i = index">
+                  <div class="svc-card-info">
+                    <span class="svc-card-name">{{ s.name }}</span>
+                    <span class="svc-card-meta">{{ s.durationMin }} min</span>
+                    <span class="svc-card-price">{{ s.price | currency }}</span>
+                  </div>
+                  <button class="remove-btn" (click)="removeService(i)">&times;</button>
+                </div>
+                <div class="svc-summary">
+                  <span>Total: <strong>{{ getFormDuration() }} min</strong></span>
+                  <span><strong>{{ getFormTotal() | currency }}</strong></span>
                 </div>
               </div>
-              <button class="add-btn" (click)="addService()">+ Add Service</button>
+              <span class="field-msg" *ngIf="formErrors.services">{{ formErrors.services }}</span>
+
               <div class="drawer-actions">
                 <button (click)="closeCreate()">Cancel</button>
                 <button class="btn-primary" (click)="doCreate()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Create Booking' }}</button>
@@ -304,14 +341,23 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .empty-drawer button{margin-top:12px}
     .drawer-loading{display:flex;align-items:center;gap:10px;justify-content:center;padding:12px;color:#6b7280;font-size:13px}
     .drawer-error{background:#fef2f2;color:#991b1b;padding:12px;border-radius:12px;font-size:13px;text-align:center}
-    .create-form{display:grid;gap:12px}
-    .create-form input{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none}
-    .create-form input:focus{border-color:#0b0b0b}
-    .create-services{display:grid;gap:8px}
-    .svc-row{display:flex;gap:8px;align-items:center}
-    .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer;font-size:16px;flex-shrink:0}
-    .add-btn{border:1px dashed #d1d5db;border-radius:12px;padding:10px;background:transparent;cursor:pointer;font-weight:600;font-size:13px;color:#6b7280;transition:all .2s}
-    .add-btn:hover{border-color:#0b0b0b;color:#0b0b0b}
+    .create-form{display:grid;gap:10px}
+    .form-label{font-size:13px;font-weight:700;color:#374151;margin:4px 0 0}
+    .form-label:first-child{margin-top:0}
+    .form-input,.form-select{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none;background:white;transition:border-color .2s}
+    .form-input:focus,.form-select:focus{border-color:#0b0b0b}
+    .field-error{border-color:#dc2626!important}
+    .field-msg{font-size:12px;color:#dc2626;margin:-4px 0 0}
+    .svc-picker{margin-bottom:4px}
+    .create-services{display:grid;gap:6px}
+    .svc-card{display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+    .svc-card-info{flex:1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .svc-card-name{font-weight:700;font-size:14px;flex:1;min-width:80px}
+    .svc-card-meta{color:#6b7280;font-size:12px}
+    .svc-card-price{font-weight:800;font-size:14px;text-align:right}
+    .svc-summary{display:flex;justify-content:space-between;padding:8px 4px 0;font-size:14px;border-top:1px solid #e5e7eb;margin-top:2px}
+    .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
+    .remove-btn:hover{opacity:.7}
     @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{flex-direction:column}.toolbar .filter-input{min-width:0}}
   `]
 })
@@ -332,13 +378,29 @@ export class BookingsComponent {
   showCreate = false;
   createBusy = false;
   createError = '';
-  createForm: CreateBookingForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [{ name: '', durationMin: 30, price: 0 }] };
+  createForm: CreateBookingForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [] };
+  formErrors: Record<string, string> = {};
+
+  clients: ClientOption[] = [];
+  staffList: StaffOption[] = [];
+  branches: BranchOption[] = [];
+  catalogServices: ServiceOption[] = [];
 
   get hasActiveFilters(): boolean {
     return !!(this.filters.search || this.filters.status || this.filters.date);
   }
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.load();
+    this.loadPickers();
+  }
+
+  loadPickers() {
+    this.api.getClients().subscribe({ next: (d) => this.clients = d });
+    this.api.getStaff().subscribe({ next: (d) => this.staffList = d });
+    this.api.getBranches().subscribe({ next: (d) => this.branches = d });
+    this.api.getServices().subscribe({ next: (d) => this.catalogServices = d });
+  }
 
   load() {
     this.loading = true;
@@ -401,15 +463,50 @@ export class BookingsComponent {
   }
 
   openCreateForm() {
-    this.showCreate = true; this.createBusy = false; this.createError = '';
-    this.createForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [{ name: '', durationMin: 30, price: 0 }] };
+    this.showCreate = true;
+    this.createBusy = false;
+    this.createError = '';
+    this.formErrors = {};
+    this.createForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [] };
   }
 
-  addService() { this.createForm.services.push({ name: '', durationMin: 30, price: 0 }); }
+  addCatalogService(serviceId: string) {
+    if (!serviceId) return;
+    const svc = this.catalogServices.find((s) => s.id === serviceId);
+    if (!svc || this.isServiceAdded(serviceId)) return;
+    this.createForm.services.push({ name: svc.name, durationMin: svc.durationMin, price: svc.price });
+  }
+
+  isServiceAdded(serviceId: string): boolean {
+    const svc = this.catalogServices.find((s) => s.id === serviceId);
+    if (!svc) return false;
+    return this.createForm.services.some((s) => s.name === svc.name);
+  }
+
   removeService(i: number) { this.createForm.services.splice(i, 1); }
 
+  getFormDuration(): number {
+    return this.createForm.services.reduce((sum, s) => sum + (s.durationMin || 0), 0);
+  }
+
+  getFormTotal(): number {
+    return this.createForm.services.reduce((sum, s) => sum + (s.price || 0), 0);
+  }
+
+  private validateForm(): boolean {
+    this.formErrors = {};
+    if (!this.createForm.clientId) this.formErrors['clientId'] = 'Please select a client.';
+    if (!this.createForm.staffId) this.formErrors['staffId'] = 'Please select a staff member.';
+    if (!this.createForm.branchId) this.formErrors['branchId'] = 'Please select a branch.';
+    if (!this.createForm.startTime) this.formErrors['startTime'] = 'Please select a start time.';
+    if (!this.createForm.services.length) this.formErrors['services'] = 'Please add at least one service.';
+    return Object.keys(this.formErrors).length === 0;
+  }
+
   doCreate() {
-    this.createBusy = true; this.createError = '';
+    this.createError = '';
+    if (!this.validateForm()) return;
+    this.createBusy = true;
     this.api.create(this.createForm).subscribe({
       next: () => { this.createBusy = false; this.showCreate = false; this.load(); },
       error: (e) => { this.createBusy = false; this.createError = e.error?.message || 'Create failed.'; },

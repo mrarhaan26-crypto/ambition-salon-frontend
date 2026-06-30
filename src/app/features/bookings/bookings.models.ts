@@ -75,3 +75,30 @@ export interface CreateBookingForm {
   branchId: string;
   services: BookingServiceFormLine[];
 }
+
+export interface ClientOption {
+  id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface StaffOption {
+  id: string;
+  fullName: string;
+  specialization?: string | null;
+}
+
+export interface BranchOption {
+  id: string;
+  name: string;
+  city?: string;
+}
+
+export interface ServiceOption {
+  id: string;
+  name: string;
+  durationMin: number;
+  price: number;
+  description?: string | null;
+}
