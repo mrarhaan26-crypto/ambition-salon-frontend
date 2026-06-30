@@ -1,6 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import {
+  CalendarBooking,
+  CalendarSummaryResponse,
+  CalendarResource,
+  CalendarAvailabilitySlot,
+  CalendarConflict,
+  AiOptimization,
+  CalendarQueryParams,
+  CancelBookingPayload,
+} from './calendar.models';
 
 @Injectable({ providedIn: 'root' })
 export class CalendarService {
@@ -8,35 +18,35 @@ export class CalendarService {
   private baseUrl = 'http://localhost:3000/api/bookings';
   private aiBase = 'http://localhost:3000/api/ai-scheduler';
 
-  getCalendarDay(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/day`, { params: query });
+  getCalendarDay(query?: CalendarQueryParams): Observable<CalendarBooking[]> {
+    return this.http.get<CalendarBooking[]>(`${this.baseUrl}/calendar/day`, { params: query as any });
   }
 
-  getCalendarWeek(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/week`, { params: query });
+  getCalendarWeek(query?: CalendarQueryParams): Observable<CalendarBooking[]> {
+    return this.http.get<CalendarBooking[]>(`${this.baseUrl}/calendar/week`, { params: query as any });
   }
 
-  getCalendarMonth(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/month`, { params: query });
+  getCalendarMonth(query?: CalendarQueryParams): Observable<CalendarBooking[]> {
+    return this.http.get<CalendarBooking[]>(`${this.baseUrl}/calendar/month`, { params: query as any });
   }
 
-  getCalendarSummary(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/summary`, { params: query });
+  getCalendarSummary(query?: CalendarQueryParams): Observable<CalendarSummaryResponse> {
+    return this.http.get<CalendarSummaryResponse>(`${this.baseUrl}/calendar/summary`, { params: query as any });
   }
 
-  getResources(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/resources`, { params: query });
+  getResources(query?: CalendarQueryParams): Observable<CalendarResource[]> {
+    return this.http.get<CalendarResource[]>(`${this.baseUrl}/calendar/resources`, { params: query as any });
   }
 
-  getResourceAvailability(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/resources/availability`, { params: query });
+  getResourceAvailability(query?: CalendarQueryParams): Observable<CalendarAvailabilitySlot[]> {
+    return this.http.get<CalendarAvailabilitySlot[]>(`${this.baseUrl}/calendar/resources/availability`, { params: query as any });
   }
 
-  getResourceConflicts(query?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/calendar/resources/conflicts`, { params: query });
+  getResourceConflicts(query?: CalendarQueryParams): Observable<CalendarConflict[]> {
+    return this.http.get<CalendarConflict[]>(`${this.baseUrl}/calendar/resources/conflicts`, { params: query as any });
   }
 
-  cancelBooking(id: string, body?: any): Observable<any> {
+  cancelBooking(id: string, body?: CancelBookingPayload): Observable<any> {
     return this.http.patch(`${this.baseUrl}/${id}/cancel`, body || {});
   }
 
@@ -44,11 +54,11 @@ export class CalendarService {
     return this.http.patch(`${this.baseUrl}/${id}/status`, { status });
   }
 
-  getAiSuggestions(query: any): Observable<any> {
-    return this.http.get(`${this.aiBase}/suggest`, { params: query });
+  getAiSuggestions(query: CalendarQueryParams): Observable<AiOptimization> {
+    return this.http.get<AiOptimization>(`${this.aiBase}/suggest`, { params: query as any });
   }
 
-  getAiOptimizeDay(query: any): Observable<any> {
-    return this.http.get(`${this.aiBase}/optimize-day`, { params: query });
+  getAiOptimizeDay(query: CalendarQueryParams): Observable<AiOptimization> {
+    return this.http.get<AiOptimization>(`${this.aiBase}/optimize-day`, { params: query as any });
   }
 }

@@ -9,6 +9,28 @@ import { Staff } from '../staff/staff.models';
 import { ResourcesService } from '../resources/resources.service';
 import { CalendarWaitlist } from './calendar-waitlist/calendar-waitlist';
 import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-scheduler';
+import {
+  CalendarBooking,
+  CalendarSummaryResponse,
+  CalendarResource,
+  AiSuggestion,
+  AiOptimization,
+  WaitlistEntry,
+  CreateFormModel,
+  EditFormModel,
+  RescheduleFormModel,
+  WalkinFormModel,
+  MonthDay,
+  WeekDay,
+  StatusCount,
+  ClientOption,
+  ServiceOption,
+  BranchOption,
+  CreateFormService,
+  CalendarQueryParams,
+  ViewMode,
+  StaffResourceMode,
+} from './calendar.models';
 
 @Component({
   selector: 'app-calendar',
@@ -589,6 +611,34 @@ import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-schedul
           </div>
         </div>
       </div>
+
+      <div class="drop-overlay" *ngIf="showDropConfirm" (click)="cancelDropReschedule()">
+        <div class="drop-dialog" (click)="$event.stopPropagation()">
+          <div class="drop-dialog-header">
+            <h3>Reschedule Booking</h3>
+          </div>
+          <div class="drop-dialog-body">
+            <div class="drop-info-row">
+              <span>Booking</span>
+              <strong>{{ dropConfirmBooking?.client?.fullName || dropConfirmBooking?.title || 'Booking' }}</strong>
+            </div>
+            <div class="drop-info-row">
+              <span>New Time</span>
+              <strong>{{ dropConfirmTime }}</strong>
+            </div>
+            <div class="drop-info-row" *ngIf="dropConfirmTargetName">
+              <span>{{ viewMode === 'staff' ? 'Staff' : 'Resource' }}</span>
+              <strong>{{ dropConfirmTargetName }}</strong>
+            </div>
+          </div>
+          <div class="drop-dialog-actions">
+            <button (click)="cancelDropReschedule()" [disabled]="dropConfirmBusy">Cancel</button>
+            <button class="btn-primary" (click)="confirmDropReschedule()" [disabled]="dropConfirmBusy">{{ dropConfirmBusy ? 'Rescheduling...' : 'Confirm Reschedule' }}</button>
+          </div>
+          <div class="drawer-loading" *ngIf="dropConfirmBusy"><div class="spinner"></div><span>Rescheduling...</span></div>
+          <div class="drawer-error" *ngIf="dropConfirmError">{{ dropConfirmError }}</div>
+        </div>
+      </div>
     </section>
   `,
   styles: [`
@@ -822,10 +872,219 @@ import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-schedul
     .svc-tl span{color:#6b7280;font-weight:600}
     .svc-tl strong{color:#0b0b0b}
     .walkin-note{font-size:12px;color:#6b7280;background:#f0fdf4;border-radius:12px;padding:10px 14px;line-height:1.5}
-    @media(max-width:1024px){.day-view{border-radius:16px}.dv-staff-col{min-width:180px;flex:1 0 180px}.dv-hour-row{height:50px}.dv-time-row{height:50px}.drawer-header{padding:20px 24px}.drawer-body{padding:20px 24px}.drawer-header h2{font-size:18px}.month-day{min-height:90px}.month-date-number{font-size:13px}}
-    @media(max-width:900px){.drawer-panel{width:100%}.summary-bar{gap:4px;padding:6px 10px}.sum-card{padding:2px 6px;min-width:60px}.week-view,.month-view{overflow-x:auto;-webkit-overflow-scrolling:touch}.month-grid{min-width:700px}.week-header{min-width:700px}.week-body{min-width:700px}.week-day-col{min-width:100px}.dv-staff-col{min-width:160px;flex:1 0 160px}.dv-hour-row{height:48px}.dv-time-row{height:48px}}
-    @media(max-width:768px){.head h1{font-size:24px}.head p{display:none}.date-label{font-size:14px;min-width:auto}.today-btn,.nav-btn{padding:8px 12px;font-size:13px;min-height:40px}.refresh-btn{padding:8px 12px;font-size:12px;min-height:40px}.updated-text{font-size:10px}.tabs button{padding:8px 14px;font-size:12px;min-height:40px}.vm-btn{padding:6px 12px!important}.summary-bar{gap:2px;padding:6px 8px}.sum-card{padding:2px 4px;min-width:50px}.sum-card b{font-size:14px}.dv-staff-col{min-width:150px;flex:1 0 150px}.dv-hour-row{height:44px}.dv-time-row{height:44px}.dv-time-col{width:48px}.dv-time-label{font-size:10px}.day-view{border-radius:12px}.week-view,.month-view{border-radius:12px}.drawer-header{padding:16px 20px}.drawer-body{padding:16px 20px}.drawer-header h2{font-size:17px}.drawer-actions button{font-size:12px;padding:10px 12px;min-height:42px}.month-day{min-height:80px;padding:6px}.month-date-number{font-size:12px}.month-preview-chip{font-size:9px}.mp-time{font-size:9px}.create-panel{width:95%}.create-form input,.create-form select{padding:12px;font-size:13px}.reschedule-form select,.reschedule-form input{padding:10px}.cancel-form select,.cancel-form input{padding:10px}.edit-form input,.edit-form textarea{padding:10px}.filter-bar{padding:0 0 6px}.branch-filter{font-size:12px;padding:6px 10px;min-width:140px}}
-    @media(max-width:480px){.head{flex-direction:column;align-items:stretch;gap:8px}.head-actions{justify-content:center}.date-label{font-size:13px}.today-btn,.nav-btn{padding:6px 10px;font-size:12px;min-height:36px}.refresh-btn{padding:6px 10px;font-size:11px;min-height:36px}.updated-text{font-size:9px}.tabs{justify-content:center}.tabs button{padding:6px 10px;font-size:11px;min-height:36px}.vm-btn{padding:4px 8px!important}.summary-bar{gap:2px;padding:4px 6px}.sum-card{padding:2px 2px;min-width:40px}.sum-card span{font-size:8px}.sum-card b{font-size:12px}.dv-time-col{width:40px}.dv-staff-col{min-width:140px;flex:1 0 140px}.dv-hour-row{height:40px}.dv-time-row{height:40px}.dv-header-gap{height:44px}.dv-staff-header{min-height:44px}.dv-time-label{font-size:9px}.week-day-header{padding:10px 4px}.week-day-header strong{font-size:11px}.week-day-date{font-size:10px}.week-day-count{font-size:9px}.week-booking{padding:6px 8px}.week-booking strong{font-size:11px}.week-booking span{font-size:10px}.week-booking small{font-size:9px}.month-day{min-height:70px;padding:4px}.month-date-number{font-size:11px}.month-preview-chip{padding:1px 4px;font-size:8px;gap:2px}.month-more{font-size:9px}.month-add-action{font-size:9px}.month-add-empty{font-size:10px}.month-today-badge{font-size:8px;padding:1px 4px}.drawer-panel{max-height:100dvh}.drawer-header{padding:14px 16px}.drawer-body{padding:14px 16px;gap:16px}.drawer-header h2{font-size:16px}.drawer-actions{gap:6px}.drawer-actions button{font-size:11px;padding:8px 10px;min-height:40px}.info-row{font-size:13px;padding:8px 0}.create-panel{width:100%;border-radius:20px;max-height:100dvh}.create-form input,.create-form select{padding:10px;font-size:12px}.create-form label{font-size:12px}.svc-row{gap:4px}.svc-select{min-width:100px}.reschedule-form{padding:12px}.cancel-form{padding:12px}.edit-form{padding:12px}.confirm-action{padding:12px}.filter-bar{padding:0 0 4px}.branch-filter{font-size:11px;padding:6px 8px;min-width:120px}}
+    .drop-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:center;align-items:center;z-index:60}
+    .drop-dialog{background:white;border-radius:20px;width:min(420px,92%);max-height:90dvh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);animation:fadeIn .2s ease;display:grid;gap:0}
+    .drop-dialog-header{padding:20px 24px 0}
+    .drop-dialog-header h3{margin:0;font-size:17px;font-weight:700;color:#0b0b0b}
+    .drop-dialog-body{display:grid;gap:2px;padding:16px 24px}
+    .drop-info-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:14px;gap:12px}
+    .drop-info-row:last-child{border-bottom:0}
+    .drop-info-row span{color:#6b7280;font-weight:600;white-space:nowrap}
+    .drop-info-row strong{text-align:right;color:#0b0b0b;word-break:break-word}
+    .drop-dialog-actions{display:flex;gap:10px;padding:4px 24px 20px}
+    .drop-dialog-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;min-height:44px}
+    .drop-dialog-actions button:first-child{background:#f3f4f6;color:#374151}
+    .drop-dialog-actions button:first-child:hover{background:#e5e7eb}
+    .drop-dialog-actions button:first-child:disabled{opacity:.5;cursor:default}
+    @media(max-width:480px){
+      .drop-dialog{border-radius:16px;width:94%}
+      .drop-dialog-header{padding:16px 18px 0}
+      .drop-dialog-header h3{font-size:15px}
+      .drop-dialog-body{padding:12px 18px}
+      .drop-info-row{font-size:13px;padding:8px 0}
+      .drop-dialog-actions{padding:2px 18px 16px;gap:6px}
+      .drop-dialog-actions button{font-size:12px;padding:10px 12px;min-height:40px}
+    }
+    @media(max-width:1200px){
+      .page{max-width:100%;overflow-x:hidden}
+      .dv-content-wrapper{max-width:100%}
+    }
+    @media(max-width:1024px){
+      .day-view{border-radius:16px}
+      .dv-staff-col{min-width:180px;flex:1 0 180px}
+      .dv-hour-row{height:50px}
+      .dv-time-row{height:50px}
+      .drawer-header{padding:20px 24px}
+      .drawer-body{padding:20px 24px}
+      .drawer-header h2{font-size:18px}
+      .month-day{min-height:90px}
+      .month-date-number{font-size:13px}
+      .dv-sidebar-stack{min-width:260px;max-width:320px}
+    }
+    @media(max-width:900px){
+      .drawer-panel{width:100%}
+      .summary-bar{gap:4px;padding:6px 10px}
+      .sum-card{padding:2px 6px;min-width:60px}
+      .week-view,.month-view{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      .month-grid{min-width:700px}
+      .week-header{min-width:700px}
+      .week-body{min-width:700px}
+      .week-day-col{min-width:100px}
+      .dv-staff-col{min-width:160px;flex:1 0 160px}
+      .dv-hour-row{height:48px}
+      .dv-time-row{height:48px}
+      .head-actions{flex-wrap:wrap;justify-content:center}
+      .staff-filter-bar{gap:4px;padding:8px}
+      .dv-sidebar-stack{min-width:240px;max-width:280px}
+      .wl-fill-banner{flex-wrap:wrap;gap:6px;padding:6px 12px}
+      .create-panel{width:min(500px,95%)}
+    }
+    @media(max-width:768px){
+      .head h1{font-size:24px}
+      .head p{display:none}
+      .date-label{font-size:14px;min-width:auto}
+      .today-btn,.nav-btn{padding:8px 12px;font-size:13px;min-height:40px}
+      .refresh-btn{padding:8px 12px;font-size:12px;min-height:40px}
+      .updated-text{font-size:10px}
+      .tabs button{padding:8px 14px;font-size:12px;min-height:40px}
+      .vm-btn{padding:6px 12px!important}
+      .summary-bar{gap:2px;padding:6px 8px}
+      .sum-card{padding:2px 4px;min-width:50px}
+      .sum-card b{font-size:14px}
+      .dv-staff-col{min-width:150px;flex:1 0 150px}
+      .dv-hour-row{height:44px}
+      .dv-time-row{height:44px}
+      .dv-time-col{width:48px}
+      .dv-time-label{font-size:10px}
+      .day-view{border-radius:12px}
+      .week-view,.month-view{border-radius:12px}
+      .drawer-header{padding:16px 20px}
+      .drawer-body{padding:16px 20px}
+      .drawer-header h2{font-size:17px}
+      .drawer-actions button{font-size:12px;padding:10px 12px;min-height:42px}
+      .month-day{min-height:80px;padding:6px}
+      .month-date-number{font-size:12px}
+      .month-preview-chip{font-size:9px}
+      .mp-time{font-size:9px}
+      .create-panel{width:95%}
+      .create-form input,.create-form select{padding:12px;font-size:13px}
+      .reschedule-form select,.reschedule-form input{padding:10px}
+      .cancel-form select,.cancel-form input{padding:10px}
+      .edit-form input,.edit-form textarea{padding:10px}
+      .filter-bar{padding:0 0 6px}
+      .branch-filter{font-size:12px;padding:6px 10px;min-width:140px}
+      .tabs-divider{display:none}
+      .staff-filter-bar{gap:4px;padding:6px 8px;justify-content:center}
+      .staff-filter-pill{padding:4px 10px;font-size:11px}
+      .sf-spacer{display:none}
+      .walkin-btn,.waitlist-toggle-btn,.ai-toggle-btn{padding:4px 10px;font-size:11px}
+      .waitlist-toggle-btn,.ai-toggle-btn{margin-left:0}
+      .dv-sidebar-stack{min-width:200px;max-width:260px;border-left-width:0;border-top:1px solid #e0e0e0}
+      .dv-content-wrapper{flex-direction:column}
+      .dv-container{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      .dv-staff-scroll{overflow-x:auto}
+      .drawer-panel{max-height:100dvh}
+      .res-filter{font-size:12px;padding:6px 10px}
+    }
+    @media(max-width:640px){
+      .page{gap:12px}
+      .head{flex-direction:column;align-items:stretch;gap:8px}
+      .head h1{font-size:20px}
+      .head-actions{flex-wrap:wrap;justify-content:center;gap:4px}
+      .date-label{font-size:12px;min-width:0;width:100%;order:-1;text-align:center}
+      .today-btn,.nav-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
+      .refresh-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1}
+      .updated-text{display:none}
+      .tabs{gap:2px;justify-content:center}
+      .tabs button{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
+      .vm-btn{padding:4px 8px!important}
+      .filter-bar{flex-wrap:wrap;gap:4px}
+      .branch-filter{font-size:11px;min-width:0;width:100%;padding:6px 10px}
+      .summary-bar{gap:2px;padding:4px 6px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+      .sum-card{padding:2px 4px;min-width:60px;flex:0 0 auto;border-right:1px solid #e5e7eb}
+      .sum-card b{font-size:13px}
+      .sum-card span{font-size:8px}
+      .staff-filter-bar{padding:6px;gap:3px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;justify-content:flex-start}
+      .staff-filter-pill{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
+      .walkin-btn,.waitlist-toggle-btn,.ai-toggle-btn{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
+      .day-view{border-radius:10px;border-left:0;border-right:0}
+      .dv-time-col{width:36px}
+      .dv-time-label{font-size:9px}
+      .dv-staff-col{min-width:130px;flex:1 0 130px}
+      .dv-hour-row{height:38px}
+      .dv-time-row{height:38px}
+      .dv-header-gap{height:40px}
+      .dv-staff-header{min-height:40px;padding:4px 6px;font-size:11px}
+      .staff-avatar{width:22px;height:22px;font-size:10px}
+      .staff-header-name{font-size:11px}
+      .staff-header-meta{font-size:8px}
+      .dv-empty-bookings{padding:16px;font-size:12px}
+      .dv-empty-staff{padding:24px;font-size:12px}
+      .week-view,.month-view{border-radius:10px;border-left:0;border-right:0}
+      .month-day{min-height:60px;padding:3px}
+      .month-date-number{font-size:10px}
+      .month-today-badge{font-size:7px;padding:1px 4px}
+      .month-booking-count{font-size:9px}
+      .month-preview-chip{padding:1px 3px;font-size:7px;gap:1px}
+      .mp-time{font-size:7px}
+      .month-more{font-size:8px;padding:1px 2px}
+      .month-add-action{font-size:8px}
+      .month-add-empty{font-size:9px;padding:2px}
+      .week-day-header{padding:8px 2px}
+      .week-day-header strong{font-size:10px}
+      .week-day-date{font-size:9px}
+      .week-day-count{font-size:8px}
+      .week-day-col{padding:4px;min-width:80px}
+      .week-booking{padding:4px 6px;font-size:10px}
+      .week-booking strong{font-size:10px}
+      .week-booking span{font-size:9px}
+      .week-booking small{font-size:8px}
+      .week-empty{font-size:11px;padding:12px 0}
+      .drawer-panel{max-height:100dvh;border-radius:0}
+      .drawer-centered .create-panel{width:100%;max-height:100dvh;border-radius:0}
+      .dv-sidebar-stack{min-width:100%;max-width:100%;border-top:1px solid #e0e0e0;max-height:300px}
+    }
+    @media(max-width:480px){
+      .head h1{font-size:18px}
+      .head-actions{justify-content:center;gap:4px}
+      .date-label{font-size:12px;min-width:0}
+      .today-btn,.nav-btn{padding:5px 8px;font-size:11px;min-height:32px}
+      .refresh-btn{padding:5px 8px;font-size:10px;min-height:32px}
+      .tabs{justify-content:center}
+      .tabs button{padding:5px 8px;font-size:10px;min-height:32px}
+      .vm-btn{padding:3px 6px!important}
+      .summary-bar{gap:2px;padding:4px 6px}
+      .sum-card{padding:2px 2px;min-width:50px}
+      .sum-card span{font-size:8px}
+      .sum-card b{font-size:12px}
+      .dv-time-col{width:34px}
+      .dv-staff-col{min-width:120px;flex:1 0 120px}
+      .dv-hour-row{height:36px}
+      .dv-time-row{height:36px}
+      .dv-header-gap{height:38px}
+      .dv-staff-header{min-height:38px}
+      .dv-time-label{font-size:8px}
+      .week-day-header{padding:6px 2px}
+      .week-day-header strong{font-size:10px}
+      .week-day-date{font-size:8px}
+      .week-day-count{font-size:8px}
+      .month-day{min-height:56px;padding:2px}
+      .month-date-number{font-size:10px}
+      .month-preview-chip{padding:1px 2px;font-size:7px;gap:1px}
+      .month-more{font-size:8px}
+      .month-add-action{font-size:8px}
+      .month-add-empty{font-size:8px}
+      .drawer-panel{max-height:100dvh}
+      .drawer-header{padding:12px 16px}
+      .drawer-body{padding:12px 16px;gap:14px}
+      .drawer-header h2{font-size:15px}
+      .drawer-actions{gap:6px}
+      .drawer-actions button{font-size:11px;padding:8px 10px;min-height:38px}
+      .info-row{font-size:12px;padding:6px 0}
+      .create-panel{width:100%;border-radius:0;max-height:100dvh}
+      .create-form input,.create-form select{padding:10px;font-size:12px}
+      .create-form label{font-size:12px}
+      .svc-row{gap:4px}
+      .svc-select{min-width:80px}
+      .reschedule-form{padding:10px;gap:8px}
+      .cancel-form{padding:10px;gap:8px}
+      .edit-form{padding:10px;gap:8px}
+      .confirm-action{padding:10px}
+      .filter-bar{padding:0 0 4px}
+      .branch-filter{font-size:11px;padding:5px 8px;min-width:0}
+      .res-filter{font-size:11px;padding:5px 8px}
+      .dv-sidebar-stack{max-height:260px}
+    }
   `]
 })
 export class CalendarComponent {
@@ -834,14 +1093,14 @@ export class CalendarComponent {
   private resourcesApi = inject(ResourcesService);
   private http = inject(HttpClient);
 
-  view: 'day' | 'week' | 'month' = 'day';
-  viewMode: 'staff' | 'resources' = 'staff';
+  view: ViewMode = 'day';
+  viewMode: StaffResourceMode = 'staff';
   currentDate = new Date();
-  bookings: any[] = [];
-  summary: any = null;
+  bookings: CalendarBooking[] = [];
+  summary: CalendarSummaryResponse | null = null;
   loading = true;
   error = '';
-  drawerBooking: any = null;
+  drawerBooking: CalendarBooking | null = null;
   drawerBusy = false;
   drawerError = '';
   showCancelForm = false;
@@ -858,55 +1117,55 @@ export class CalendarComponent {
 
   showEditForm = false;
   editBusy = false;
-  editForm: any = { title: '', notes: '' };
+  editForm: EditFormModel = { title: '', notes: '' };
 
   showConfirmAction = false;
   confirmTargetStatus = '';
   confirmLabel = '';
 
   dayHours = Array.from({ length: 12 }, (_, i) => i + 8);
-  weekDays: { date: Date }[] = [];
-  monthDays: { date: Date; otherMonth: boolean; isToday: boolean }[] = [];
+  weekDays: WeekDay[] = [];
+  monthDays: MonthDay[] = [];
   staffList: Staff[] = [];
-  resourceList: any[] = [];
-  resourceFilter: string = '';
-  selectedStaffFilter: string = '';
+  resourceList: CalendarResource[] = [];
+  resourceFilter = '';
+  selectedStaffFilter = '';
   selectedBranchId = '';
 
   showCreate = false;
   createBusy = false;
   createError = '';
-  createForm: any = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', resourceId: '', services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }] };
-  clientList: any[] = [];
-  serviceList: any[] = [];
-  branchList: any[] = [];
+  createForm: CreateFormModel = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', resourceId: '', services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }] };
+  clientList: ClientOption[] = [];
+  serviceList: ServiceOption[] = [];
+  branchList: BranchOption[] = [];
 
   showWalkin = false;
   walkinBusy = false;
   walkinError = '';
-  walkinForm: any = { clientName: '', staffId: '', startTime: '', branchId: '', serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
+  walkinForm: WalkinFormModel = { clientName: '', staffId: '', startTime: '', branchId: '', serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
 
   showReschedule = false;
   rescheduleBusy = false;
   rescheduleError = '';
-  rescheduleForm: any = { staffId: '', startTime: '' };
+  rescheduleForm: RescheduleFormModel = { staffId: '', startTime: '' };
 
   showWaitlist = false;
-  waitlistEntries: any[] = [];
+  waitlistEntries: WaitlistEntry[] = [];
   waitlistLoading = false;
   waitlistError = '';
-  fillWaitlistEntry: any = null;
+  fillWaitlistEntry: WaitlistEntry | null = null;
 
   showAiPanel = false;
-  aiSuggestions: any[] = [];
+  aiSuggestions: AiSuggestion[] = [];
   aiLoading = false;
   aiError = '';
   aiServiceId = '';
   aiServiceDuration = 30;
   aiOptimizing = false;
-  aiOptimization: any = null;
+  aiOptimization: AiOptimization | null = null;
 
-  dragBooking: any = null;
+  dragBooking: CalendarBooking | null = null;
   dragStartX = 0;
   dragStartY = 0;
   dragDidMove = false;
@@ -917,8 +1176,16 @@ export class CalendarComponent {
   dropTargetMinute = 0;
   private previousDropTarget: HTMLElement | null = null;
 
+  showDropConfirm = false;
+  dropConfirmBooking: CalendarBooking | null = null;
+  dropConfirmTime = '';
+  dropConfirmTargetName = '';
+  private dropConfirmPayload: Record<string, any> = {};
+  dropConfirmBusy = false;
+  dropConfirmError = '';
+
   lastUpdated = '';
-  private autoRefreshTimer: any = null;
+  private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   get visibleStaffList(): Staff[] {
     if (!this.selectedStaffFilter) return this.staffList;
@@ -960,7 +1227,7 @@ export class CalendarComponent {
     this.error = '';
     this.drawerBooking = null;
     const dateStr = this.currentDate.toISOString().slice(0, 10);
-    const params: any = { date: dateStr };
+    const params: CalendarQueryParams = { date: dateStr };
     if (this.selectedBranchId) params.branchId = this.selectedBranchId;
 
     if (this.view === 'day') {
@@ -1033,7 +1300,7 @@ export class CalendarComponent {
   }
 
   private loadResources() {
-    const params: any = { isActive: true };
+    const params: CalendarQueryParams = { isActive: true };
     if (this.resourceFilter) params.type = this.resourceFilter;
     this.resourcesApi.getAll(params).subscribe({
       next: (d) => this.resourceList = Array.isArray(d) ? d : [],
@@ -1042,7 +1309,7 @@ export class CalendarComponent {
 
   private loadBranches() {
     if (this.branchList.length === 0) {
-      this.http.get<any[]>('http://localhost:3000/api/branches').subscribe({
+      this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
         next: (d) => this.branchList = Array.isArray(d) ? d : [],
       });
     }
@@ -1059,7 +1326,7 @@ export class CalendarComponent {
     this.waitlistLoading = true;
     this.waitlistError = '';
     const dateStr = this.currentDate.toISOString().slice(0, 10);
-    this.http.get<any[]>('/api/waitlist', {
+    this.http.get<WaitlistEntry[]>('/api/waitlist', {
       params: { branchId: '1', status: 'WAITING', from: dateStr, to: dateStr }
     }).subscribe({
       next: (d) => {
@@ -1084,7 +1351,7 @@ export class CalendarComponent {
   toggleAiPanel(): void {
     this.showAiPanel = !this.showAiPanel;
     if (this.showAiPanel && this.serviceList.length === 0) {
-      this.http.get<any[]>('http://localhost:3000/api/services').subscribe({
+      this.http.get<ServiceOption[]>('http://localhost:3000/api/services').subscribe({
         next: (d) => this.serviceList = Array.isArray(d) ? d : [],
       });
     }
@@ -1097,7 +1364,7 @@ export class CalendarComponent {
 
   loadAiSuggestions(): void {
     const dateStr = this.currentDate.toISOString().slice(0, 10);
-    const params: any = { branchId: '1', date: dateStr };
+    const params: CalendarQueryParams = { branchId: '1', date: dateStr };
     if (this.aiServiceId) {
       const svc = this.serviceList.find((s: any) => s.id === this.aiServiceId);
       if (svc?.durationMin) params.durationMinutes = svc.durationMin;
@@ -1121,7 +1388,7 @@ export class CalendarComponent {
 
   loadAiOptimizeDay(): void {
     const dateStr = this.currentDate.toISOString().slice(0, 10);
-    const params: any = { branchId: '1', date: dateStr };
+    const params: CalendarQueryParams = { branchId: '1', date: dateStr };
     if (this.aiServiceId) {
       const svc = this.serviceList.find((s: any) => s.id === this.aiServiceId);
       if (svc?.durationMin) params.durationMinutes = svc.durationMin;
@@ -1143,7 +1410,7 @@ export class CalendarComponent {
     });
   }
 
-  aiBookSlot(slot: any): void {
+  aiBookSlot(slot: AiSuggestion): void {
     if (!slot.staffId || !slot.suggestedStart) {
       this.aiError = 'Invalid slot data.';
       return;
@@ -1241,15 +1508,15 @@ export class CalendarComponent {
     return msg;
   }
 
-  openDrawer(b: any) { if (this.dragLockClick) { this.dragLockClick = false; return; } this.drawerBooking = b; this.drawerBusy = false; this.drawerError = ''; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.cancelReason = ''; this.cancelCustomReason = ''; }
+  openDrawer(b: CalendarBooking) { if (this.dragLockClick) { this.dragLockClick = false; return; } this.drawerBooking = b; this.drawerBusy = false; this.drawerError = ''; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.cancelReason = ''; this.cancelCustomReason = ''; }
   closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; }
 
-  canCancel(b: any): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
-  canReschedule(b: any): boolean { return b && ['PENDING', 'CONFIRMED'].includes(b.status); }
+  canCancel(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
+  canReschedule(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED'].includes(b.status); }
 
   closeCancelForm() { this.showCancelForm = false; this.cancelReason = ''; this.cancelCustomReason = ''; this.drawerError = ''; }
 
-  openEditForm(b: any) { this.showReschedule = false; this.showCancelForm = false; this.showConfirmAction = false; this.editForm.title = b.title || ''; this.editForm.notes = b.notes || ''; this.showEditForm = true; this.drawerError = ''; }
+  openEditForm(b: CalendarBooking) { this.showReschedule = false; this.showCancelForm = false; this.showConfirmAction = false; this.editForm.title = b.title || ''; this.editForm.notes = b.notes || ''; this.showEditForm = true; this.drawerError = ''; }
   closeEditForm() { this.showEditForm = false; this.editForm = { title: '', notes: '' }; this.drawerError = ''; }
   openCancelForm() { this.showReschedule = false; this.showEditForm = false; this.showConfirmAction = false; this.showCancelForm = true; this.cancelReason = ''; this.cancelCustomReason = ''; this.drawerError = ''; }
   openConfirmAction(status: string) { this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = true; this.confirmTargetStatus = status; this.confirmLabel = status === 'CHECKED_IN' ? 'Check In' : 'Complete'; this.drawerError = ''; }
@@ -1257,14 +1524,16 @@ export class CalendarComponent {
   doEdit() {
     const { title, notes } = this.editForm;
     if (!title?.trim()) { this.drawerError = 'Title is required.'; return; }
+    const booking = this.drawerBooking;
+    if (!booking) { this.drawerError = 'No booking selected.'; return; }
     this.editBusy = true; this.drawerError = '';
-    this.http.patch(`http://localhost:3000/api/bookings/${this.drawerBooking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
+    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
       next: () => { this.editBusy = false; this.closeEditForm(); this.closeDrawer(); this.load(); },
       error: (e) => { this.editBusy = false; this.drawerError = this.extractCalendarError(e); },
     });
   }
 
-  doCancel(b: any) {
+  doCancel(b: CalendarBooking) {
     const reason = this.cancelReason === 'Other' && this.cancelCustomReason
       ? this.cancelCustomReason.trim()
       : this.cancelReason;
@@ -1276,7 +1545,7 @@ export class CalendarComponent {
     });
   }
 
-  doStatus(b: any, status: string) {
+  doStatus(b: CalendarBooking, status: string) {
     this.drawerBusy = true; this.drawerError = '';
     this.api.updateStatus(b.id, status).subscribe({
       next: () => { this.drawerBusy = false; this.closeDrawer(); this.load(); },
@@ -1284,11 +1553,11 @@ export class CalendarComponent {
     });
   }
 
-  getBookingsAtHour(hour: number): any[] {
+  getBookingsAtHour(hour: number): CalendarBooking[] {
     return this.bookings.filter(b => new Date(b.startTime).getHours() === hour);
   }
 
-  getBookingsForDate(date: Date): any[] {
+  getBookingsForDate(date: Date): CalendarBooking[] {
     const d = new Date(date);
     return this.bookings.filter(b => {
       const bd = new Date(b.startTime);
@@ -1296,7 +1565,7 @@ export class CalendarComponent {
     });
   }
 
-  getBookingsForResource(resourceId: string, hour: number): any[] {
+  getBookingsForResource(resourceId: string, hour: number): CalendarBooking[] {
     return this.bookings.filter(b => {
       const bResourceId = b.resourceId || b.resource?.id;
       if (!bResourceId) return false;
@@ -1347,7 +1616,7 @@ export class CalendarComponent {
     this.loadClientsAndServices();
   }
 
-  openCreateBookingFromResource(resource: any, hour: number) {
+  openCreateBookingFromResource(resource: CalendarResource, hour: number) {
     if (this.dragLockClick) { this.dragLockClick = false; return; }
     this.showCreate = true;
     this.createBusy = false;
@@ -1368,7 +1637,7 @@ export class CalendarComponent {
     this.loadClientsAndServices();
   }
 
-  getUnassignedBookings(hour: number): any[] {
+  getUnassignedBookings(hour: number): CalendarBooking[] {
     return this.bookings.filter(b => {
       const bResourceId = b.resourceId || b.resource?.id;
       if (bResourceId) return false;
@@ -1382,7 +1651,7 @@ export class CalendarComponent {
     return r ? `${r.name} (${r.type})` : '';
   }
 
-  getBookingsForStaff(staffId: string, hour: number): any[] {
+  getBookingsForStaff(staffId: string, hour: number): CalendarBooking[] {
     return this.bookings.filter(b => {
       const bStaffId = b.staffId || b.staff?.id;
       if (bStaffId !== staffId) return false;
@@ -1395,25 +1664,25 @@ export class CalendarComponent {
     return new Date(dt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
-  getStaffBookings(staffId: string): any[] {
+  getStaffBookings(staffId: string): CalendarBooking[] {
     return this.bookings.filter(b => {
       const bStaffId = b.staffId || b.staff?.id;
       return bStaffId === staffId;
     });
   }
 
-  getAllResourceBookings(resourceId: string): any[] {
+  getAllResourceBookings(resourceId: string): CalendarBooking[] {
     return this.bookings.filter(b => {
       const bResourceId = b.resourceId || b.resource?.id;
       return bResourceId === resourceId;
     });
   }
 
-  getAllUnassignedBookings(): any[] {
+  getAllUnassignedBookings(): CalendarBooking[] {
     return this.bookings.filter(b => !(b.resourceId || b.resource?.id));
   }
 
-  getBookingDurationMinutes(booking: any): number {
+  getBookingDurationMinutes(booking: CalendarBooking): number {
     if (!booking.startTime || !booking.endTime) return 30;
     const start = new Date(booking.startTime).getTime();
     const end = new Date(booking.endTime).getTime();
@@ -1421,7 +1690,7 @@ export class CalendarComponent {
     return Math.max(15, Math.min(diff, 480));
   }
 
-  getBookingBlockStyle(booking: any): any {
+  getBookingBlockStyle(booking: CalendarBooking): any {
     if (!booking.startTime || this.dayHours.length === 0) return {};
     const start = new Date(booking.startTime);
     const firstHour = this.dayHours[0];
@@ -1462,7 +1731,7 @@ export class CalendarComponent {
     };
   }
 
-  startBookingDrag(event: PointerEvent, booking: any) {
+  startBookingDrag(event: PointerEvent, booking: CalendarBooking) {
     if (!this.canReschedule(booking)) return;
     this.dragStartX = event.clientX;
     this.dragStartY = event.clientY;
@@ -1561,7 +1830,7 @@ export class CalendarComponent {
     this.dropTargetMinute = 0;
   }
 
-  private confirmAndApplyDragReschedule(booking: any) {
+  private confirmAndApplyDragReschedule(booking: CalendarBooking) {
     if (this.dropTargetHour === null) return;
     const targetTime = new Date(this.currentDate);
     targetTime.setHours(this.dropTargetHour, this.dropTargetMinute || 0, 0, 0);
@@ -1576,23 +1845,45 @@ export class CalendarComponent {
     } else if (this.viewMode === 'resources' && this.dropTargetResourceId === null) {
       targetName = 'Unassigned';
     }
-    const msg = this.viewMode === 'staff'
-      ? `Move booking to ${timeStr} with ${targetName}?`
-      : `Move booking to ${timeStr} (${targetName})?`;
-    if (!confirm(msg)) return;
-    const b = booking;
-    const payload: any = { startTime: targetTime.toISOString().slice(0, 16) };
-    if (this.viewMode === 'resources' && this.dropTargetResourceId !== (b.resourceId || '')) {
+    const payload: Record<string, any> = { startTime: targetTime.toISOString().slice(0, 16) };
+    if (this.viewMode === 'resources' && this.dropTargetResourceId !== (booking.resourceId || '')) {
       payload.resourceId = this.dropTargetResourceId || null;
     }
-    this.loading = true;
-    this.http.patch(`http://localhost:3000/api/bookings/${b.id}/reschedule`, payload).subscribe({
-      next: () => { this.load(); },
-      error: (e) => {
+    this.dropConfirmBooking = booking;
+    this.dropConfirmTime = timeStr;
+    this.dropConfirmTargetName = targetName;
+    this.dropConfirmPayload = payload;
+    this.dropConfirmBusy = false;
+    this.dropConfirmError = '';
+    this.showDropConfirm = true;
+  }
+
+  confirmDropReschedule(): void {
+    const booking = this.dropConfirmBooking;
+    if (!booking) { this.cancelDropReschedule(); return; }
+    this.dropConfirmBusy = true;
+    this.dropConfirmError = '';
+    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}/reschedule`, this.dropConfirmPayload).subscribe({
+      next: () => {
+        this.dropConfirmBusy = false;
+        this.showDropConfirm = false;
+        this.dropConfirmBooking = null;
+        this.dropConfirmPayload = {};
         this.load();
-        setTimeout(() => { this.error = this.extractCalendarError(e); }, 300);
+      },
+      error: (e) => {
+        this.dropConfirmBusy = false;
+        this.dropConfirmError = this.extractCalendarError(e);
       },
     });
+  }
+
+  cancelDropReschedule(): void {
+    this.showDropConfirm = false;
+    this.dropConfirmBooking = null;
+    this.dropConfirmPayload = {};
+    this.dropConfirmBusy = false;
+    this.dropConfirmError = '';
   }
 
   staffInitials(staff: Staff): string {
@@ -1680,11 +1971,11 @@ export class CalendarComponent {
     if (!this.walkinForm.serviceId) { this.walkinError = 'Please select a service.'; this.walkinBusy = false; return; }
     if (!this.walkinForm.branchId) { this.walkinError = 'Please select a branch.'; this.walkinBusy = false; return; }
     if (!this.walkinForm.startTime) { this.walkinError = 'Date & time is required.'; this.walkinBusy = false; return; }
-    const existing = this.clientList.find((c: any) => (c.fullName || c.name || '').toLowerCase() === name.toLowerCase());
+    const existing = this.clientList.find((c: ClientOption) => (c.fullName || c.name || '').toLowerCase() === name.toLowerCase());
     if (existing) {
       this.createWalkinBooking(existing.id);
     } else {
-      this.http.post<any>('http://localhost:3000/api/clients', { fullName: name }).subscribe({
+      this.http.post<{ id: string }>('http://localhost:3000/api/clients', { fullName: name }).subscribe({
         next: (client) => this.createWalkinBooking(client.id),
         error: () => { this.walkinBusy = false; this.walkinError = 'Failed to create client.'; },
       });
@@ -1692,7 +1983,7 @@ export class CalendarComponent {
   }
 
   private createWalkinBooking(clientId: string) {
-    const payload: any = {
+    const payload: Record<string, any> = {
       clientId,
       staffId: this.walkinForm.staffId,
       title: 'Walk-in',
@@ -1746,14 +2037,14 @@ export class CalendarComponent {
   doCreateBooking() {
     this.createBusy = true;
     this.createError = '';
-    const payload: any = {
+    const payload: Record<string, any> = {
       clientId: this.createForm.clientId,
       staffId: this.createForm.staffId,
       title: this.createForm.title || 'Booking',
       startTime: this.createForm.startTime,
       branchId: this.createForm.branchId,
       notes: this.createForm.notes || undefined,
-      services: this.createForm.services.filter((s: any) => s.name),
+      services: this.createForm.services.filter((s: CreateFormService) => s.name),
     };
     if (this.createForm.resourceId) payload.resourceId = this.createForm.resourceId;
     this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
@@ -1773,7 +2064,7 @@ export class CalendarComponent {
     });
   }
 
-  showRescheduleForm(b: any) {
+  showRescheduleForm(b: CalendarBooking) {
     this.showEditForm = false;
     this.showCancelForm = false;
     this.showConfirmAction = false;
@@ -1795,7 +2086,7 @@ export class CalendarComponent {
     this.rescheduleError = '';
     const b = this.drawerBooking;
     if (!b) return;
-    const payload: any = { startTime: this.rescheduleForm.startTime };
+    const payload: Record<string, any> = { startTime: this.rescheduleForm.startTime };
     if (this.rescheduleForm.resourceId !== (b.resourceId || '')) {
       payload.resourceId = this.rescheduleForm.resourceId || null;
     }
@@ -1806,13 +2097,13 @@ export class CalendarComponent {
   }
 
   private loadClientsAndServices() {
-    this.http.get<any[]>('http://localhost:3000/api/clients').subscribe({
+    this.http.get<ClientOption[]>('http://localhost:3000/api/clients').subscribe({
       next: (d) => this.clientList = Array.isArray(d) ? d : [],
     });
-    this.http.get<any[]>('http://localhost:3000/api/services').subscribe({
+    this.http.get<ServiceOption[]>('http://localhost:3000/api/services').subscribe({
       next: (d) => this.serviceList = Array.isArray(d) ? d : [],
     });
-    this.http.get<any[]>('http://localhost:3000/api/branches').subscribe({
+    this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
       next: (d) => this.branchList = Array.isArray(d) ? d : [],
     });
   }
@@ -1828,7 +2119,7 @@ export class CalendarComponent {
     return this.isSameDay(date, new Date());
   }
 
-  getMonthStatusCounts(date: Date): { status: string; count: number }[] {
+  getMonthStatusCounts(date: Date): StatusCount[] {
     const bookings = this.getBookingsForDate(date);
     const counts: Record<string, number> = {};
     for (const b of bookings) {
@@ -1838,7 +2129,7 @@ export class CalendarComponent {
     return Object.entries(counts).map(([status, count]) => ({ status, count }));
   }
 
-  getMonthPreviewBookings(date: Date): any[] {
+  getMonthPreviewBookings(date: Date): CalendarBooking[] {
     return this.getBookingsForDate(date).slice(0, 3);
   }
 
