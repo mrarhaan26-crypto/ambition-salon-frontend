@@ -78,49 +78,93 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
 
       <div class="drawer-overlay" *ngIf="showDetail" (click)="closeDetail()">
         <div class="drawer-panel" (click)="$event.stopPropagation()">
-          <div class="drawer-header">
-            <h2>{{ selectedBooking?.title }}</h2>
-            <button class="close-btn" (click)="closeDetail()">&times;</button>
-          </div>
-          <div class="drawer-body">
-            <div class="drawer-section">
-              <h3>Booking Details</h3>
-              <div class="info-row"><span>Status</span><span class="status-badge" [class]="'badge-' + (selectedBooking?.status || '').toLowerCase()">{{ selectedBooking?.status }}</span></div>
-              <div class="info-row"><span>Start</span><span>{{ selectedBooking?.startTime | date:'MMM dd, yyyy h:mm a' }}</span></div>
-              <div class="info-row"><span>End</span><span>{{ selectedBooking?.endTime | date:'MMM dd, yyyy h:mm a' }}</span></div>
-              <div class="info-row"><span>Duration</span><span>{{ getDurationMin(selectedBooking) }} min</span></div>
-              <div class="info-row"><span>Staff</span><span>{{ selectedBooking?.staff?.fullName || 'Unassigned' }}</span></div>
-              <div class="info-row" *ngIf="selectedBooking?.branch?.name"><span>Branch</span><span>{{ selectedBooking.branch.name }}</span></div>
-              <div class="info-row" *ngIf="selectedBooking?.resource?.name"><span>Resource</span><span>{{ selectedBooking.resource.name }}</span></div>
-              <div class="info-row"><span>Amount</span><span>{{ (selectedBooking?.totalAmount || 0) | currency }}</span></div>
-              <div class="info-row" *ngIf="selectedBooking?.notes"><span>Notes</span><span>{{ selectedBooking?.notes }}</span></div>
+          <ng-container *ngIf="selectedBooking; else noBooking">
+            <div class="drawer-header">
+              <div class="drawer-header-info">
+                <h2>{{ selectedBooking.title }}</h2>
+                <span class="header-subtitle">{{ selectedBooking.client?.fullName || 'Unknown Client' }}</span>
+              </div>
+              <span class="status-badge drawer-badge" [class]="'badge-' + (selectedBooking.status || '').toLowerCase()">{{ selectedBooking.status }}</span>
+              <button class="close-btn" (click)="closeDetail()">&times;</button>
             </div>
+            <div class="drawer-body">
+              <div class="drawer-section">
+                <h3>Date & Time</h3>
+                <div class="datetime-block">
+                  <span class="dt-date">{{ selectedBooking.startTime | date:'EEEE, MMMM dd, yyyy' }}</span>
+                  <span class="dt-time">{{ selectedBooking.startTime | date:'h:mm a' }} — {{ selectedBooking.endTime | date:'h:mm a' }}</span>
+                  <span class="dt-duration">{{ getDurationMin(selectedBooking) }} minutes</span>
+                </div>
+              </div>
 
-            <div class="drawer-section" *ngIf="selectedBooking?.client">
-              <h3>Client</h3>
-              <div class="info-row"><span>Name</span><span>{{ selectedBooking?.client?.fullName }}</span></div>
-              <div class="info-row" *ngIf="selectedBooking?.client?.phone"><span>Phone</span><span>{{ selectedBooking?.client?.phone }}</span></div>
-              <div class="info-row" *ngIf="selectedBooking?.client?.email"><span>Email</span><span>{{ selectedBooking?.client?.email }}</span></div>
+              <div class="drawer-section">
+                <h3>Staff & Location</h3>
+                <div class="info-row"><span>Staff</span><span>{{ selectedBooking.staff?.fullName || 'Unassigned' }}</span></div>
+                <div class="info-row" *ngIf="selectedBooking.branch?.name"><span>Branch</span><span>{{ selectedBooking.branch.name }}</span></div>
+                <div class="info-row" *ngIf="selectedBooking.resource?.name"><span>Resource</span><span>{{ selectedBooking.resource.name }}</span></div>
+              </div>
+
+              <div class="drawer-section" *ngIf="selectedBooking.client">
+                <h3>Client</h3>
+                <div class="info-row"><span>Name</span><span>{{ selectedBooking.client.fullName }}</span></div>
+                <div class="info-row" *ngIf="selectedBooking.client.phone"><span>Phone</span><span>{{ selectedBooking.client.phone }}</span></div>
+                <div class="info-row" *ngIf="selectedBooking.client.email"><span>Email</span><span>{{ selectedBooking.client.email }}</span></div>
+              </div>
+
+              <div class="drawer-section" *ngIf="selectedBooking.services?.length">
+                <h3>Services ({{ selectedBooking.services.length }})</h3>
+                <div class="svc-line" *ngFor="let s of selectedBooking.services">
+                  <span class="svc-name">{{ s.name }}</span>
+                  <span class="svc-meta">{{ s.durationMin }} min</span>
+                  <span class="svc-price">{{ s.price | currency }}</span>
+                </div>
+                <div class="svc-total">
+                  <span>Total</span>
+                  <span>{{ (selectedBooking.totalAmount || 0) | currency }}</span>
+                </div>
+              </div>
+
+              <div class="drawer-section" *ngIf="selectedBooking.notes">
+                <h3>Notes</h3>
+                <p class="notes-text">{{ selectedBooking.notes }}</p>
+              </div>
+
+              <div class="drawer-actions" *ngIf="isTerminalStatus(selectedBooking.status); else actionButtons">
+                <div class="no-actions">
+                  <span class="terminal-msg">{{ selectedBooking.status === 'COMPLETED' ? 'This booking is completed.' : selectedBooking.status === 'CANCELLED' ? 'This booking was cancelled.' : 'This booking was marked as no-show.' }}</span>
+                </div>
+              </div>
+              <ng-template #actionButtons>
+                <div class="drawer-actions" *ngIf="!isTerminalStatus(selectedBooking.status)">
+                  <ng-container *ngIf="!cancelConfirm; else cancelConfirmBlock">
+                    <button *ngIf="canCancel(selectedBooking)" class="btn-danger" (click)="cancelConfirm = true" [disabled]="drawerBusy">Cancel Booking</button>
+                    <button *ngIf="selectedBooking.status === 'CONFIRMED'" class="btn-primary" (click)="doStatus(selectedBooking, 'CHECKED_IN')" [disabled]="drawerBusy">Check In</button>
+                    <button *ngIf="selectedBooking.status === 'CHECKED_IN'" class="btn-primary" (click)="doStatus(selectedBooking, 'COMPLETED')" [disabled]="drawerBusy">Complete</button>
+                  </ng-container>
+                  <ng-template #cancelConfirmBlock>
+                    <div class="cancel-confirm">
+                      <span class="confirm-msg">Cancel this booking?</span>
+                      <div class="confirm-btns">
+                        <button class="btn-danger" (click)="doCancel(selectedBooking)" [disabled]="drawerBusy">{{ drawerBusy ? 'Cancelling...' : 'Yes, Cancel' }}</button>
+                        <button class="btn-secondary" (click)="cancelConfirm = false" [disabled]="drawerBusy">Keep</button>
+                      </div>
+                    </div>
+                  </ng-template>
+                </div>
+              </ng-template>
+
+              <div class="drawer-loading" *ngIf="drawerBusy && !cancelConfirm"><div class="spinner"></div><span>Updating...</span></div>
+              <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
             </div>
-
-            <div class="drawer-section" *ngIf="selectedBooking?.services?.length">
-              <h3>Services ({{ selectedBooking.services.length }})</h3>
-              <div class="svc-line" *ngFor="let s of selectedBooking.services">
-                <span class="svc-name">{{ s.name }}</span>
-                <span class="svc-meta">{{ s.durationMin }} min</span>
-                <span class="svc-price">{{ s.price | currency }}</span>
+          </ng-container>
+          <ng-template #noBooking>
+            <div class="drawer-body">
+              <div class="empty-drawer">
+                <p>Booking information is not available.</p>
+                <button class="btn-primary" (click)="closeDetail()">Close</button>
               </div>
             </div>
-
-            <div class="drawer-actions" *ngIf="selectedBooking?.status">
-              <button *ngIf="canCancel(selectedBooking)" class="btn-danger" (click)="doCancel(selectedBooking)">Cancel Booking</button>
-              <button *ngIf="selectedBooking?.status === 'CONFIRMED'" class="btn-primary" (click)="doStatus(selectedBooking, 'CHECKED_IN')">Check In</button>
-              <button *ngIf="selectedBooking?.status === 'CHECKED_IN'" class="btn-primary" (click)="doStatus(selectedBooking, 'COMPLETED')">Complete</button>
-            </div>
-
-            <div class="drawer-loading" *ngIf="drawerBusy"><div class="spinner"></div><span>Updating...</span></div>
-            <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
-          </div>
+          </ng-template>
         </div>
       </div>
 
@@ -222,23 +266,42 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .create-panel{background:white;border-radius:24px;width:min(520px,90%);max-height:90vh;overflow-y:auto;animation:fadeIn .2s ease}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
     @keyframes fadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
-    .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:24px 28px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:white;z-index:1}
-    .drawer-header h2{margin:0;font-size:20px}
-    .close-btn{border:0;background:transparent;font-size:28px;cursor:pointer;color:#6b7280;padding:0;line-height:1}
+    .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:24px 28px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:white;z-index:1;gap:12px}
+    .drawer-header-info{flex:1;min-width:0}
+    .drawer-header-info h2{margin:0;font-size:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .header-subtitle{font-size:13px;color:#6b7280;display:block;margin-top:2px}
+    .drawer-badge{flex-shrink:0;font-size:12px;padding:4px 12px}
+    .close-btn{border:0;background:transparent;font-size:28px;cursor:pointer;color:#6b7280;padding:0;line-height:1;flex-shrink:0}
     .drawer-body{padding:24px 28px;display:grid;gap:20px}
     .drawer-section h3{font-size:13px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 12px;letter-spacing:.05em}
     .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
     .info-row span:first-child{color:#6b7280;font-weight:600}
     .info-row span:last-child{text-align:right;max-width:60%}
+    .datetime-block{display:grid;gap:4px;padding:4px 0}
+    .datetime-block .dt-date{font-weight:700;font-size:15px}
+    .datetime-block .dt-time{font-size:14px;color:#374151}
+    .datetime-block .dt-duration{font-size:12px;color:#6b7280;background:#f3f4f6;padding:2px 10px;border-radius:8px;display:inline-block;width:fit-content}
     .svc-line{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
     .svc-name{flex:1;font-weight:600}
     .svc-meta{color:#6b7280;font-size:12px}
     .svc-price{font-weight:800;text-align:right}
+    .svc-total{display:flex;justify-content:space-between;padding:10px 0 0;font-weight:800;font-size:14px;border-top:2px solid #e5e7eb;margin-top:4px}
+    .notes-text{font-size:14px;color:#374151;margin:0;line-height:1.5;padding:4px 0}
     .drawer-actions{display:flex;gap:10px;flex-wrap:wrap}
     .drawer-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;transition:opacity .2s}
-    .drawer-actions button:hover{opacity:.85}
+    .drawer-actions button:hover:not(:disabled){opacity:.85}
+    .drawer-actions button:disabled{opacity:.4;cursor:not-allowed}
     .btn-primary{background:#0b0b0b;color:white}
+    .btn-secondary{background:#f3f4f6;color:#374151}
     .btn-danger{background:#fee2e2;color:#991b1b}
+    .cancel-confirm{flex:1;display:grid;gap:8px;padding:12px;background:#fefce8;border:1px solid #fde68a;border-radius:12px;text-align:center}
+    .confirm-msg{font-weight:700;font-size:14px;color:#92400e}
+    .confirm-btns{display:flex;gap:8px}
+    .confirm-btns button{flex:1}
+    .no-actions{flex:1;text-align:center;padding:12px;background:#f3f4f6;border-radius:12px}
+    .terminal-msg{font-size:13px;color:#6b7280;font-weight:600}
+    .empty-drawer{padding:48px 24px;text-align:center;color:#6b7280}
+    .empty-drawer button{margin-top:12px}
     .drawer-loading{display:flex;align-items:center;gap:10px;justify-content:center;padding:12px;color:#6b7280;font-size:13px}
     .drawer-error{background:#fef2f2;color:#991b1b;padding:12px;border-radius:12px;font-size:13px;text-align:center}
     .create-form{display:grid;gap:12px}
@@ -264,6 +327,7 @@ export class BookingsComponent {
   selectedBooking: BookingListItem | null = null;
   drawerBusy = false;
   drawerError = '';
+  cancelConfirm = false;
 
   showCreate = false;
   createBusy = false;
@@ -301,11 +365,16 @@ export class BookingsComponent {
     return b.services.reduce((sum, s) => sum + (s.durationMin || 0), 0);
   }
 
+  isTerminalStatus(status: string): boolean {
+    return ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(status);
+  }
+
   openDetail(b: BookingListItem) {
     this.selectedBooking = b;
     this.showDetail = true;
     this.drawerBusy = false;
     this.drawerError = '';
+    this.cancelConfirm = false;
   }
 
   closeDetail() { this.showDetail = false; }
