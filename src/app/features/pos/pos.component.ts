@@ -384,6 +384,48 @@ import { ServicesService } from '../services/services.service';
     .print-btn,.refund-btn{border:0;border-radius:14px;padding:13px;font-weight:900;cursor:pointer}
     .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
     .refund-btn:disabled{opacity:.55;cursor:not-allowed}
+    @media print{
+      @page{size:80mm 297mm;margin:0}
+      ::ng-deep app-layout .sidebar,
+      ::ng-deep app-layout .topbar,
+      ::ng-deep app-layout .mobile-toggle{display:none!important}
+      ::ng-deep app-layout .app-shell,
+      ::ng-deep app-layout .main,
+      ::ng-deep app-layout .content{display:block!important;min-height:0!important;margin:0!important;padding:0!important;background:white!important;overflow:visible!important}
+      :host{display:block!important;background:white!important;color:#000!important;width:80mm!important;margin:0!important;padding:0!important}
+      .page{display:block!important;width:80mm!important;margin:0!important;padding:0!important;background:white!important;color:#000!important}
+      .head,
+      .loading,
+      .error,
+      .kpis,
+      .grid-2,
+      .sales-history-panel,
+      .drawer-backdrop,
+      .drawer-head,
+      .drawer-actions,
+      .receipt-loading,
+      .checkout-error,
+      .success-msg{display:none!important}
+      .receipt-drawer{position:static!important;display:block!important;width:80mm!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important;background:white!important;box-shadow:none!important;overflow:visible!important;z-index:auto!important}
+      .receipt-card{display:block!important;width:80mm!important;max-width:80mm!important;margin:0!important;padding:5mm!important;box-sizing:border-box!important;background:white!important;color:#000!important;border:0!important;border-radius:0!important;box-shadow:none!important;font-family:'Courier New',Courier,monospace!important;font-size:10px!important;line-height:1.35!important}
+      .receipt-brand{border-bottom:1px dashed #000!important;padding:0 0 3mm!important;margin:0 0 3mm!important;text-align:center!important}
+      .receipt-brand h3{margin:0 0 1mm!important;font-size:14px!important;line-height:1.2!important;color:#000!important;text-transform:uppercase!important}
+      .receipt-brand span{display:block!important;font-size:9px!important;color:#000!important;letter-spacing:0!important}
+      .receipt-meta{display:grid!important;grid-template-columns:1fr 1fr!important;gap:1.5mm 3mm!important;margin:0 0 3mm!important;padding-bottom:3mm!important;border-bottom:1px dashed #000!important}
+      .receipt-meta div{background:white!important;border-radius:0!important;padding:0!important;color:#000!important}
+      .receipt-meta span{display:block!important;font-size:8px!important;color:#000!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:0!important}
+      .receipt-meta strong{display:block!important;font-size:9px!important;color:#000!important;font-weight:700!important;word-break:break-word!important}
+      .receipt-items{display:grid!important;gap:1.5mm!important;margin:0!important;padding:0 0 3mm!important;border-bottom:1px dashed #000!important}
+      .receipt-item{display:grid!important;grid-template-columns:1fr 9mm 16mm 18mm!important;gap:1.5mm!important;align-items:start!important;font-size:9px!important;color:#000!important;break-inside:avoid!important}
+      .receipt-item span:first-child{word-break:break-word!important}
+      .receipt-item span:not(:first-child),
+      .receipt-item strong{text-align:right!important;color:#000!important;font-size:9px!important;font-weight:700!important}
+      .head-row{border-bottom:1px dashed #000!important;padding:0 0 1.5mm!important;color:#000!important;font-size:8px!important;font-weight:700!important;text-transform:uppercase!important}
+      .receipt-total{display:flex!important;justify-content:space-between!important;align-items:flex-end!important;margin:3mm 0 0!important;padding:3mm 0 0!important;border-top:1px dashed #000!important;color:#000!important}
+      .receipt-total span{font-size:11px!important;font-weight:900!important;text-transform:uppercase!important;color:#000!important}
+      .receipt-total strong{font-size:16px!important;font-weight:900!important;color:#000!important}
+      .thankyou{margin:4mm 0 0!important;text-align:center!important;font-size:9px!important;color:#000!important}
+    }
     @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}}
     @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid{grid-template-columns:1fr}}
