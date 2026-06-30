@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BookingsService } from './bookings.service';
+import { BookingsService, BookingQueryParams } from './bookings.service';
+import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingServiceFormLine, BookingStatus } from './bookings.models';
 
 @Component({
   selector: 'app-bookings',
@@ -18,8 +19,8 @@ import { BookingsService } from './bookings.service';
       </div>
 
       <div class="toolbar">
-        <input [(ngModel)]="filters.search" (input)="load()" placeholder="Search client or title...">
-        <select [(ngModel)]="filters.status" (change)="load()">
+        <input [(ngModel)]="filters.search" (input)="onFilterChange()" placeholder="Search client or title..." class="filter-input">
+        <select [(ngModel)]="filters.status" (change)="onFilterChange()" class="filter-select">
           <option value="">All Status</option>
           <option value="PENDING">Pending</option>
           <option value="CONFIRMED">Confirmed</option>
@@ -28,7 +29,12 @@ import { BookingsService } from './bookings.service';
           <option value="CANCELLED">Cancelled</option>
           <option value="NO_SHOW">No Show</option>
         </select>
-        <input type="date" [(ngModel)]="filters.date" (change)="load()">
+        <input type="date" [(ngModel)]="filters.date" (change)="onFilterChange()" class="filter-date">
+        <button class="clear-btn" *ngIf="hasActiveFilters" (click)="clearFilters()">Clear</button>
+      </div>
+
+      <div class="summary" *ngIf="!loading && !error && bookings.length > 0">
+        <span class="count">{{ bookings.length }} booking{{ bookings.length === 1 ? '' : 's' }}</span>
       </div>
 
       <div class="loading" *ngIf="loading"><div class="spinner"></div><span>Loading bookings...</span></div>
@@ -39,23 +45,33 @@ import { BookingsService } from './bookings.service';
       </div>
 
       <div class="empty" *ngIf="!loading && !error && bookings.length === 0">
-        <p>No bookings found. Create your first booking to get started.</p>
+        <div class="empty-icon">📅</div>
+        <p>No bookings found.</p>
+        <span class="empty-hint" *ngIf="hasActiveFilters">Try adjusting your filters or <a href="#" (click)="clearFilters(); $event.preventDefault()">clear them</a>.</span>
+        <span class="empty-hint" *ngIf="!hasActiveFilters">Create your first booking to get started.</span>
       </div>
 
       <div class="bookings-list" *ngIf="!loading && !error && bookings.length > 0">
-        <div class="booking-row" *ngFor="let b of bookings" [class]="'status-' + (b.status || '').toLowerCase()">
-          <div class="booking-info">
-            <strong>{{ b.client?.fullName || 'Unknown' }}</strong>
-            <span>{{ b.title }}</span>
-            <small>{{ b.startTime | date:'MMM dd, yyyy h:mm a' }} — {{ b.endTime | date:'h:mm a' }}</small>
+        <div class="booking-row" *ngFor="let b of bookings" [class]="'status-' + (b.status || '').toLowerCase()" (click)="openDetail(b)">
+          <div class="booking-main">
+            <div class="booking-client">
+              <strong>{{ b.client?.fullName || 'Unknown Client' }}</strong>
+              <span class="booking-title">{{ b.title }}</span>
+            </div>
+            <div class="booking-datetime">
+              <span class="date">{{ b.startTime | date:'MMM dd' }}</span>
+              <span class="time">{{ b.startTime | date:'h:mm a' }} — {{ b.endTime | date:'h:mm a' }}</span>
+              <span class="duration" *ngIf="getDurationMin(b) as dur">{{ dur }} min</span>
+            </div>
+            <div class="booking-services" *ngIf="b.services?.length">
+              <span class="svc-tag" *ngFor="let s of b.services">{{ s.name }}</span>
+            </div>
           </div>
-          <div class="booking-meta">
+          <div class="booking-side">
             <span class="status-badge" [class]="'badge-' + (b.status || '').toLowerCase()">{{ b.status }}</span>
-            <b>{{ (b.totalAmount || 0) | currency }}</b>
             <span class="staff-name">{{ b.staff?.fullName || 'Unassigned' }}</span>
-          </div>
-          <div class="booking-actions">
-            <button (click)="openDetail(b)">View</button>
+            <span class="branch-name" *ngIf="b.branch?.name">{{ b.branch.name }}</span>
+            <b class="amount">{{ (b.totalAmount || 0) | currency }}</b>
           </div>
         </div>
       </div>
@@ -72,7 +88,10 @@ import { BookingsService } from './bookings.service';
               <div class="info-row"><span>Status</span><span class="status-badge" [class]="'badge-' + (selectedBooking?.status || '').toLowerCase()">{{ selectedBooking?.status }}</span></div>
               <div class="info-row"><span>Start</span><span>{{ selectedBooking?.startTime | date:'MMM dd, yyyy h:mm a' }}</span></div>
               <div class="info-row"><span>End</span><span>{{ selectedBooking?.endTime | date:'MMM dd, yyyy h:mm a' }}</span></div>
+              <div class="info-row"><span>Duration</span><span>{{ getDurationMin(selectedBooking) }} min</span></div>
               <div class="info-row"><span>Staff</span><span>{{ selectedBooking?.staff?.fullName || 'Unassigned' }}</span></div>
+              <div class="info-row" *ngIf="selectedBooking?.branch?.name"><span>Branch</span><span>{{ selectedBooking.branch.name }}</span></div>
+              <div class="info-row" *ngIf="selectedBooking?.resource?.name"><span>Resource</span><span>{{ selectedBooking.resource.name }}</span></div>
               <div class="info-row"><span>Amount</span><span>{{ (selectedBooking?.totalAmount || 0) | currency }}</span></div>
               <div class="info-row" *ngIf="selectedBooking?.notes"><span>Notes</span><span>{{ selectedBooking?.notes }}</span></div>
             </div>
@@ -82,6 +101,15 @@ import { BookingsService } from './bookings.service';
               <div class="info-row"><span>Name</span><span>{{ selectedBooking?.client?.fullName }}</span></div>
               <div class="info-row" *ngIf="selectedBooking?.client?.phone"><span>Phone</span><span>{{ selectedBooking?.client?.phone }}</span></div>
               <div class="info-row" *ngIf="selectedBooking?.client?.email"><span>Email</span><span>{{ selectedBooking?.client?.email }}</span></div>
+            </div>
+
+            <div class="drawer-section" *ngIf="selectedBooking?.services?.length">
+              <h3>Services ({{ selectedBooking.services.length }})</h3>
+              <div class="svc-line" *ngFor="let s of selectedBooking.services">
+                <span class="svc-name">{{ s.name }}</span>
+                <span class="svc-meta">{{ s.durationMin }} min</span>
+                <span class="svc-price">{{ s.price | currency }}</span>
+              </div>
             </div>
 
             <div class="drawer-actions" *ngIf="selectedBooking?.status">
@@ -108,7 +136,7 @@ import { BookingsService } from './bookings.service';
               <input [(ngModel)]="createForm.staffId" placeholder="Staff ID">
               <input [(ngModel)]="createForm.title" placeholder="Title">
               <input [(ngModel)]="createForm.startTime" type="datetime-local">
-               <input [(ngModel)]="createForm.branchId" placeholder="Branch ID">
+              <input [(ngModel)]="createForm.branchId" placeholder="Branch ID">
               <div class="create-services">
                 <div class="svc-row" *ngFor="let s of createForm.services; let i = index">
                   <input [(ngModel)]="s.name" placeholder="Service name" style="flex:1">
@@ -131,44 +159,63 @@ import { BookingsService } from './bookings.service';
     </section>
   `,
   styles: [`
-    .page{display:grid;gap:24px}
-    .head{display:flex;justify-content:space-between;align-items:center}
+    .page{display:grid;gap:20px;max-width:1200px}
+    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
     h1{font-size:34px;margin:0}
-    p{color:#6b7280;margin:6px 0 0}
-    .primary{border:0;border-radius:14px;padding:12px 20px;font-weight:800;cursor:pointer;background:#0b0b0b;color:white}
-    .toolbar{display:flex;gap:12px;flex-wrap:wrap}
-    .toolbar input{flex:1;min-width:180px;padding:14px;border:1px solid #e5e7eb;border-radius:14px}
-    .toolbar select{padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:white}
+    p{color:#6b7280;margin:6px 0 0;font-size:14px}
+    .primary{border:0;border-radius:14px;padding:12px 20px;font-weight:800;cursor:pointer;background:#0b0b0b;color:white;font-size:14px;white-space:nowrap;transition:opacity .2s}
+    .primary:hover{opacity:.85}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .filter-input{flex:1;min-width:180px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none;transition:border-color .2s}
+    .filter-input:focus{border-color:#0b0b0b}
+    .filter-select{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;background:white;outline:none;cursor:pointer;transition:border-color .2s}
+    .filter-select:focus{border-color:#0b0b0b}
+    .filter-date{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none;transition:border-color .2s}
+    .filter-date:focus{border-color:#0b0b0b}
+    .clear-btn{border:1px solid #e5e7eb;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;background:white;font-size:13px;transition:all .2s}
+    .clear-btn:hover{border-color:#dc2626;color:#dc2626}
+    .summary{padding:4px 2px}
+    .count{font-size:13px;color:#6b7280;font-weight:600}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
     .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
-    .error strong{color:#991b1b}.error p{color:#7f1d1d}
+    .error strong{color:#991b1b}.error p{color:#7f1d1d;margin:8px 0}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
-    .empty{padding:48px;text-align:center;color:#6b7280;background:white;border-radius:24px;border:1px solid #e5e7eb}
+    .empty{padding:48px 24px;text-align:center;color:#6b7280;background:white;border-radius:24px;border:1px solid #e5e7eb}
+    .empty-icon{font-size:40px;margin-bottom:12px}
+    .empty p{font-size:16px;font-weight:600;margin:0 0 6px}
+    .empty-hint{font-size:13px;color:#9ca3af}
+    .empty-hint a{color:#0b0b0b;text-decoration:underline;cursor:pointer}
     .bookings-list{display:grid;gap:8px}
-    .booking-row{display:flex;align-items:center;gap:16px;background:white;border:1px solid #e5e7eb;border-radius:18px;padding:16px 20px;border-left:4px solid #e5e7eb;transition:box-shadow .2s}
+    .booking-row{display:flex;align-items:center;gap:16px;background:white;border:1px solid #e5e7eb;border-radius:16px;padding:14px 18px;border-left:4px solid #e5e7eb;transition:box-shadow .2s;cursor:pointer}
     .booking-row:hover{box-shadow:0 8px 25px rgba(15,23,42,.08)}
     .booking-row.status-confirmed{border-left-color:#3b82f6}
     .booking-row.status-completed{border-left-color:#16a34a}
     .booking-row.status-pending{border-left-color:#eab308}
-    .booking-row.status-cancelled{border-left-color:#dc2626;opacity:.7}
-    .booking-row.status-no_show{border-left-color:#6b7280;opacity:.7}
+    .booking-row.status-cancelled{border-left-color:#dc2626;opacity:.65}
+    .booking-row.status-no_show{border-left-color:#6b7280;opacity:.65}
     .booking-row.status-checked_in{border-left-color:#8b5cf6}
-    .booking-info{flex:2}
-    .booking-info strong{display:block;font-size:16px}
-    .booking-info span{display:block;font-size:13px;color:#374151}
-    .booking-info small{font-size:12px;color:#6b7280}
-    .booking-meta{flex:1;text-align:right;display:grid;gap:4px}
-    .status-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700}
+    .booking-main{flex:2;display:grid;gap:6px;min-width:0}
+    .booking-client strong{display:block;font-size:15px;line-height:1.3}
+    .booking-title{font-size:13px;color:#374151;display:block}
+    .booking-datetime{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#6b7280}
+    .booking-datetime .date{font-weight:600}
+    .booking-datetime .time{color:#4b5563}
+    .booking-datetime .duration{background:#f3f4f6;padding:1px 8px;border-radius:8px;font-weight:600;color:#374151}
+    .booking-services{display:flex;flex-wrap:wrap;gap:4px}
+    .svc-tag{font-size:11px;background:#f3f4f6;color:#4b5563;padding:2px 8px;border-radius:8px;font-weight:600}
+    .booking-side{flex-shrink:0;text-align:right;display:grid;gap:3px;align-items:end}
+    .status-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;text-align:center}
     .badge-confirmed{background:#dbeafe;color:#1d4ed8}
     .badge-completed{background:#f0fdf4;color:#16a34a}
     .badge-pending{background:#fefce8;color:#a16207}
     .badge-cancelled{background:#fef2f2;color:#dc2626}
     .badge-no_show{background:#f3f4f6;color:#6b7280}
     .badge-checked_in{background:#f3e8ff;color:#7c3aed}
-    .booking-meta b{font-size:18px}.staff-name{font-size:12px;color:#6b7280}
-    .booking-actions button{border:1px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-weight:700;cursor:pointer;background:white;font-size:12px;white-space:nowrap}
+    .staff-name{font-size:12px;color:#6b7280;font-weight:600}
+    .branch-name{font-size:11px;color:#9ca3af}
+    .amount{font-size:16px;font-weight:800}
     .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:flex-end;z-index:50}
     .drawer-centered{justify-content:center;align-items:center}
     .drawer-panel{background:white;width:min(460px,100%);max-height:100vh;overflow-y:auto;animation:slideIn .25s ease}
@@ -183,44 +230,56 @@ import { BookingsService } from './bookings.service';
     .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
     .info-row span:first-child{color:#6b7280;font-weight:600}
     .info-row span:last-child{text-align:right;max-width:60%}
+    .svc-line{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+    .svc-name{flex:1;font-weight:600}
+    .svc-meta{color:#6b7280;font-size:12px}
+    .svc-price{font-weight:800;text-align:right}
     .drawer-actions{display:flex;gap:10px;flex-wrap:wrap}
-    .drawer-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px}
+    .drawer-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;transition:opacity .2s}
+    .drawer-actions button:hover{opacity:.85}
     .btn-primary{background:#0b0b0b;color:white}
     .btn-danger{background:#fee2e2;color:#991b1b}
     .drawer-loading{display:flex;align-items:center;gap:10px;justify-content:center;padding:12px;color:#6b7280;font-size:13px}
     .drawer-error{background:#fef2f2;color:#991b1b;padding:12px;border-radius:12px;font-size:13px;text-align:center}
     .create-form{display:grid;gap:12px}
-    .create-form input,select{padding:14px;border:1px solid #e5e7eb;border-radius:14px}
+    .create-form input{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none}
+    .create-form input:focus{border-color:#0b0b0b}
     .create-services{display:grid;gap:8px}
     .svc-row{display:flex;gap:8px;align-items:center}
-    .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer}
-    .add-btn{border:1px dashed #e5e7eb;border-radius:12px;padding:12px;background:transparent;cursor:pointer;font-weight:600}
-    @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-meta{text-align:left}.toolbar{flex-direction:column}}
+    .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer;font-size:16px;flex-shrink:0}
+    .add-btn{border:1px dashed #d1d5db;border-radius:12px;padding:10px;background:transparent;cursor:pointer;font-weight:600;font-size:13px;color:#6b7280;transition:all .2s}
+    .add-btn:hover{border-color:#0b0b0b;color:#0b0b0b}
+    @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{flex-direction:column}.toolbar .filter-input{min-width:0}}
   `]
 })
 export class BookingsComponent {
   private api = inject(BookingsService);
 
-  bookings: any[] = [];
-  filters: any = { search: '', status: '', date: '' };
+  bookings: BookingListItem[] = [];
+  filters: BookingFilterState = { search: '', status: '', date: '' };
   loading = true;
   error = '';
 
   showDetail = false;
-  selectedBooking: any = null;
+  selectedBooking: BookingListItem | null = null;
   drawerBusy = false;
   drawerError = '';
 
   showCreate = false;
   createBusy = false;
   createError = '';
-  createForm: any = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [{ name: '', durationMin: 30, price: 0 }] };
+  createForm: CreateBookingForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [{ name: '', durationMin: 30, price: 0 }] };
+
+  get hasActiveFilters(): boolean {
+    return !!(this.filters.search || this.filters.status || this.filters.date);
+  }
 
   ngOnInit() { this.load(); }
 
   load() {
-    this.loading = true; this.error = '';
-    const params: any = {};
+    this.loading = true;
+    this.error = '';
+    const params: BookingQueryParams = {};
     if (this.filters.search) params.search = this.filters.search;
     if (this.filters.status) params.status = this.filters.status;
     if (this.filters.date) params.startTime = this.filters.date;
@@ -230,13 +289,33 @@ export class BookingsComponent {
     });
   }
 
-  openDetail(b: any) { this.selectedBooking = b; this.showDetail = true; this.drawerBusy = false; this.drawerError = ''; }
+  onFilterChange() { this.load(); }
+
+  clearFilters() {
+    this.filters = { search: '', status: '', date: '' };
+    this.load();
+  }
+
+  getDurationMin(b: BookingListItem | null): number {
+    if (!b?.services?.length) return 0;
+    return b.services.reduce((sum, s) => sum + (s.durationMin || 0), 0);
+  }
+
+  openDetail(b: BookingListItem) {
+    this.selectedBooking = b;
+    this.showDetail = true;
+    this.drawerBusy = false;
+    this.drawerError = '';
+  }
+
   closeDetail() { this.showDetail = false; }
   closeCreate() { this.showCreate = false; }
 
-  canCancel(b: any): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
+  canCancel(b: BookingListItem | null): boolean {
+    return !!b && (['PENDING', 'CONFIRMED', 'CHECKED_IN'] as BookingStatus[]).includes(b.status);
+  }
 
-  doCancel(b: any) {
+  doCancel(b: BookingListItem) {
     this.drawerBusy = true; this.drawerError = '';
     this.api.cancel(b.id).subscribe({
       next: () => { this.drawerBusy = false; this.closeDetail(); this.load(); },
@@ -244,7 +323,7 @@ export class BookingsComponent {
     });
   }
 
-  doStatus(b: any, status: string) {
+  doStatus(b: BookingListItem, status: string) {
     this.drawerBusy = true; this.drawerError = '';
     this.api.updateStatus(b.id, status).subscribe({
       next: () => { this.drawerBusy = false; this.closeDetail(); this.load(); },

@@ -1,45 +1,65 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import type { BookingListItem, BookingServiceLine, CreateBookingForm } from './bookings.models';
+
+export interface BookingQueryParams {
+  search?: string;
+  status?: string;
+  startTime?: string;
+  branchId?: string;
+  staffId?: string;
+  clientId?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class BookingsService {
   private http = inject(HttpClient);
   private baseUrl = 'http://localhost:3000/api/bookings';
 
-  getAll(query?: any): Observable<any[]> {
-    return this.http.get<any[]>(this.baseUrl, { params: query });
+  getAll(query?: BookingQueryParams): Observable<BookingListItem[]> {
+    let params = new HttpParams();
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        if (value) params = params.set(key, value);
+      }
+    }
+    return this.http.get<BookingListItem[]>(this.baseUrl, { params });
   }
 
-  getById(id: string): Observable<any> {
-    return this.http.get(`${this.baseUrl}/${id}`);
+  getById(id: string): Observable<BookingListItem> {
+    return this.http.get<BookingListItem>(`${this.baseUrl}/${id}`);
   }
 
-  create(body: any): Observable<any> {
-    return this.http.post(this.baseUrl, body);
+  create(body: CreateBookingForm): Observable<BookingListItem> {
+    return this.http.post<BookingListItem>(this.baseUrl, body);
   }
 
-  update(id: string, body: any): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}`, body);
+  update(id: string, body: Partial<BookingListItem>): Observable<BookingListItem> {
+    return this.http.patch<BookingListItem>(`${this.baseUrl}/${id}`, body);
   }
 
-  reschedule(id: string, body: any): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/reschedule`, body);
+  reschedule(id: string, body: { startTime: string; resourceId?: string }): Observable<BookingListItem> {
+    return this.http.patch<BookingListItem>(`${this.baseUrl}/${id}/reschedule`, body);
   }
 
-  cancel(id: string, body?: any): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/cancel`, body || {});
+  cancel(id: string, body?: { reason?: string }): Observable<BookingListItem> {
+    return this.http.patch<BookingListItem>(`${this.baseUrl}/${id}/cancel`, body || {});
   }
 
-  updateStatus(id: string, status: string): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/status`, { status });
+  updateStatus(id: string, status: string): Observable<BookingListItem> {
+    return this.http.patch<BookingListItem>(`${this.baseUrl}/${id}/status`, { status });
   }
 
-  remove(id: string): Observable<any> {
-    return this.http.delete(`${this.baseUrl}/${id}`);
+  remove(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 
-  getSlots(query: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/slots`, { params: query });
+  getSlots(query: { branchId: string; staffId: string; date: string; serviceIds: string; slotSizeMinutes?: string }): Observable<any> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value) params = params.set(key, value);
+    }
+    return this.http.get(`${this.baseUrl}/slots`, { params });
   }
 }
