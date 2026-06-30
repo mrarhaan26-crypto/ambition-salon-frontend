@@ -46,7 +46,7 @@ import {
         <div class="head-actions">
           <button (click)="goToday()" class="today-btn">Today</button>
           <button (click)="prev()" class="nav-btn">&larr;</button>
-          <span class="date-label">{{ dateLabel }}</span>
+          <span class="date-label">{{ dateLabel }}<span class="today-badge" *ngIf="isCurrentDateToday()">Today</span></span>
           <button (click)="next()" class="nav-btn">&rarr;</button>
           <button (click)="refresh()" class="refresh-btn" [disabled]="loading">{{ loading ? 'Loading...' : 'Refresh' }}</button>
           <span class="updated-text" *ngIf="lastUpdated && !loading">Updated {{ lastUpdated }}</span>
@@ -131,7 +131,8 @@ import {
               <div class="dv-container">
                 <div class="dv-time-col">
                   <div class="dv-header-gap"></div>
-                  <div class="dv-time-row" *ngFor="let hour of dayHours">
+                  <div class="dv-time-row" *ngFor="let hour of dayHours"
+                    (click)="openCreateBookingUnassigned(hour)">
                     <span class="dv-time-label">{{ hour }}:00</span>
                   </div>
                 </div>
@@ -224,7 +225,8 @@ import {
               <div class="dv-container">
                 <div class="dv-time-col">
                   <div class="dv-header-gap"></div>
-                  <div class="dv-time-row" *ngFor="let hour of dayHours">
+                  <div class="dv-time-row" *ngFor="let hour of dayHours"
+                    (click)="openCreateBookingUnassigned(hour)">
                     <span class="dv-time-label">{{ hour }}:00</span>
                   </div>
                 </div>
@@ -699,7 +701,7 @@ import {
     .refresh-btn{font-size:12px;padding:10px 14px;min-height:40px}
     .refresh-btn:disabled{opacity:.5;cursor:default}
     .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
-    .date-label{font-weight:700;font-size:16px;min-width:200px;text-align:center}
+    .date-label{font-weight:700;font-size:16px;min-width:200px;text-align:center;color:#374151;letter-spacing:-.02em}
     .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
     .tabs button{border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer;background:white}
     .tabs button.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
@@ -751,7 +753,8 @@ import {
     .dv-container{display:flex}
     .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa}
     .dv-header-gap{height:52px;border-bottom:1px solid #e5e7eb}
-    .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #f1f5f9}
+    .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #f1f5f9;cursor:pointer}
+    .dv-time-row:hover{background:#eef2ff}
     .dv-time-label{font-size:11px;color:#6b7280;font-weight:600}
     .dv-staff-scroll{display:flex;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
     .dv-staff-col{min-width:200px;flex:1 0 200px;border-right:1px solid #e5e7eb}
@@ -764,7 +767,8 @@ import {
     .staff-header-name{font-size:13px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .staff-header-meta{font-size:9px;color:#6b7280;font-weight:600}
     .dv-staff-body{position:relative}
-    .dv-hour-row{height:56px;border-bottom:1px solid #f1f5f9;padding:2px 4px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden}
+    .dv-hour-row{height:56px;border-bottom:1px solid #f1f5f9;padding:2px 4px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden;cursor:pointer}
+    .dv-hour-row:hover{background:#f0f4ff}
     .dv-hour-row-alt{background:#fafafa}
     .dv-unassigned-col{background:#fafcff}
     .dv-unassigned-col .dv-staff-header{background:#eef2ff;color:#4338ca;font-style:italic;border-left:3px solid #6366f1}
@@ -859,6 +863,7 @@ import {
     .month-date-number{font-size:14px;font-weight:700;color:#0b0b0b}
     .other-month .month-date-number{color:#9ca3af}
     .month-today-badge{font-size:9px;background:#6366f1;color:white;border-radius:8px;padding:1px 6px;font-weight:700}
+    .today-badge{font-size:10px;background:#6366f1;color:white;border-radius:10px;padding:2px 8px;font-weight:700;margin-left:8px;vertical-align:middle}
     .month-booking-count{font-size:10px;color:#6366f1;font-weight:700;margin-bottom:4px}
     .month-status-row{display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;align-items:center}
     .month-status-item{display:flex;align-items:center;gap:2px}
@@ -1279,13 +1284,13 @@ export class CalendarComponent {
   }
 
   get dateLabel(): string {
-    if (this.view === 'day') return this.currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (this.view === 'day') return `Day · ${this.currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`;
     if (this.view === 'week') {
       const start = this.weekDays[0]?.date;
       const end = this.weekDays[6]?.date;
-      return start ? `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : '';
+      return start ? `Week · ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : '';
     }
-    return this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return `Month · ${this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
   }
 
   ngOnInit() { this.load(); this.startAutoRefresh(); }
