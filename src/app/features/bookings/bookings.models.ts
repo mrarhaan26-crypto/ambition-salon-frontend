@@ -72,7 +72,9 @@ export interface CreateBookingForm {
   staffId: string;
   title: string;
   startTime: string;
+  endTime?: string;
   branchId: string;
+  notes?: string;
   services: BookingServiceFormLine[];
 }
 

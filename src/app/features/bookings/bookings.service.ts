@@ -63,6 +63,13 @@ export class BookingsService {
     return this.http.get(`${this.baseUrl}/slots`, { params });
   }
 
+  getClientBookingCount(clientId: string): Observable<number> {
+    let params = new HttpParams().set('clientId', clientId);
+    return this.http.get<BookingListItem[]>(this.baseUrl, { params }).pipe(
+      (d) => new Observable<number>((sub) => d.subscribe({ next: (b) => { sub.next(b.length); sub.complete(); }, error: (e) => { sub.next(0); sub.complete(); } }))
+    );
+  }
+
   getClients(): Observable<ClientOption[]> {
     return this.http.get<ClientOption[]>('http://localhost:3000/api/clients');
   }

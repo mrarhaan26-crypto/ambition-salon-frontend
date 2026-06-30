@@ -1,12 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { FormsService } from './forms.service';
+import { ClientsService } from '../clients/clients.service';
 
 @Component({
   selector: 'app-forms',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <section class="page">
       <div class="head">
@@ -15,6 +17,15 @@ import { FormsService } from './forms.service';
           <p>Form templates and client submissions.</p>
         </div>
         <button class="primary" (click)="openCreate()">+ New Form</button>
+      </div>
+
+      <div class="client-context" *ngIf="filterClientName">
+        <div class="cc-avatar">{{ filterClientName.charAt(0).toUpperCase() }}</div>
+        <div class="cc-info">
+          <strong>{{ filterClientName }}</strong>
+          <span>Viewing forms context</span>
+        </div>
+        <a [routerLink]="'/app/clients'" class="cc-back">Back to Clients</a>
       </div>
 
       <div class="loading" *ngIf="loading"><div class="spinner"></div><span>Loading forms...</span></div>
@@ -69,6 +80,12 @@ import { FormsService } from './forms.service';
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error strong{color:#991b1b}.error p{color:#7f1d1d}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
+    .client-context{display:flex;align-items:center;gap:16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:24px;padding:16px 20px}
+    .cc-avatar{width:44px;height:44px;border-radius:50%;background:#0b0b0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0}
+    .cc-info{flex:1}
+    .cc-info strong{display:block;font-size:15px}
+    .cc-info span{font-size:12px;color:#6b7280}
+    .cc-back{border:1px solid #cbd5e1;border-radius:12px;padding:10px 16px;font-weight:700;font-size:12px;color:#0b0b0b;text-decoration:none}
     .empty{padding:48px;text-align:center;color:#6b7280}
     .card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
     .card{background:white;border:1px solid #e5e7eb;border-radius:24px;padding:24px;box-shadow:0 12px 35px rgba(15,23,42,.06)}
@@ -96,14 +113,31 @@ import { FormsService } from './forms.service';
 })
 export class FormsComponent {
   private api = inject(FormsService);
+  private route = inject(ActivatedRoute);
+  private clientsApi = inject(ClientsService);
   items: any[] = [];
   loading = true;
   error = '';
   showForm = false;
   editingId = '';
   form: any = { name: '', description: '', fields: '' };
+  filterClientId = '';
+  filterClientName = '';
 
-  ngOnInit() { this.loadAll(); }
+  ngOnInit() {
+    this.loadAll();
+    this.route.queryParams.subscribe((qp) => {
+      this.filterClientId = qp['clientId'] || '';
+      if (this.filterClientId) {
+        this.clientsApi.getClient(this.filterClientId).subscribe({
+          next: (c) => { this.filterClientName = c.fullName; },
+          error: () => { this.filterClientName = 'Client'; },
+        });
+      } else {
+        this.filterClientName = '';
+      }
+    });
+  }
 
   loadAll() {
     this.loading = true; this.error = '';
@@ -121,3 +155,4 @@ export class FormsComponent {
 
   deleteItem(f: any) { if (!confirm(`Delete form "${f.name}"?`)) return; this.api.remove(f.id).subscribe({ next: () => this.loadAll() }); }
 }
+

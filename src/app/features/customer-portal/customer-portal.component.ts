@@ -44,7 +44,7 @@ import { CustomerPortalService } from './customer-portal.service';
             <div class="empty" *ngIf="upcoming.length === 0"><p>No upcoming bookings.</p></div>
             <div class="booking-item" *ngFor="let b of upcoming">
               <strong>{{ b.title }}</strong>
-              <span>{{ b.startTime | date:'MMM dd, yyyy HH:mm' }}</span>
+              <span>{{ b.startTime | date:'MMM dd, yyyy h:mm a' }}</span>
               <span class="badge" [class]="'st-'+b.status.toLowerCase()">{{ b.status }}</span>
             </div>
           </div>

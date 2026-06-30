@@ -85,7 +85,7 @@ import { BookOnlineService } from './book-online.service';
         <div class="panel success" *ngIf="step === 4 && createdBooking">
           <h2>Booking Confirmed!</h2>
           <p><strong>Service:</strong> {{ createdBooking.title }}</p>
-          <p><strong>Date:</strong> {{ createdBooking.startTime | date:'MMM dd, yyyy HH:mm' }}</p>
+          <p><strong>Date:</strong> {{ createdBooking.startTime | date:'MMM dd, yyyy h:mm a' }}</p>
           <p><strong>Status:</strong> {{ createdBooking.status }}</p>
           <button class="primary" (click)="reset()">Book Another</button>
         </div>

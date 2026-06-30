@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { BookingsService, BookingQueryParams } from './bookings.service';
 import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingServiceFormLine, BookingStatus, ClientOption, StaffOption, BranchOption, ServiceOption } from './bookings.models';
 
 @Component({
   selector: 'app-bookings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <section class="page">
       <div class="head">
@@ -33,6 +34,11 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
         <button class="clear-btn" *ngIf="hasActiveFilters" (click)="clearFilters()">Clear</button>
       </div>
 
+      <div class="client-filter-banner" *ngIf="filterClientName">
+        <span>Viewing bookings for <strong>{{ filterClientName }}</strong></span>
+        <button class="clear-client-filter" (click)="clearClientFilter()">Clear filter</button>
+      </div>
+
       <div class="summary" *ngIf="!loading && !error && bookings.length > 0">
         <span class="count">{{ bookings.length }} booking{{ bookings.length === 1 ? '' : 's' }}</span>
       </div>
@@ -52,28 +58,55 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
       </div>
 
       <div class="bookings-list" *ngIf="!loading && !error && bookings.length > 0">
-        <div class="booking-row" *ngFor="let b of bookings" [class]="'status-' + (b.status || '').toLowerCase()" (click)="openDetail(b)">
-          <div class="booking-main">
-            <div class="booking-client">
-              <strong>{{ b.client?.fullName || 'Unknown Client' }}</strong>
-              <span class="booking-title">{{ b.title }}</span>
+        <ng-container *ngIf="todayBookings.length > 0">
+          <div class="list-section-label">Today</div>
+          <div class="booking-row" *ngFor="let b of todayBookings" [class]="'status-' + (b.status || '').toLowerCase()" (click)="openDetail(b)">
+            <div class="booking-main">
+              <div class="booking-client">
+                <strong>{{ b.client?.fullName || 'Unknown Client' }}</strong>
+                <span class="booking-title">{{ b.title }}</span>
+              </div>
+              <div class="booking-datetime">
+                <span class="time">{{ b.startTime | date:'h:mm a' }} — {{ b.endTime | date:'h:mm a' }}</span>
+                <span class="duration" *ngIf="getDurationMin(b) as dur">{{ dur }} min</span>
+              </div>
+              <div class="booking-services" *ngIf="b.services?.length">
+                <span class="svc-tag" *ngFor="let s of b.services">{{ s.name }}</span>
+              </div>
             </div>
-            <div class="booking-datetime">
-              <span class="date">{{ b.startTime | date:'MMM dd' }}</span>
-              <span class="time">{{ b.startTime | date:'h:mm a' }} — {{ b.endTime | date:'h:mm a' }}</span>
-              <span class="duration" *ngIf="getDurationMin(b) as dur">{{ dur }} min</span>
-            </div>
-            <div class="booking-services" *ngIf="b.services?.length">
-              <span class="svc-tag" *ngFor="let s of b.services">{{ s.name }}</span>
+            <div class="booking-side">
+              <span class="status-badge" [class]="'badge-' + (b.status || '').toLowerCase()">{{ b.status | titlecase | slice:0:4 }}</span>
+              <span class="staff-name">{{ b.staff?.fullName || 'Unassigned' }}</span>
+              <span class="branch-name" *ngIf="b.branch?.name">{{ b.branch.name }}</span>
+              <b class="amount">{{ (b.totalAmount || 0) | currency }}</b>
             </div>
           </div>
-          <div class="booking-side">
-            <span class="status-badge" [class]="'badge-' + (b.status || '').toLowerCase()">{{ b.status }}</span>
-            <span class="staff-name">{{ b.staff?.fullName || 'Unassigned' }}</span>
-            <span class="branch-name" *ngIf="b.branch?.name">{{ b.branch.name }}</span>
-            <b class="amount">{{ (b.totalAmount || 0) | currency }}</b>
+        </ng-container>
+        <ng-container *ngIf="upcomingBookings.length > 0">
+          <div class="list-section-label" *ngIf="todayBookings.length > 0">Upcoming</div>
+          <div class="booking-row" *ngFor="let b of upcomingBookings" [class]="'status-' + (b.status || '').toLowerCase()" (click)="openDetail(b)">
+            <div class="booking-main">
+              <div class="booking-client">
+                <strong>{{ b.client?.fullName || 'Unknown Client' }}</strong>
+                <span class="booking-title">{{ b.title }}</span>
+              </div>
+              <div class="booking-datetime">
+                <span class="date">{{ b.startTime | date:'MMM dd' }}</span>
+                <span class="time">{{ b.startTime | date:'h:mm a' }} — {{ b.endTime | date:'h:mm a' }}</span>
+                <span class="duration" *ngIf="getDurationMin(b) as dur">{{ dur }} min</span>
+              </div>
+              <div class="booking-services" *ngIf="b.services?.length">
+                <span class="svc-tag" *ngFor="let s of b.services">{{ s.name }}</span>
+              </div>
+            </div>
+            <div class="booking-side">
+              <span class="status-badge" [class]="'badge-' + (b.status || '').toLowerCase()">{{ b.status | titlecase | slice:0:4 }}</span>
+              <span class="staff-name">{{ b.staff?.fullName || 'Unassigned' }}</span>
+              <span class="branch-name" *ngIf="b.branch?.name">{{ b.branch.name }}</span>
+              <b class="amount">{{ (b.totalAmount || 0) | currency }}</b>
+            </div>
           </div>
-        </div>
+        </ng-container>
       </div>
 
       <div class="drawer-overlay" *ngIf="showDetail" (click)="closeDetail()">
@@ -106,9 +139,16 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
 
               <div class="drawer-section" *ngIf="selectedBooking.client">
                 <h3>Client</h3>
-                <div class="info-row"><span>Name</span><span>{{ selectedBooking.client.fullName }}</span></div>
-                <div class="info-row" *ngIf="selectedBooking.client.phone"><span>Phone</span><span>{{ selectedBooking.client.phone }}</span></div>
-                <div class="info-row" *ngIf="selectedBooking.client.email"><span>Email</span><span>{{ selectedBooking.client.email }}</span></div>
+                <div class="client-card">
+                  <div class="client-avatar">{{ (selectedBooking.client.fullName || '?').charAt(0) }}</div>
+                  <div class="client-info">
+                    <span class="client-name">{{ selectedBooking.client.fullName }}</span>
+                    <span class="client-contact" *ngIf="selectedBooking.client.phone">{{ selectedBooking.client.phone }}</span>
+                    <span class="client-contact" *ngIf="selectedBooking.client.email">{{ selectedBooking.client.email }}</span>
+                    <span class="client-history" *ngIf="clientBookingCount > 0">{{ clientBookingCount }} booking{{ clientBookingCount === 1 ? '' : 's' }} total</span>
+                  </div>
+                  <a routerLink="/app/clients" class="client-crm-link" title="View in CRM">CRM</a>
+                </div>
               </div>
 
               <div class="drawer-section" *ngIf="selectedBooking.services?.length">
@@ -201,7 +241,23 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
               <input [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input">
 
               <label class="form-label">Start Time *</label>
-              <input [(ngModel)]="createForm.startTime" type="datetime-local" class="form-input" [class.field-error]="formErrors.startTime">
+              <div class="time-picker-row">
+                <input [(ngModel)]="createDate" type="date" class="form-input time-date" (change)="syncTimeToForm()" [class.field-error]="formErrors.startTime">
+                <select [(ngModel)]="createHour" class="form-input time-hour" (change)="syncTimeToForm()">
+                  <option *ngFor="let h of [1,2,3,4,5,6,7,8,9,10,11,12]" [value]="h">{{ h }}</option>
+                </select>
+                <select [(ngModel)]="createMinute" class="form-input time-min" (change)="syncTimeToForm()">
+                  <option value="00">:00</option>
+                  <option value="15">:15</option>
+                  <option value="30">:30</option>
+                  <option value="45">:45</option>
+                </select>
+                <select [(ngModel)]="createAmPm" class="form-input time-ampm" (change)="syncTimeToForm()">
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+                <span class="time-12-preview" *ngIf="createForm.startTime">{{ createForm.startTime | date:'h:mm a' }}</span>
+              </div>
               <span class="field-msg" *ngIf="formErrors.startTime">{{ formErrors.startTime }}</span>
 
               <label class="form-label">Services *</label>
@@ -226,6 +282,14 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 </div>
               </div>
               <span class="field-msg" *ngIf="formErrors.services">{{ formErrors.services }}</span>
+
+              <div class="duration-hint" *ngIf="createForm.services.length > 0 && createForm.startTime">
+                <span>Scheduled: <strong>{{ createForm.startTime | date:'h:mm a' }}</strong> – <strong>{{ getEstimatedEndTime() | date:'h:mm a' }}</strong></span>
+                <span>({{ getFormDuration() }} min total)</span>
+              </div>
+
+              <label class="form-label">Notes</label>
+              <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." class="form-input form-textarea" rows="2"></textarea>
 
               <div class="drawer-actions">
                 <button (click)="closeCreate()">Cancel</button>
@@ -255,6 +319,10 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .filter-date:focus{border-color:#0b0b0b}
     .clear-btn{border:1px solid #e5e7eb;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;background:white;font-size:13px;transition:all .2s}
     .clear-btn:hover{border-color:#dc2626;color:#dc2626}
+    .client-filter-banner{display:flex;align-items:center;gap:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px 16px;font-size:14px;color:#1e40af}
+    .client-filter-banner strong{font-weight:800}
+    .clear-client-filter{border:1px solid #bfdbfe;background:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#1e40af;transition:all .2s;margin-left:auto}
+    .clear-client-filter:hover{background:#dbeafe}
     .summary{padding:4px 2px}
     .count{font-size:13px;color:#6b7280;font-weight:600}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
@@ -268,7 +336,9 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .empty p{font-size:16px;font-weight:600;margin:0 0 6px}
     .empty-hint{font-size:13px;color:#9ca3af}
     .empty-hint a{color:#0b0b0b;text-decoration:underline;cursor:pointer}
-    .bookings-list{display:grid;gap:8px}
+    .bookings-list{display:grid;gap:6px}
+    .list-section-label{font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.06em;padding:12px 4px 4px;margin-top:8px;border-top:1px solid #f3f4f6}
+    .list-section-label:first-child{border-top:0;margin-top:0}
     .booking-row{display:flex;align-items:center;gap:16px;background:white;border:1px solid #e5e7eb;border-radius:16px;padding:14px 18px;border-left:4px solid #e5e7eb;transition:box-shadow .2s;cursor:pointer}
     .booking-row:hover{box-shadow:0 8px 25px rgba(15,23,42,.08)}
     .booking-row.status-confirmed{border-left-color:#3b82f6}
@@ -287,7 +357,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .booking-services{display:flex;flex-wrap:wrap;gap:4px}
     .svc-tag{font-size:11px;background:#f3f4f6;color:#4b5563;padding:2px 8px;border-radius:8px;font-weight:600}
     .booking-side{flex-shrink:0;text-align:right;display:grid;gap:3px;align-items:end}
-    .status-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;text-align:center}
+    .status-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.03em}
     .badge-confirmed{background:#dbeafe;color:#1d4ed8}
     .badge-completed{background:#f0fdf4;color:#16a34a}
     .badge-pending{background:#fefce8;color:#a16207}
@@ -314,6 +384,15 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
     .info-row span:first-child{color:#6b7280;font-weight:600}
     .info-row span:last-child{text-align:right;max-width:60%}
+    .client-card{display:flex;align-items:center;gap:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:12px 14px;transition:border-color .2s}
+    .client-card:hover{border-color:#d1d5db}
+    .client-avatar{width:40px;height:40px;border-radius:50%;background:#0b0b0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0}
+    .client-info{flex:1;min-width:0;display:grid;gap:2px}
+    .client-name{font-weight:700;font-size:14px;color:#111827}
+    .client-contact{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .client-history{font-size:11px;color:#9ca3af;font-weight:600}
+    .client-crm-link{flex-shrink:0;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none;transition:all .2s}
+    .client-crm-link:hover{background:#e5e7eb;border-color:#d1d5db}
     .datetime-block{display:grid;gap:4px;padding:4px 0}
     .datetime-block .dt-date{font-weight:700;font-size:15px}
     .datetime-block .dt-time{font-size:14px;color:#374151}
@@ -358,11 +437,22 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .svc-summary{display:flex;justify-content:space-between;padding:8px 4px 0;font-size:14px;border-top:1px solid #e5e7eb;margin-top:2px}
     .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
     .remove-btn:hover{opacity:.7}
+    .time-picker-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .time-picker-row select.form-input{padding:12px 6px;min-width:52px;text-align:center;font-size:14px;appearance:auto}
+    .time-date{flex:1;min-width:140px}
+    .time-hour{width:56px}
+    .time-min{width:60px}
+    .time-ampm{width:68px}
+    .time-12-preview{font-size:13px;color:#4b5563;font-weight:600;background:#f3f4f6;padding:6px 10px;border-radius:8px}
+    .duration-hint{display:flex;justify-content:space-between;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 12px;font-size:12px;color:#15803d}
+    .duration-hint strong{font-weight:800}
+    .form-textarea{resize:vertical;font-family:inherit;min-height:50px}
     @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{flex-direction:column}.toolbar .filter-input{min-width:0}}
   `]
 })
 export class BookingsComponent {
   private api = inject(BookingsService);
+  private route = inject(ActivatedRoute);
 
   bookings: BookingListItem[] = [];
   filters: BookingFilterState = { search: '', status: '', date: '' };
@@ -374,12 +464,20 @@ export class BookingsComponent {
   drawerBusy = false;
   drawerError = '';
   cancelConfirm = false;
+  clientBookingCount = 0;
 
   showCreate = false;
   createBusy = false;
   createError = '';
-  createForm: CreateBookingForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [] };
+  createForm: CreateBookingForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', services: [] };
   formErrors: Record<string, string> = {};
+
+  filterClientId = '';
+  filterClientName = '';
+  createDate = '';
+  createHour = 9;
+  createMinute = '00';
+  createAmPm = 'AM';
 
   clients: ClientOption[] = [];
   staffList: StaffOption[] = [];
@@ -390,9 +488,60 @@ export class BookingsComponent {
     return !!(this.filters.search || this.filters.status || this.filters.date);
   }
 
+  get filteredBookings(): BookingListItem[] {
+    let list = this.bookings;
+    if (this.filters.search) {
+      const q = this.filters.search.toLowerCase();
+      list = list.filter(b =>
+        (b.client?.fullName || '').toLowerCase().includes(q) ||
+        (b.title || '').toLowerCase().includes(q) ||
+        (b.staff?.fullName || '').toLowerCase().includes(q)
+      );
+    }
+    if (this.filters.date) {
+      list = list.filter(b => b.startTime.startsWith(this.filters.date!));
+    }
+    return list;
+  }
+
+  get todayBookings(): BookingListItem[] {
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    return this.filteredBookings.filter(b => b.startTime.startsWith(todayStr));
+  }
+
+  get upcomingBookings(): BookingListItem[] {
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    return this.filteredBookings.filter(b => !b.startTime.startsWith(todayStr));
+  }
+
   ngOnInit() {
     this.load();
     this.loadPickers();
+
+    this.route.queryParams.subscribe((params) => {
+      const clientId = params['clientId'];
+      if (clientId) {
+        this.filterClientId = clientId;
+        const sub = this.api.getClients().subscribe({
+          next: (clients) => {
+            const match = clients.find((c) => c.id === clientId);
+            if (match) {
+              this.filterClientName = match.fullName;
+              this.openCreateForm();
+              this.createForm.clientId = match.id;
+              setTimeout(() => {
+                const sel = document.querySelector<HTMLSelectElement>('.create-form select.form-select');
+                if (sel) sel.value = match.id;
+              });
+            }
+            sub.unsubscribe();
+            this.load();
+          },
+        });
+      }
+    });
   }
 
   loadPickers() {
@@ -409,6 +558,7 @@ export class BookingsComponent {
     if (this.filters.search) params.search = this.filters.search;
     if (this.filters.status) params.status = this.filters.status;
     if (this.filters.date) params.startTime = this.filters.date;
+    if (this.filterClientId) params.clientId = this.filterClientId;
     this.api.getAll(params).subscribe({
       next: (d) => { this.bookings = d; this.loading = false; },
       error: () => { this.error = 'Bookings data unavailable.'; this.loading = false; },
@@ -419,6 +569,12 @@ export class BookingsComponent {
 
   clearFilters() {
     this.filters = { search: '', status: '', date: '' };
+    if (!this.filterClientId) this.load(); else this.load();
+  }
+
+  clearClientFilter() {
+    this.filterClientId = '';
+    this.filterClientName = '';
     this.load();
   }
 
@@ -437,6 +593,10 @@ export class BookingsComponent {
     this.drawerBusy = false;
     this.drawerError = '';
     this.cancelConfirm = false;
+    this.clientBookingCount = 0;
+    if (b.client?.id) {
+      this.api.getClientBookingCount(b.client.id).subscribe({ next: (c) => this.clientBookingCount = c });
+    }
   }
 
   closeDetail() { this.showDetail = false; }
@@ -467,7 +627,11 @@ export class BookingsComponent {
     this.createBusy = false;
     this.createError = '';
     this.formErrors = {};
-    this.createForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', services: [] };
+    this.createForm = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', services: [] };
+    this.createDate = '';
+    this.createHour = 9;
+    this.createMinute = '00';
+    this.createAmPm = 'AM';
   }
 
   addCatalogService(serviceId: string) {
@@ -485,12 +649,30 @@ export class BookingsComponent {
 
   removeService(i: number) { this.createForm.services.splice(i, 1); }
 
+  syncTimeToForm() {
+    if (!this.createDate || !this.createHour || !this.createMinute || !this.createAmPm) {
+      this.createForm.startTime = '';
+      return;
+    }
+    let h24 = this.createHour;
+    if (this.createAmPm === 'PM' && h24 !== 12) h24 += 12;
+    if (this.createAmPm === 'AM' && h24 === 12) h24 = 0;
+    this.createForm.startTime = `${this.createDate}T${String(h24).padStart(2, '0')}:${this.createMinute}`;
+  }
+
   getFormDuration(): number {
     return this.createForm.services.reduce((sum, s) => sum + (s.durationMin || 0), 0);
   }
 
   getFormTotal(): number {
     return this.createForm.services.reduce((sum, s) => sum + (s.price || 0), 0);
+  }
+
+  getEstimatedEndTime(): string {
+    if (!this.createForm.startTime) return '';
+    const start = new Date(this.createForm.startTime);
+    const dur = this.getFormDuration();
+    return new Date(start.getTime() + dur * 60000).toISOString();
   }
 
   private validateForm(): boolean {

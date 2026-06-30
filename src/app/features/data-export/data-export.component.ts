@@ -75,7 +75,7 @@ import { DataExportService } from './data-export.service';
                       {{ h.status }}
                     </span>
                   </td>
-                  <td>{{ h.createdAt | date:'MMM dd, yyyy HH:mm' }}</td>
+                  <td>{{ h.createdAt | date:'MMM dd, yyyy h:mm a' }}</td>
                 </tr>
               </tbody>
             </table>

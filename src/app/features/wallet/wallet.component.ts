@@ -1,12 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { WalletService } from './wallet.service';
+import { ClientsService } from '../clients/clients.service';
 
 @Component({
   selector: 'app-wallet',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <section class="page">
       <div class="head">
@@ -14,6 +16,15 @@ import { WalletService } from './wallet.service';
           <h1>Wallet</h1>
           <p>Client wallet balances and transactions.</p>
         </div>
+      </div>
+
+      <div class="client-context" *ngIf="filterClientName">
+        <div class="cc-avatar">{{ filterClientName.charAt(0).toUpperCase() }}</div>
+        <div class="cc-info">
+          <strong>{{ filterClientName }}</strong>
+          <span>Wallet context</span>
+        </div>
+        <a [routerLink]="'/app/clients'" class="cc-back">Back to Clients</a>
       </div>
 
       <div class="loading" *ngIf="loading"><div class="spinner"></div><span>Loading wallet data...</span></div>
@@ -82,6 +93,13 @@ import { WalletService } from './wallet.service';
     .head{display:flex;justify-content:space-between;align-items:center}
     h1{font-size:34px;margin:0}
     p{color:#6b7280;margin:6px 0 0}
+    .client-context{display:flex;align-items:center;gap:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;padding:14px 18px}
+    .cc-avatar{width:40px;height:40px;border-radius:50%;background:#0b0b0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0}
+    .cc-info{flex:1}
+    .cc-info strong{display:block;font-size:15px}
+    .cc-info span{font-size:12px;color:#6b7280}
+    .cc-back{border:1px solid #e5e7eb;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:#374151;text-decoration:none;transition:all .2s}
+    .cc-back:hover{background:#f3f4f6}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
     .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
@@ -114,14 +132,29 @@ import { WalletService } from './wallet.service';
 })
 export class WalletComponent {
   private api = inject(WalletService);
+  private route = inject(ActivatedRoute);
+  private clientsApi = inject(ClientsService);
   data: any = null;
   loading = true;
   error = '';
   selectedClient: any = null;
   creditForm: any = null;
   debitForm: any = null;
+  filterClientId = '';
+  filterClientName = '';
 
-  ngOnInit() { this.loadAll(); }
+  ngOnInit() {
+    this.route.queryParams.subscribe((params) => {
+      const clientId = params['clientId'];
+      if (clientId) {
+        this.filterClientId = clientId;
+        this.clientsApi.getClient(clientId).subscribe({
+          next: (c) => { this.filterClientName = c.fullName; },
+        });
+      }
+    });
+    this.loadAll();
+  }
 
   loadAll() {
     this.loading = true; this.error = '';

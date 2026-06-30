@@ -141,7 +141,7 @@ import {
                   <div class="dv-header-gap"></div>
                   <div class="dv-time-row" *ngFor="let hour of dayHours"
                     (click)="openCreateBookingUnassigned(hour)">
-                    <span class="dv-time-label">{{ hour }}:00</span>
+                    <span class="dv-time-label">{{ formatHourLabel(hour) }}</span>
                   </div>
                 </div>
                 <div class="dv-staff-scroll" [class.calendar-dragging]="dragBooking !== null">
@@ -236,7 +236,7 @@ import {
                   <div class="dv-header-gap"></div>
                   <div class="dv-time-row" *ngFor="let hour of dayHours"
                     (click)="openCreateBookingUnassigned(hour)">
-                    <span class="dv-time-label">{{ hour }}:00</span>
+                    <span class="dv-time-label">{{ formatHourLabel(hour) }}</span>
                   </div>
                 </div>
                 <div class="dv-staff-scroll" [class.calendar-dragging]="dragBooking !== null">
@@ -1860,6 +1860,12 @@ export class CalendarComponent {
 
   formatTime(dt: string): string {
     return new Date(dt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  formatHourLabel(hour: number): string {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
   getStaffBookings(staffId: string): CalendarBooking[] {

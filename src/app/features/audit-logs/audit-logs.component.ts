@@ -84,7 +84,7 @@ import { AuditLogsService } from './audit-logs.service';
                 <td><span class="action-badge">{{ log.action }}</span></td>
                 <td>{{ log.entityType }}</td>
                 <td class="mono">{{ log.entityId }}</td>
-                <td>{{ log.timestamp | date:'MMM dd, yyyy HH:mm' }}</td>
+                <td>{{ log.timestamp | date:'MMM dd, yyyy h:mm a' }}</td>
               </tr>
             </tbody>
           </table>
@@ -117,7 +117,7 @@ import { AuditLogsService } from './audit-logs.service';
           </div>
           <div class="detail-row">
             <span>Timestamp</span>
-            <strong>{{ selectedLog.timestamp | date:'MMM dd, yyyy HH:mm:ss' }}</strong>
+            <strong>{{ selectedLog.timestamp | date:'MMM dd, yyyy h:mm:ss a' }}</strong>
           </div>
           <div class="detail-row" *ngIf="selectedLog.metadata">
             <span>Metadata</span>
