@@ -14,7 +14,7 @@ import { ServicesService } from '../services/services.service';
       <div class="head">
         <div>
           <h1>POS / Billing</h1>
-          <p>Fast salon checkout with client, services, payment, receipt, and recent sales.</p>
+          <p>Fast salon checkout with client, services, discount, tax, receipt, and recent sales.</p>
         </div>
         <button class="refresh-btn" (click)="load()">Refresh</button>
       </div>
@@ -45,8 +45,8 @@ import { ServicesService } from '../services/services.service';
             <strong>{{ cart.length }}</strong>
           </div>
           <div class="kpi-card">
-            <span>Cart Total</span>
-            <strong>{{ cartTotal() | currency:'USD':'symbol':'1.0-0' }}</strong>
+            <span>Grand Total</span>
+            <strong>{{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</strong>
           </div>
         </div>
 
@@ -103,10 +103,23 @@ import { ServicesService } from '../services/services.service';
                 </div>
               </div>
 
+              <div class="totals-grid">
+                <label>
+                  <span>Discount amount</span>
+                  <input [(ngModel)]="checkoutForm.discountAmount" type="number" min="0" step="0.01" placeholder="0">
+                </label>
+                <label>
+                  <span>Tax rate %</span>
+                  <input [(ngModel)]="checkoutForm.taxRate" type="number" min="0" step="0.01" placeholder="0">
+                </label>
+              </div>
+
               <div class="summary-box">
                 <div><span>Subtotal</span><strong>{{ cartTotal() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
+                <div><span>Discount</span><strong>-{{ discountAmount() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
+                <div><span>Tax</span><strong>{{ taxAmount() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
                 <div><span>Payment</span><strong>{{ checkoutForm.paymentMethod }}</strong></div>
-                <div class="grand"><span>Total</span><strong>{{ cartTotal() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
+                <div class="grand"><span>Total</span><strong>{{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
               </div>
 
               <label>
@@ -250,6 +263,7 @@ import { ServicesService } from '../services/services.service';
     .line-total{text-align:right;font-size:13px}
     .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer}
     .add-btn{border:1px dashed #d1d5db;border-radius:12px;padding:9px 12px;background:white;cursor:pointer;font-weight:800}
+    .totals-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .summary-box{display:grid;gap:8px;background:#0b0b0b;color:white;border-radius:18px;padding:16px}
     .summary-box div{display:flex;justify-content:space-between;align-items:center}
     .summary-box span{color:#d1d5db;font-size:13px}
@@ -294,7 +308,7 @@ import { ServicesService } from '../services/services.service';
     .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
     .refund-btn:disabled{opacity:.55;cursor:not-allowed}
     @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}}
+    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid{grid-template-columns:1fr}}
   `]
 })
 export class PosComponent {
@@ -317,7 +331,7 @@ export class PosComponent {
 
   cart: any[] = [];
   selectedServiceId = '';
-  checkoutForm: any = { clientId: '', paymentMethod: 'CASH' };
+  checkoutForm: any = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
   checkoutBusy = false;
   checkoutSuccess = false;
   checkoutError = '';
@@ -388,6 +402,24 @@ export class PosComponent {
 
   cartTotal(): number {
     return this.cart.reduce((sum, item) => sum + this.lineTotal(item), 0);
+  }
+
+  discountAmount(): number {
+    const discount = Number(this.checkoutForm.discountAmount) || 0;
+    return Math.max(0, Math.min(discount, this.cartTotal()));
+  }
+
+  taxableAmount(): number {
+    return Math.max(0, this.cartTotal() - this.discountAmount());
+  }
+
+  taxAmount(): number {
+    const rate = Number(this.checkoutForm.taxRate) || 0;
+    return this.taxableAmount() * Math.max(0, rate) / 100;
+  }
+
+  grandTotal(): number {
+    return this.taxableAmount() + this.taxAmount();
   }
 
   viewReceipt(sale: any) {
@@ -462,6 +494,17 @@ export class PosComponent {
       unitPrice: Number(item.unitPrice) || 0,
     }));
 
+    const discount = this.discountAmount();
+    const tax = this.taxAmount();
+
+    if (discount > 0) {
+      items.push({ serviceId: null, name: 'Discount', quantity: 1, unitPrice: -discount });
+    }
+
+    if (tax > 0) {
+      items.push({ serviceId: null, name: 'Tax', quantity: 1, unitPrice: tax });
+    }
+
     this.api.checkout({
       clientId: this.checkoutForm.clientId || null,
       items,
@@ -472,7 +515,7 @@ export class PosComponent {
         this.checkoutSuccess = true;
         this.cart = [];
         this.selectedServiceId = '';
-        this.checkoutForm = { clientId: '', paymentMethod: 'CASH' };
+        this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
         this.load();
         this.viewReceipt(sale);
         setTimeout(() => this.checkoutSuccess = false, 3000);
