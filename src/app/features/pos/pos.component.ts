@@ -1,9 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PosService } from './pos.service';
 import { ClientsService } from '../clients/clients.service';
 import { ServicesService } from '../services/services.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { InventoryProduct } from '../inventory/inventory.models';
 
 @Component({
   selector: 'app-pos',
@@ -61,12 +63,14 @@ import { ServicesService } from '../services/services.service';
             </div>
 
             <div class="checkout-form">
-              <label>
+              <label class="client-picker">
                 <span>Client</span>
+                <input class="search-input" [(ngModel)]="clientSearch" placeholder="Search loaded clients...">
                 <select [(ngModel)]="checkoutForm.clientId">
                   <option value="">Walk-in customer</option>
-                  <option *ngFor="let client of clients" [value]="client.id">{{ client.fullName }}</option>
+                  <option *ngFor="let client of filteredClients()" [value]="client.id">{{ client.fullName }}</option>
                 </select>
+                <small class="picker-count" *ngIf="clientSearch">Showing {{ filteredClients().length }} of {{ clients.length }} clients</small>
               </label>
 
               <label>
@@ -82,20 +86,56 @@ import { ServicesService } from '../services/services.service';
                 </div>
               </label>
 
+              <label class="product-picker">
+                <span>Add product</span>
+                <div class="picker-tools" *ngIf="products.length > 0">
+                  <input class="search-input" [(ngModel)]="productSearch" placeholder="Search products by name, SKU, or category...">
+                  <small class="picker-count">{{ filteredProducts().length }} of {{ products.length }} active products</small>
+                </div>
+                <div class="service-add">
+                  <select [(ngModel)]="selectedProductId" [disabled]="productsLoading || filteredProducts().length === 0">
+                    <option value="">{{ productsLoading ? 'Loading products...' : 'Choose product' }}</option>
+                    <option *ngFor="let product of filteredProducts()" [value]="product.id">
+                      {{ product.name }} - {{ product.price | currency:'USD':'symbol':'1.0-0' }}
+                    </option>
+                  </select>
+                  <button type="button" (click)="addSelectedProduct()" [disabled]="!selectedProductId">Add</button>
+                </div>
+                <small class="product-hint" *ngIf="!productsLoading && products.length > 0">Products are added as POS line items. Stock is not deducted automatically yet.</small>
+                <div class="empty product-empty" *ngIf="!productsLoading && products.length === 0">
+                  <p>No active products available. Add or activate products in Inventory to sell retail items here.</p>
+                </div>
+                <div class="empty product-empty" *ngIf="!productsLoading && products.length > 0 && filteredProducts().length === 0">
+                  <p>No products match the current search.</p>
+                </div>
+              </label>
+
+              <div class="checkout-error" *ngIf="productsError">{{ productsError }}</div>
+
               <div class="cart-box">
                 <div class="cart-head">
                   <strong>Cart</strong>
-                  <button type="button" class="add-btn" (click)="addCartItem()">+ Manual item</button>
+                  <div class="cart-actions">
+                    <button type="button" class="add-btn" (click)="addCartItem()">+ Manual item</button>
+                    <button type="button" class="ghost-btn" (click)="holdSale()" [disabled]="cart.length === 0">Hold Sale</button>
+                    <button type="button" class="ghost-btn" (click)="restoreHeldSale()" [disabled]="!heldSaleExists">Restore Held</button>
+                    <button type="button" class="ghost-btn" (click)="clearHeldSale()" [disabled]="!heldSaleExists">Clear Held</button>
+                    <button type="button" class="danger-outline" (click)="clearCart()" [disabled]="cart.length === 0">Clear Cart</button>
+                  </div>
                 </div>
 
                 <div class="empty" *ngIf="cart.length === 0">
-                  <p>No items added yet. Add a service or manual item.</p>
+                  <p>No items added yet. Add a service, product, manual item, or restore a held sale.</p>
                 </div>
 
                 <div class="cart-items" *ngIf="cart.length > 0">
                   <div class="cart-row" *ngFor="let item of cart; let i = index">
                     <input [(ngModel)]="item.name" placeholder="Item name" class="item-name">
-                    <input [(ngModel)]="item.quantity" type="number" min="1" placeholder="Qty" class="qty">
+                    <div class="qty-control">
+                      <button type="button" (click)="decreaseQuantity(item)">-</button>
+                      <input [ngModel]="item.quantity" (ngModelChange)="setCartQuantity(item, $event)" type="number" min="1" placeholder="Qty" class="qty">
+                      <button type="button" (click)="increaseQuantity(item)">+</button>
+                    </div>
                     <input [(ngModel)]="item.unitPrice" type="number" min="0" step="0.01" placeholder="Price" class="price">
                     <strong class="line-total">{{ lineTotal(item) | currency:'USD':'symbol':'1.0-0' }}</strong>
                     <button class="remove-btn" (click)="removeCartItem(i)">x</button>
@@ -132,7 +172,7 @@ import { ServicesService } from '../services/services.service';
               <div class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</div>
               <div class="success-msg" *ngIf="checkoutSuccess">Checkout completed successfully!</div>
 
-              <button class="checkout-btn" (click)="doCheckout()" [disabled]="cart.length === 0 || checkoutBusy">
+              <button class="checkout-btn" (click)="doCheckout()" [disabled]="!canCheckout()">
                 {{ checkoutBusy ? 'Processing...' : 'Complete Checkout' }}
               </button>
             </div>
@@ -209,6 +249,7 @@ import { ServicesService } from '../services/services.service';
             <div>
               <h2>Sales History</h2>
               <p>Filter all POS sales by date, status, and payment method.</p>
+              <span class="history-meta">{{ salesHistory.length }} loaded · {{ salesFilterLabel() }}</span>
             </div>
             <div class="panel-actions">
               <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
@@ -249,13 +290,13 @@ import { ServicesService } from '../services/services.service';
 
           <div class="loading mini-loading" *ngIf="salesLoading">
             <div class="spinner"></div>
-            <span>Loading sales...</span>
+            <span>Loading sales history...</span>
           </div>
 
           <div class="checkout-error" *ngIf="salesError">{{ salesError }}</div>
 
           <div class="empty" *ngIf="!salesLoading && salesHistory.length === 0">
-            <p>No sales found for selected filters.</p>
+            <p>No sales found for {{ salesFilterLabel() }}.</p>
           </div>
 
           <div class="history-list" *ngIf="!salesLoading && salesHistory.length > 0">
@@ -303,6 +344,8 @@ import { ServicesService } from '../services/services.service';
               <div><span>Date</span><strong>{{ selectedSale.createdAt | date:'MMM dd, yyyy h:mm a' }}</strong></div>
               <div><span>Payment</span><strong>{{ selectedSale.paymentMethod || 'CASH' }}</strong></div>
               <div><span>Status</span><strong>{{ selectedSale.status }}</strong></div>
+              <div><span>Items</span><strong>{{ receiptItemCount(selectedSale) }}</strong></div>
+              <div *ngIf="selectedSale.staff?.fullName"><span>Cashier</span><strong>{{ selectedSale.staff.fullName }}</strong></div>
             </div>
 
             <div class="receipt-items">
@@ -324,6 +367,8 @@ import { ServicesService } from '../services/services.service';
 
             <p class="thankyou">Thank you for visiting.</p>
           </div>
+
+          <p class="refund-note" *ngIf="selectedSale.status === 'REFUNDED'">This sale has already been refunded.</p>
 
           <div class="drawer-actions">
             <button class="print-btn" (click)="printReceipt()">Print Receipt</button>
@@ -357,6 +402,7 @@ import { ServicesService } from '../services/services.service';
     .panel h2{margin:0;font-size:20px}
     .panel-title p{font-size:13px}
     .mode-chip{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800;color:#374151;white-space:nowrap}
+    .history-meta{display:block;margin-top:4px;color:#6b7280;font-size:12px;font-weight:700}
     .checkout-form{display:grid;gap:14px}
     label{display:grid;gap:7px}
     label span{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}
@@ -364,14 +410,27 @@ import { ServicesService } from '../services/services.service';
     .service-add{display:grid;grid-template-columns:1fr auto;gap:10px}
     .service-add button{border:0;border-radius:14px;padding:0 18px;background:#0b0b0b;color:white;font-weight:900;cursor:pointer}
     .service-add button:disabled{opacity:.45}
+    .search-input{height:auto;padding:11px 12px;border-radius:12px;font-size:13px}
+    .picker-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+    .picker-count{font-size:12px;color:#6b7280;font-weight:700;white-space:nowrap}
+    .product-hint{font-size:12px;color:#6b7280;line-height:1.4}
+    .product-empty{padding:14px;text-align:left;border-radius:14px}
+    .product-empty p{margin:0;font-size:13px}
     .cart-box{border:1px solid #eef2f7;border-radius:18px;padding:14px;background:#fbfdff}
-    .cart-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .cart-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+    .cart-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .cart-items{display:grid;gap:8px}
-    .cart-row{display:grid;grid-template-columns:1fr 70px 100px 90px 34px;gap:8px;align-items:center}
+    .cart-row{display:grid;grid-template-columns:1fr 122px 100px 90px 34px;gap:8px;align-items:center}
     .cart-row input{padding:10px;border-radius:10px}
+    .qty-control{display:grid;grid-template-columns:32px 1fr 32px;gap:5px;align-items:center}
+    .qty-control button{border:1px solid #e5e7eb;background:white;border-radius:9px;height:34px;font-weight:900;cursor:pointer}
+    .qty-control input{text-align:center;padding:8px 4px}
     .line-total{text-align:right;font-size:13px}
     .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer}
-    .add-btn{border:1px dashed #d1d5db;border-radius:12px;padding:9px 12px;background:white;cursor:pointer;font-weight:800}
+    .add-btn,.ghost-btn,.danger-outline{border:1px dashed #d1d5db;border-radius:12px;padding:9px 12px;background:white;cursor:pointer;font-weight:800}
+    .ghost-btn{border-style:solid;color:#374151}
+    .danger-outline{border-style:solid;border-color:#fecaca;color:#991b1b;background:#fff7f7}
+    .ghost-btn:disabled,.danger-outline:disabled{opacity:.45;cursor:not-allowed}
     .totals-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .summary-box{display:grid;gap:8px;background:#0b0b0b;color:white;border-radius:18px;padding:16px}
     .summary-box div{display:flex;justify-content:space-between;align-items:center}
@@ -394,6 +453,7 @@ import { ServicesService } from '../services/services.service';
     .receipt-link{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer}
     .empty{padding:22px;text-align:center;color:#6b7280;background:#f8fafc;border-radius:16px}
     .panel-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .history-status{display:flex;align-items:center;gap:10px;color:#6b7280;font-size:13px}
     .export-btn{border:1px solid #0b0b0b;background:#0b0b0b;color:white;border-radius:12px;padding:10px 16px;font-weight:900;cursor:pointer}
     .export-btn:disabled{opacity:.45;cursor:not-allowed}
     .closing-panel,.sales-history-panel{margin-top:18px}
@@ -427,12 +487,13 @@ import { ServicesService } from '../services/services.service';
     .receipt-meta div{background:#f8fafc;border-radius:12px;padding:10px}
     .receipt-meta span{display:block;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:800}
     .receipt-meta strong{font-size:13px;word-break:break-word}
-    .receipt-items{display:grid;gap:8px}
+    .receipt-items{display:grid;gap:10px}
     .receipt-item{display:grid;grid-template-columns:1fr 42px 70px 75px;gap:8px;align-items:center;font-size:13px}
     .head-row{font-weight:900;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:8px}
     .receipt-total{display:flex;justify-content:space-between;align-items:center;border-top:1px dashed #d1d5db;margin-top:16px;padding-top:16px}
     .receipt-total span{font-weight:900}.receipt-total strong{font-size:26px}
     .thankyou{text-align:center;font-size:12px}
+    .refund-note{margin:0;padding:12px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800;text-align:center}
     .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .print-btn,.refund-btn{border:0;border-radius:14px;padding:13px;font-weight:900;cursor:pointer}
     .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
@@ -457,6 +518,7 @@ import { ServicesService } from '../services/services.service';
       .drawer-backdrop,
       .drawer-head,
       .drawer-actions,
+      .refund-note,
       .receipt-loading,
       .checkout-error,
       .success-msg{display:none!important}
@@ -481,18 +543,20 @@ import { ServicesService } from '../services/services.service';
       .thankyou{margin:4mm 0 0!important;text-align:center!important;font-size:9px!important;color:#000!important}
     }
     @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.closing-grid{grid-template-columns:repeat(2,1fr)}.payment-summary{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}}
-    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid,.closing-grid,.payment-summary{grid-template-columns:1fr}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
+    @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}.cart-head{flex-direction:column}.cart-actions{justify-content:flex-start}.picker-tools{grid-template-columns:1fr}}
+    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 1fr 34px}.cart-row .item-name{grid-column:1/4}.qty-control{grid-column:1}.price{grid-column:2}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3;grid-row:2/4}.cart-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.cart-actions button{min-height:40px}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-drawer{width:100vw;padding:16px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.history-filters,.history-row{grid-template-columns:1fr}.history-row b,.history-row small{text-align:left}.totals-grid,.closing-grid,.payment-summary{grid-template-columns:1fr}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
   `]
 })
 export class PosComponent {
   private api = inject(PosService);
   private clientsApi = inject(ClientsService);
   private servicesApi = inject(ServicesService);
+  private inventoryApi = inject(InventoryService);
 
   dashboard: any = null;
   clients: any[] = [];
   services: any[] = [];
+  products: InventoryProduct[] = [];
   paymentMethods: any[] = [
     { id: 'CASH', name: 'Cash' },
     { id: 'CARD', name: 'Card' },
@@ -511,10 +575,16 @@ export class PosComponent {
 
   cart: any[] = [];
   selectedServiceId = '';
+  selectedProductId = '';
+  clientSearch = '';
+  productSearch = '';
   checkoutForm: any = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
   checkoutBusy = false;
   checkoutSuccess = false;
   checkoutError = '';
+  productsLoading = false;
+  productsError = '';
+  heldSaleExists = false;
 
   salesHistory: any[] = [];
   salesLoading = false;
@@ -525,8 +595,26 @@ export class PosComponent {
   saleDetailLoading = false;
   saleDetailError = '';
   refundBusy = false;
+  private readonly heldSaleKey = 'ambition-pos-held-sale';
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardShortcuts(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
+
+    if (event.key === 'Escape' && this.selectedSale) {
+      event.preventDefault();
+      this.closeReceipt();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && this.canCheckout()) {
+      event.preventDefault();
+      this.doCheckout();
+    }
+  }
 
   ngOnInit() {
+    this.refreshHeldSaleState();
     this.load();
   }
 
@@ -553,10 +641,42 @@ export class PosComponent {
       error: () => { this.services = []; },
     });
 
+    this.loadProducts();
+
     this.api.getPaymentMethods().subscribe({
       next: (methods) => { this.paymentMethods = methods?.length ? methods : this.paymentMethods; },
       error: () => {},
     });
+  }
+
+  loadProducts() {
+    this.productsLoading = true;
+    this.productsError = '';
+
+    this.inventoryApi.getAll({ isActive: true }).subscribe({
+      next: (products) => {
+        this.products = products || [];
+        this.productsLoading = false;
+      },
+      error: () => {
+        this.products = [];
+        this.productsError = 'Products could not be loaded for POS.';
+        this.productsLoading = false;
+      },
+    });
+  }
+
+  filteredClients(): any[] {
+    const term = this.clientSearch.trim().toLowerCase();
+    if (!term) return this.clients;
+    return this.clients.filter((client) => String(client.fullName || '').toLowerCase().includes(term));
+  }
+
+  filteredProducts(): InventoryProduct[] {
+    const term = this.productSearch.trim().toLowerCase();
+    if (!term) return this.products;
+    return this.products.filter((product) => [product.name, product.sku, product.category]
+      .some((value) => String(value || '').toLowerCase().includes(term)));
   }
 
   addSelectedService() {
@@ -573,6 +693,22 @@ export class PosComponent {
     this.selectedServiceId = '';
   }
 
+  addSelectedProduct() {
+    const product = this.products.find((item) => item.id === this.selectedProductId);
+    if (!product) return;
+
+    // TODO: Deduct stock only after POS sale items support inventory-linked product sales transactionally.
+    this.cart.push({
+      serviceId: null,
+      productId: product.id,
+      name: product.sku ? `${product.name} (SKU: ${product.sku})` : product.name,
+      quantity: 1,
+      unitPrice: Number(product.price) || 0,
+    });
+
+    this.selectedProductId = '';
+  }
+
   addCartItem() {
     this.cart.push({ serviceId: null, name: '', quantity: 1, unitPrice: 0 });
   }
@@ -581,8 +717,87 @@ export class PosComponent {
     this.cart.splice(i, 1);
   }
 
+  increaseQuantity(item: any) {
+    item.quantity = this.safeQuantity(item.quantity) + 1;
+  }
+
+  decreaseQuantity(item: any) {
+    item.quantity = Math.max(1, this.safeQuantity(item.quantity) - 1);
+  }
+
+  setCartQuantity(item: any, value: any) {
+    item.quantity = this.safeQuantity(value);
+  }
+
+  clearCart() {
+    if (this.cart.length === 0) return;
+    if (!confirm('Clear all cart items? Client and payment method will stay selected.')) return;
+    this.cart = [];
+    this.selectedServiceId = '';
+    this.selectedProductId = '';
+    this.checkoutForm.discountAmount = 0;
+    this.checkoutForm.taxRate = 0;
+  }
+
+  holdSale() {
+    if (this.cart.length === 0) return;
+    if (!confirm('Hold this sale and clear the checkout? Client, payment, discount, and tax will be saved.')) return;
+
+    try {
+      const heldSale = {
+        cart: this.cart.map((item) => ({ ...item, quantity: this.safeQuantity(item.quantity) })),
+        checkoutForm: { ...this.checkoutForm },
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(this.heldSaleKey, JSON.stringify(heldSale));
+      this.heldSaleExists = true;
+      this.cart = [];
+      this.selectedServiceId = '';
+      this.selectedProductId = '';
+      this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
+    } catch {
+      this.checkoutError = 'Held sale could not be saved in this browser.';
+    }
+  }
+
+  restoreHeldSale() {
+    const raw = localStorage.getItem(this.heldSaleKey);
+    if (!raw) {
+      this.refreshHeldSaleState();
+      return;
+    }
+
+    if (this.cart.length > 0 && !confirm('Replace the current cart with the held sale?')) return;
+
+    try {
+      const heldSale = JSON.parse(raw);
+      this.cart = (heldSale.cart || []).map((item: any) => ({ ...item, quantity: this.safeQuantity(item.quantity) }));
+      this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0, ...(heldSale.checkoutForm || {}) };
+      this.selectedServiceId = '';
+      this.selectedProductId = '';
+    } catch {
+      this.checkoutError = 'Held sale could not be restored.';
+    }
+  }
+
+  clearHeldSale() {
+    if (!this.heldSaleExists) return;
+    if (!confirm('Clear the held sale from this browser?')) return;
+    localStorage.removeItem(this.heldSaleKey);
+    this.refreshHeldSaleState();
+  }
+
+  private refreshHeldSaleState() {
+    this.heldSaleExists = !!localStorage.getItem(this.heldSaleKey);
+  }
+
+  private safeQuantity(value: any): number {
+    const quantity = Math.floor(Number(value));
+    return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  }
+
   lineTotal(item: any): number {
-    return (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+    return this.safeQuantity(item.quantity) * (Number(item.unitPrice) || 0);
   }
 
   cartTotal(): number {
@@ -634,6 +849,16 @@ export class PosComponent {
     this.loadSalesHistory();
   }
 
+  salesFilterLabel(): string {
+    const parts: string[] = [];
+    if (this.salesFilters.from || this.salesFilters.to) {
+      parts.push(`${this.salesFilters.from || 'start'} to ${this.salesFilters.to || 'today'}`);
+    }
+    if (this.salesFilters.status) parts.push(this.salesFilters.status.toLowerCase());
+    if (this.salesFilters.paymentMethod) parts.push(this.salesFilters.paymentMethod);
+    return parts.length ? parts.join(' · ') : 'all loaded sales';
+  }
+
   closingSummary(): any {
     const paymentTotals: Record<string, number> = { CASH: 0, CARD: 0, UPI: 0, WALLET: 0 };
     const summary = {
@@ -674,7 +899,8 @@ export class PosComponent {
   exportSalesCsv() {
     if (!this.salesHistory.length) return;
 
-    const rows = [
+    const summary = this.closingSummary();
+    const rows: any[][] = [
       ['Sale ID', 'Date', 'Client name', 'Payment method', 'Status', 'Total amount', 'Item names'],
       ...this.salesHistory.map((sale) => [
         sale.id,
@@ -685,6 +911,10 @@ export class PosComponent {
         (Number(sale.totalAmount) || 0).toFixed(2),
         this.saleItemNames(sale),
       ]),
+      [],
+      ['', '', '', '', 'Completed total', summary.completedAmount.toFixed(2), ''],
+      ['', '', '', '', 'Refunded total', summary.refundedAmount.toFixed(2), ''],
+      ['', '', '', '', 'Net sales', summary.netSales.toFixed(2), ''],
     ];
 
     const csv = rows.map((row) => row.map((value) => this.csvValue(value)).join(',')).join('\r\n');
@@ -728,6 +958,12 @@ export class PosComponent {
     return String(value).padStart(2, '0');
   }
 
+  receiptItemCount(sale: any): number {
+    return (sale?.items || [])
+      .filter((item: any) => !['discount', 'tax'].includes(String(item.name || '').trim().toLowerCase()))
+      .reduce((sum: number, item: any) => sum + this.safeQuantity(item.quantity), 0);
+  }
+
   viewReceipt(sale: any) {
     this.selectedSale = sale;
     this.saleDetailLoading = true;
@@ -758,7 +994,8 @@ export class PosComponent {
 
   refundSale() {
     if (!this.selectedSale || this.selectedSale.status === 'REFUNDED') return;
-    if (!confirm('Refund this POS sale?')) return;
+    const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(this.selectedSale.totalAmount) || 0);
+    if (!confirm(`Refund sale ${this.selectedSale.id} for ${amount}? This will mark the sale as refunded.`)) return;
 
     this.refundBusy = true;
     this.saleDetailError = '';
@@ -768,12 +1005,17 @@ export class PosComponent {
         this.selectedSale = sale;
         this.refundBusy = false;
         this.load();
+        this.loadSalesHistory();
       },
       error: (err) => {
         this.refundBusy = false;
         this.saleDetailError = err?.error?.message || 'Refund failed. Please try again.';
       },
     });
+  }
+
+  canCheckout(): boolean {
+    return this.cart.length > 0 && !this.checkoutBusy;
   }
 
   doCheckout() {
@@ -796,7 +1038,7 @@ export class PosComponent {
     const items = this.cart.map((item) => ({
       serviceId: item.serviceId || null,
       name: String(item.name || 'Item').trim(),
-      quantity: Number(item.quantity) || 1,
+      quantity: this.safeQuantity(item.quantity),
       unitPrice: Number(item.unitPrice) || 0,
     }));
 
@@ -821,8 +1063,10 @@ export class PosComponent {
         this.checkoutSuccess = true;
         this.cart = [];
         this.selectedServiceId = '';
+        this.selectedProductId = '';
         this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
         this.load();
+        this.loadSalesHistory();
         this.viewReceipt(sale);
         setTimeout(() => this.checkoutSuccess = false, 3000);
       },
