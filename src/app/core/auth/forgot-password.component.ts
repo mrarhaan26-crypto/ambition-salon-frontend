@@ -1,0 +1,2 @@
+import { Component } from '@angular/core';
+@Component({selector:'app-forgot-password',standalone:true,template:`<section class="auth-page"><form class="card auth-card"><h1>Forgot Password</h1><input placeholder="Email"><button class="btn btn-primary">Send Reset Link</button></form></section>`,styles:[`.auth-page{min-height:100vh;display:grid;place-items:center;background:#f7f7f7}.auth-card{width:min(420px,calc(100% - 32px));display:grid;gap:16px}`]})export class ForgotPasswordComponent{}

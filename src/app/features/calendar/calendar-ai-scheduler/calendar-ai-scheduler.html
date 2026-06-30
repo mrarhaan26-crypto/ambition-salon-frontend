@@ -1,0 +1,82 @@
+<div class="ai-panel">
+  <div class="ai-header">
+    <h3>
+      <span class="ai-header-icon">✨</span>
+      AI Suggestions
+    </h3>
+    <button class="ai-close-btn" (click)="closePanel.emit()">&times;</button>
+  </div>
+
+  <div class="ai-service-select" *ngIf="serviceList.length > 0">
+    <label class="ai-sel-label">Service</label>
+    <select class="ai-sel" [ngModel]="serviceId" (ngModelChange)="onServiceChange($event)">
+      <option value="">-- Select a service --</option>
+      <option *ngFor="let svc of serviceList" [value]="svc.id">{{ svc.name }} ({{ svc.durationMin }}min)</option>
+    </select>
+  </div>
+
+  <div class="ai-service-select" *ngIf="!serviceId">
+    <label class="ai-sel-label">Custom Duration (min)</label>
+    <input class="ai-sel ai-duration-input" type="number" [ngModel]="serviceDuration" (ngModelChange)="onDurationChange($event)" min="15" max="480" step="15" />
+  </div>
+
+  <div class="ai-actions-row">
+    <button class="ai-btn ai-btn-primary" (click)="runSuggest.emit()" [disabled]="loading">Find Slots</button>
+    <button class="ai-btn ai-btn-secondary" (click)="runOptimize.emit()" [disabled]="optimizing">Optimize Day</button>
+  </div>
+
+  <div class="ai-loading" *ngIf="loading">
+    <span class="ai-spinner"></span>
+    Scanning schedule...
+  </div>
+
+  <div class="ai-error" *ngIf="error">{{ error }}</div>
+
+  <div class="ai-empty" *ngIf="!loading && !error && suggestions.length === 0 && !optimization">
+    <p>Select a service and click <strong>Find Slots</strong> to see AI suggestions.</p>
+  </div>
+
+  <div class="ai-results" *ngIf="!loading">
+    <div class="ai-suggestion-list" *ngIf="suggestions.length > 0">
+      <div class="ai-section-label">Best Slots</div>
+      <div class="ai-card" *ngFor="let s of suggestions; trackBy: trackById">
+        <div class="ai-card-top">
+          <div class="ai-card-staff">{{ s.staffName || getStaffName(s.staffId) }}</div>
+          <div class="ai-score" *ngIf="s.score !== undefined">
+            <span class="ai-score-value" [class.ai-score-high]="s.score >= 70" [class.ai-score-mid]="s.score >= 40 && s.score < 70" [class.ai-score-low]="s.score < 40">{{ s.score }}</span>
+          </div>
+        </div>
+        <div class="ai-card-time">
+          <span class="ai-time-slot">{{ s.suggestedStart | date:'shortTime' }} – {{ s.suggestedEnd | date:'shortTime' }}</span>
+          <span class="ai-booking-count">{{ s.activeBookings || 0 }} booking{{ (s.activeBookings || 0) !== 1 ? 's' : '' }}</span>
+        </div>
+        <div class="ai-card-reason" *ngIf="s.reason">{{ s.reason }}</div>
+        <div class="ai-card-meta" *ngIf="s.bookedMinutes !== undefined">
+          <span class="ai-meta-item">{{ s.bookedMinutes }}min booked today</span>
+        </div>
+        <div class="ai-card-action">
+          <button class="ai-book-btn" (click)="bookSlot.emit(s)">Book this slot</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-optimization" *ngIf="optimization">
+      <div class="ai-section-label">Optimization Suggestions</div>
+      <div class="ai-card ai-opt-card">
+        <div class="ai-opt-header">
+          <span class="ai-opt-strategy">{{ optimization.strategy }}</span>
+        </div>
+        <div class="ai-opt-recs" *ngIf="optimization.recommendationCount !== undefined">
+          <span class="ai-opt-count">{{ optimization.recommendationCount }} recommendation{{ optimization.recommendationCount !== 1 ? 's' : '' }}</span>
+        </div>
+        <div class="ai-opt-best" *ngIf="optimization.bestOption">
+          <div class="ai-opt-best-label">Best option:</div>
+          <div class="ai-opt-best-detail">
+            {{ optimization.bestOption.staffName || getStaffName(optimization.bestOption.staffId) }} —
+            {{ optimization.bestOption.suggestedStart | date:'shortTime' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

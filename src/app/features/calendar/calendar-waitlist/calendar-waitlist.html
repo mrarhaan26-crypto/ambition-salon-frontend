@@ -1,0 +1,43 @@
+<div class="wl-panel">
+  <div class="wl-header">
+    <h3>Waitlist</h3>
+    <span class="wl-count">{{ entries.length }} waiting</span>
+  </div>
+
+  <div class="wl-loading" *ngIf="loading">Loading...</div>
+  <div class="wl-error" *ngIf="error">{{ error }}</div>
+
+  <div class="wl-empty" *ngIf="!loading && !error && entries.length === 0">
+    <p>No clients on the waitlist.</p>
+  </div>
+
+  <div class="wl-list" *ngIf="!loading && entries.length > 0">
+    <div class="wl-entry" *ngFor="let entry of entries"
+      [class.wl-entry-selected]="fillEntry?.id === entry.id"
+      [class.wl-entry-high]="entry.priority === 'HIGH'">
+      <div class="wl-entry-main" (click)="selectForFill(entry)">
+        <div class="wl-entry-name">
+          <strong>{{ entry.client?.fullName || 'Walk-in' }}</strong>
+          <span class="wl-priority-badge" *ngIf="entry.priority === 'HIGH'">High</span>
+        </div>
+        <div class="wl-entry-service">{{ entry.serviceName || 'No service' }}</div>
+        <div class="wl-entry-time" *ngIf="entry.preferredStart || entry.preferredEnd">
+          <span class="wl-time-label">Preferred:</span>
+          {{ entry.preferredStart | date:'shortTime' }}{{ entry.preferredEnd ? ' - ' + (entry.preferredEnd | date:'shortTime') : '' }}
+        </div>
+        <div class="wl-entry-notes" *ngIf="entry.notes">{{ entry.notes }}</div>
+      </div>
+      <div class="wl-entry-actions">
+        <button class="wl-fill-btn" (click)="selectForFill(entry); $event.stopPropagation()" title="Use this entry to fill an empty slot">Fill Slot</button>
+        <button class="wl-remove-btn" (click)="removeEntry.emit(entry.id); $event.stopPropagation()" title="Remove from waitlist">&times;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wl-footer" *ngIf="fillEntry">
+    <div class="wl-fill-active">
+      Filling: <strong>{{ fillEntry.client?.fullName || 'Walk-in' }}</strong>
+    </div>
+    <button class="wl-cancel-fill-btn" (click)="cancelFill.emit()">Cancel</button>
+  </div>
+</div>
