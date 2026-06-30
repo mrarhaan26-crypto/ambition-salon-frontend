@@ -6,6 +6,8 @@ import { ClientsService } from '../clients/clients.service';
 import { ServicesService } from '../services/services.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { InventoryProduct } from '../inventory/inventory.models';
+import { StaffService } from '../staff/staff.service';
+import { Staff } from '../staff/staff.models';
 
 @Component({
   selector: 'app-pos',
@@ -73,6 +75,19 @@ import { InventoryProduct } from '../inventory/inventory.models';
                 <small class="picker-count" *ngIf="clientSearch">Showing {{ filteredClients().length }} of {{ clients.length }} clients</small>
               </label>
 
+              <label class="staff-picker">
+                <span>Staff / Cashier</span>
+                <input class="search-input" [(ngModel)]="staffSearch" placeholder="Search active staff...">
+                <select [(ngModel)]="checkoutForm.staffId" [disabled]="staffLoading || staffMembers.length === 0">
+                  <option value="">No staff selected</option>
+                  <option *ngFor="let staff of filteredStaff()" [value]="staff.id">{{ staff.fullName }} - {{ staff.role }}</option>
+                </select>
+                <small class="picker-count" *ngIf="!staffLoading && staffMembers.length > 0">{{ filteredStaff().length }} active staff available</small>
+                <small class="product-hint" *ngIf="!staffLoading && staffMembers.length === 0">No active staff available for POS selection.</small>
+              </label>
+
+              <div class="checkout-error" *ngIf="staffError">{{ staffError }}</div>
+
               <label>
                 <span>Add service</span>
                 <div class="service-add">
@@ -89,19 +104,22 @@ import { InventoryProduct } from '../inventory/inventory.models';
               <label class="product-picker">
                 <span>Add product</span>
                 <div class="picker-tools" *ngIf="products.length > 0">
-                  <input class="search-input" [(ngModel)]="productSearch" placeholder="Search products by name, SKU, or category...">
+                  <input class="search-input" [(ngModel)]="productSearch" (keydown.enter)="addExactProductFromSearch($event)" placeholder="Search or scan SKU/barcode...">
                   <small class="picker-count">{{ filteredProducts().length }} of {{ products.length }} active products</small>
                 </div>
                 <div class="service-add">
                   <select [(ngModel)]="selectedProductId" [disabled]="productsLoading || filteredProducts().length === 0">
                     <option value="">{{ productsLoading ? 'Loading products...' : 'Choose product' }}</option>
                     <option *ngFor="let product of filteredProducts()" [value]="product.id">
-                      {{ product.name }} - {{ product.price | currency:'USD':'symbol':'1.0-0' }}
+                      {{ product.name }} - {{ product.price | currency:'USD':'symbol':'1.0-0' }}{{ productStockLabel(product) }}
                     </option>
                   </select>
                   <button type="button" (click)="addSelectedProduct()" [disabled]="!selectedProductId">Add</button>
                 </div>
-                <small class="product-hint" *ngIf="!productsLoading && products.length > 0">Products are added as POS line items. Stock is not deducted automatically yet.</small>
+                <div class="product-flags" *ngIf="!productsLoading && products.length > 0">
+                  <small class="product-hint">Products are added as POS line items. Stock is not deducted automatically yet.</small>
+                  <span class="stock-chip" *ngIf="lowStockProducts().length > 0">{{ lowStockProducts().length }} low stock</span>
+                </div>
                 <div class="empty product-empty" *ngIf="!productsLoading && products.length === 0">
                   <p>No active products available. Add or activate products in Inventory to sell retail items here.</p>
                 </div>
@@ -169,6 +187,35 @@ import { InventoryProduct } from '../inventory/inventory.models';
                 </select>
               </label>
 
+              <div class="split-box">
+                <div class="split-head">
+                  <strong>Split payment draft</strong>
+                  <span>{{ splitPaymentTotal() | currency:'USD':'symbol':'1.0-0' }} / {{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</span>
+                </div>
+                <div class="split-grid">
+                  <label><span>Cash</span><input [(ngModel)]="splitPayments.cash" type="number" min="0" step="0.01" placeholder="0"></label>
+                  <label><span>Card</span><input [(ngModel)]="splitPayments.card" type="number" min="0" step="0.01" placeholder="0"></label>
+                  <label><span>UPI</span><input [(ngModel)]="splitPayments.upi" type="number" min="0" step="0.01" placeholder="0"></label>
+                  <label><span>Wallet</span><input [(ngModel)]="splitPayments.wallet" type="number" min="0" step="0.01" placeholder="0"></label>
+                </div>
+                <small class="product-hint">Split payment record is UI-only until backend payment split is enabled. Checkout still submits the primary payment method.</small>
+                <div class="split-warning" *ngIf="hasSplitPayment() && !splitPaymentMatchesTotal()">
+                  Split total must equal the current grand total before checkout.
+                </div>
+              </div>
+
+              <div class="wallet-hook" *ngIf="checkoutForm.paymentMethod === 'WALLET' || splitAmount('wallet') > 0">
+                <strong>Wallet payment hook</strong>
+                <span>Wallet debit API exists, but POS wallet deduction is disabled until checkout and wallet debit can run transactionally together.</span>
+                <button type="button" disabled>Wallet debit coming soon</button>
+              </div>
+
+              <label>
+                <span>Checkout note</span>
+                <textarea [(ngModel)]="checkoutNote" placeholder="UI-only note for held sale handoff"></textarea>
+                <small class="product-hint">Notes are kept with held sales in this browser only until POS sale note persistence is enabled.</small>
+              </label>
+
               <div class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</div>
               <div class="success-msg" *ngIf="checkoutSuccess">Checkout completed successfully!</div>
 
@@ -198,6 +245,7 @@ import { InventoryProduct } from '../inventory/inventory.models';
               <div class="sale-right">
                 <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
                 <span class="sale-method">{{ sale.paymentMethod || 'CASH' }}</span>
+                <span class="sale-method" *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</span>
                 <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
                 <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
               </div>
@@ -249,7 +297,7 @@ import { InventoryProduct } from '../inventory/inventory.models';
             <div>
               <h2>Sales History</h2>
               <p>Filter all POS sales by date, status, and payment method.</p>
-              <span class="history-meta">{{ salesHistory.length }} loaded · {{ salesFilterLabel() }}</span>
+              <span class="history-meta">{{ salesHistory.length }} loaded - {{ salesFilterLabel() }}</span>
             </div>
             <div class="panel-actions">
               <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
@@ -308,6 +356,7 @@ import { InventoryProduct } from '../inventory/inventory.models';
               <div>
                 <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
                 <small>{{ sale.paymentMethod || 'CASH' }}</small>
+                <small *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</small>
               </div>
               <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
               <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
@@ -336,16 +385,17 @@ import { InventoryProduct } from '../inventory/inventory.models';
           <div class="receipt-card" id="pos-receipt" *ngIf="!saleDetailLoading">
             <div class="receipt-brand">
               <h3>Ambition Unisex Salon</h3>
-              <span>POS Receipt</span>
+              <span>Receipt #{{ receiptNumber(selectedSale) }}</span>
             </div>
 
             <div class="receipt-meta">
+              <div><span>Receipt #</span><strong>{{ receiptNumber(selectedSale) }}</strong></div>
               <div><span>Client</span><strong>{{ selectedSale.client?.fullName || 'Walk-in' }}</strong></div>
               <div><span>Date</span><strong>{{ selectedSale.createdAt | date:'MMM dd, yyyy h:mm a' }}</strong></div>
               <div><span>Payment</span><strong>{{ selectedSale.paymentMethod || 'CASH' }}</strong></div>
               <div><span>Status</span><strong>{{ selectedSale.status }}</strong></div>
               <div><span>Items</span><strong>{{ receiptItemCount(selectedSale) }}</strong></div>
-              <div *ngIf="selectedSale.staff?.fullName"><span>Cashier</span><strong>{{ selectedSale.staff.fullName }}</strong></div>
+              <div *ngIf="staffLabel(selectedSale)"><span>Cashier</span><strong>{{ staffLabel(selectedSale) }}</strong></div>
             </div>
 
             <div class="receipt-items">
@@ -375,6 +425,7 @@ import { InventoryProduct } from '../inventory/inventory.models';
             <button class="refund-btn" (click)="refundSale()" [disabled]="selectedSale.status === 'REFUNDED' || refundBusy">
               {{ refundBusy ? 'Refunding...' : selectedSale.status === 'REFUNDED' ? 'Already Refunded' : 'Refund Sale' }}
             </button>
+            <button class="return-btn" type="button" disabled title="Return and exchange workflow requires a backend returns endpoint.">Return / Exchange Soon</button>
           </div>
         </aside>
       </ng-container>
@@ -413,7 +464,9 @@ import { InventoryProduct } from '../inventory/inventory.models';
     .search-input{height:auto;padding:11px 12px;border-radius:12px;font-size:13px}
     .picker-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
     .picker-count{font-size:12px;color:#6b7280;font-weight:700;white-space:nowrap}
+    .product-flags{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .product-hint{font-size:12px;color:#6b7280;line-height:1.4}
+    .stock-chip{display:inline-flex;align-items:center;border-radius:999px;background:#fef2f2;color:#991b1b;padding:4px 9px;font-size:11px;font-weight:900}
     .product-empty{padding:14px;text-align:left;border-radius:14px}
     .product-empty p{margin:0;font-size:13px}
     .cart-box{border:1px solid #eef2f7;border-radius:18px;padding:14px;background:#fbfdff}
@@ -437,6 +490,13 @@ import { InventoryProduct } from '../inventory/inventory.models';
     .summary-box span{color:#d1d5db;font-size:13px}
     .summary-box .grand{border-top:1px solid rgba(255,255,255,.16);padding-top:10px;margin-top:4px}
     .summary-box .grand strong{font-size:22px}
+    .split-box,.wallet-hook{display:grid;gap:10px;background:#fbfdff;border:1px solid #eef2f7;border-radius:16px;padding:14px}
+    .split-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
+    .split-head span{font-weight:900;color:#374151}
+    .split-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .split-warning{padding:10px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800}
+    .wallet-hook strong{font-size:13px}.wallet-hook span{font-size:12px;color:#6b7280}.wallet-hook button{border:0;border-radius:12px;padding:10px;background:#e5e7eb;color:#6b7280;font-weight:900;cursor:not-allowed}
+    textarea{padding:13px 14px;border:1px solid #e5e7eb;border-radius:14px;background:white;min-width:0;min-height:82px;font:inherit}
     .checkout-btn{border:0;border-radius:14px;padding:15px;background:#0b0b0b;color:white;font-weight:900;cursor:pointer}
     .checkout-btn:disabled{opacity:.5}
     .checkout-error{padding:12px;background:#fef2f2;color:#991b1b;border-radius:12px;font-weight:700}
@@ -453,7 +513,7 @@ import { InventoryProduct } from '../inventory/inventory.models';
     .receipt-link{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer}
     .empty{padding:22px;text-align:center;color:#6b7280;background:#f8fafc;border-radius:16px}
     .panel-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-    .history-status{display:flex;align-items:center;gap:10px;color:#6b7280;font-size:13px}
+
     .export-btn{border:1px solid #0b0b0b;background:#0b0b0b;color:white;border-radius:12px;padding:10px 16px;font-weight:900;cursor:pointer}
     .export-btn:disabled{opacity:.45;cursor:not-allowed}
     .closing-panel,.sales-history-panel{margin-top:18px}
@@ -494,9 +554,9 @@ import { InventoryProduct } from '../inventory/inventory.models';
     .receipt-total span{font-weight:900}.receipt-total strong{font-size:26px}
     .thankyou{text-align:center;font-size:12px}
     .refund-note{margin:0;padding:12px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800;text-align:center}
-    .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .print-btn,.refund-btn{border:0;border-radius:14px;padding:13px;font-weight:900;cursor:pointer}
-    .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
+    .drawer-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .print-btn,.refund-btn,.return-btn{border:0;border-radius:14px;padding:13px;font-weight:900;cursor:pointer}
+    .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}.return-btn{background:#e5e7eb;color:#6b7280;cursor:not-allowed}
     .refund-btn:disabled{opacity:.55;cursor:not-allowed}
     @media print{
       @page{size:80mm 297mm;margin:0}
@@ -542,9 +602,9 @@ import { InventoryProduct } from '../inventory/inventory.models';
       .receipt-total strong{font-size:16px!important;font-weight:900!important;color:#000!important}
       .thankyou{margin:4mm 0 0!important;text-align:center!important;font-size:9px!important;color:#000!important}
     }
-    @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.closing-grid{grid-template-columns:repeat(2,1fr)}.payment-summary{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.closing-grid{grid-template-columns:repeat(2,1fr)}.payment-summary{grid-template-columns:repeat(2,1fr)}.split-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}.cart-head{flex-direction:column}.cart-actions{justify-content:flex-start}.picker-tools{grid-template-columns:1fr}}
-    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 1fr 34px}.cart-row .item-name{grid-column:1/4}.qty-control{grid-column:1}.price{grid-column:2}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3;grid-row:2/4}.cart-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.cart-actions button{min-height:40px}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-drawer{width:100vw;padding:16px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.history-filters,.history-row{grid-template-columns:1fr}.history-row b,.history-row small{text-align:left}.totals-grid,.closing-grid,.payment-summary{grid-template-columns:1fr}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
+    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 1fr 34px}.cart-row .item-name{grid-column:1/4}.qty-control{grid-column:1}.price{grid-column:2}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3;grid-row:2/4}.cart-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.cart-actions button{min-height:40px}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-drawer{width:100vw;padding:16px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.history-filters,.history-row{grid-template-columns:1fr}.history-row b,.history-row small{text-align:left}.totals-grid,.closing-grid,.payment-summary,.split-grid{grid-template-columns:1fr}.split-head{align-items:flex-start;flex-direction:column}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
   `]
 })
 export class PosComponent {
@@ -552,11 +612,13 @@ export class PosComponent {
   private clientsApi = inject(ClientsService);
   private servicesApi = inject(ServicesService);
   private inventoryApi = inject(InventoryService);
+  private staffApi = inject(StaffService);
 
   dashboard: any = null;
   clients: any[] = [];
   services: any[] = [];
   products: InventoryProduct[] = [];
+  staffMembers: Staff[] = [];
   paymentMethods: any[] = [
     { id: 'CASH', name: 'Cash' },
     { id: 'CARD', name: 'Card' },
@@ -577,14 +639,19 @@ export class PosComponent {
   selectedServiceId = '';
   selectedProductId = '';
   clientSearch = '';
+  staffSearch = '';
   productSearch = '';
-  checkoutForm: any = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
+  checkoutForm: any = this.defaultCheckoutForm();
   checkoutBusy = false;
   checkoutSuccess = false;
   checkoutError = '';
   productsLoading = false;
   productsError = '';
+  staffLoading = false;
+  staffError = '';
   heldSaleExists = false;
+  splitPayments: any = { cash: 0, card: 0, upi: 0, wallet: 0 };
+  checkoutNote = '';
 
   salesHistory: any[] = [];
   salesLoading = false;
@@ -641,11 +708,33 @@ export class PosComponent {
       error: () => { this.services = []; },
     });
 
+    this.loadStaff();
     this.loadProducts();
 
     this.api.getPaymentMethods().subscribe({
       next: (methods) => { this.paymentMethods = methods?.length ? methods : this.paymentMethods; },
       error: () => {},
+    });
+  }
+
+  private defaultCheckoutForm(): any {
+    return { clientId: '', staffId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
+  }
+
+  loadStaff() {
+    this.staffLoading = true;
+    this.staffError = '';
+
+    this.staffApi.getAll({ isActive: true }).subscribe({
+      next: (staff) => {
+        this.staffMembers = staff || [];
+        this.staffLoading = false;
+      },
+      error: () => {
+        this.staffMembers = [];
+        this.staffError = 'Staff could not be loaded for POS.';
+        this.staffLoading = false;
+      },
     });
   }
 
@@ -672,11 +761,43 @@ export class PosComponent {
     return this.clients.filter((client) => String(client.fullName || '').toLowerCase().includes(term));
   }
 
+  filteredStaff(): Staff[] {
+    const term = this.staffSearch.trim().toLowerCase();
+    if (!term) return this.staffMembers;
+    return this.staffMembers.filter((staff) => [staff.fullName, staff.email, staff.role]
+      .some((value) => String(value || '').toLowerCase().includes(term)));
+  }
+
   filteredProducts(): InventoryProduct[] {
     const term = this.productSearch.trim().toLowerCase();
     if (!term) return this.products;
-    return this.products.filter((product) => [product.name, product.sku, product.category]
+    return this.products.filter((product) => [product.name, product.sku, product.category, (product as any).barcode]
       .some((value) => String(value || '').toLowerCase().includes(term)));
+  }
+
+  lowStockProducts(): InventoryProduct[] {
+    return this.products.filter((product) => Number(product.quantity) <= Number(product.minStockLevel));
+  }
+
+  productStockLabel(product: InventoryProduct): string {
+    if (product.quantity === undefined || product.quantity === null) return '';
+    const stock = ` - ${product.quantity} ${product.unit || 'in stock'}`;
+    return Number(product.quantity) <= Number(product.minStockLevel) ? `${stock} - LOW` : stock;
+  }
+
+  addExactProductFromSearch(event: Event) {
+    event.preventDefault();
+    const term = this.productSearch.trim().toLowerCase();
+    if (!term) return;
+
+    const exactMatches = this.products.filter((product) => [product.sku, (product as any).barcode, product.name]
+      .some((value) => String(value || '').toLowerCase() === term));
+
+    if (exactMatches.length === 1) {
+      this.selectedProductId = exactMatches[0].id;
+      this.addSelectedProduct();
+      this.productSearch = '';
+    }
   }
 
   addSelectedService() {
@@ -747,6 +868,8 @@ export class PosComponent {
       const heldSale = {
         cart: this.cart.map((item) => ({ ...item, quantity: this.safeQuantity(item.quantity) })),
         checkoutForm: { ...this.checkoutForm },
+        splitPayments: { ...this.splitPayments },
+        checkoutNote: this.checkoutNote,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(this.heldSaleKey, JSON.stringify(heldSale));
@@ -754,7 +877,9 @@ export class PosComponent {
       this.cart = [];
       this.selectedServiceId = '';
       this.selectedProductId = '';
-      this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
+      this.checkoutForm = this.defaultCheckoutForm();
+      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
+      this.checkoutNote = '';
     } catch {
       this.checkoutError = 'Held sale could not be saved in this browser.';
     }
@@ -772,7 +897,9 @@ export class PosComponent {
     try {
       const heldSale = JSON.parse(raw);
       this.cart = (heldSale.cart || []).map((item: any) => ({ ...item, quantity: this.safeQuantity(item.quantity) }));
-      this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0, ...(heldSale.checkoutForm || {}) };
+      this.checkoutForm = { ...this.defaultCheckoutForm(), ...(heldSale.checkoutForm || {}) };
+      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0, ...(heldSale.splitPayments || {}) };
+      this.checkoutNote = heldSale.checkoutNote || '';
       this.selectedServiceId = '';
       this.selectedProductId = '';
     } catch {
@@ -794,6 +921,23 @@ export class PosComponent {
   private safeQuantity(value: any): number {
     const quantity = Math.floor(Number(value));
     return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  }
+
+  splitAmount(method: string): number {
+    return Math.max(0, Number(this.splitPayments?.[method]) || 0);
+  }
+
+  splitPaymentTotal(): number {
+    return this.splitAmount('cash') + this.splitAmount('card') + this.splitAmount('upi') + this.splitAmount('wallet');
+  }
+
+  hasSplitPayment(): boolean {
+    return this.splitPaymentTotal() > 0;
+  }
+
+  splitPaymentMatchesTotal(): boolean {
+    if (!this.hasSplitPayment()) return true;
+    return Math.abs(this.splitPaymentTotal() - this.grandTotal()) < 0.01;
   }
 
   lineTotal(item: any): number {
@@ -856,7 +1000,7 @@ export class PosComponent {
     }
     if (this.salesFilters.status) parts.push(this.salesFilters.status.toLowerCase());
     if (this.salesFilters.paymentMethod) parts.push(this.salesFilters.paymentMethod);
-    return parts.length ? parts.join(' · ') : 'all loaded sales';
+    return parts.length ? parts.join(' - ') : 'all loaded sales';
   }
 
   closingSummary(): any {
@@ -958,6 +1102,18 @@ export class PosComponent {
     return String(value).padStart(2, '0');
   }
 
+  receiptNumber(sale: any): string {
+    const id = String(sale?.id || '');
+    return id ? id.slice(-8).toUpperCase() : 'PENDING';
+  }
+
+  staffLabel(sale: any): string {
+    if (sale?.staff?.fullName) return sale.staff.fullName;
+    const staffId = sale?.staffId || (sale?.id === this.selectedSale?.id ? this.selectedSale?.staffId : '');
+    if (!staffId) return '';
+    return this.staffMembers.find((staff) => staff.id === staffId)?.fullName || '';
+  }
+
   receiptItemCount(sale: any): number {
     return (sale?.items || [])
       .filter((item: any) => !['discount', 'tax'].includes(String(item.name || '').trim().toLowerCase()))
@@ -1015,7 +1171,7 @@ export class PosComponent {
   }
 
   canCheckout(): boolean {
-    return this.cart.length > 0 && !this.checkoutBusy;
+    return this.cart.length > 0 && !this.checkoutBusy && this.splitPaymentMatchesTotal();
   }
 
   doCheckout() {
@@ -1056,6 +1212,7 @@ export class PosComponent {
     this.api.checkout({
       clientId: this.checkoutForm.clientId || null,
       items,
+      staffId: this.checkoutForm.staffId || null,
       paymentMethod: this.checkoutForm.paymentMethod || 'CASH',
     }).subscribe({
       next: (sale) => {
@@ -1064,7 +1221,9 @@ export class PosComponent {
         this.cart = [];
         this.selectedServiceId = '';
         this.selectedProductId = '';
-        this.checkoutForm = { clientId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
+        this.checkoutForm = this.defaultCheckoutForm();
+      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
+      this.checkoutNote = '';
         this.load();
         this.loadSalesHistory();
         this.viewReceipt(sale);
