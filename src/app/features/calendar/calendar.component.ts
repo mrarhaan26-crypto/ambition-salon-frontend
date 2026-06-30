@@ -75,6 +75,14 @@ import {
           <option value="">All Branches</option>
           <option *ngFor="let b of branchList" [value]="b.id">{{ b.name || b.city || b.id }}</option>
         </select>
+        <select [(ngModel)]="statusFilter" (change)="onStatusFilterChange()" class="status-filter">
+          <option value="">All Status</option>
+          <option value="CONFIRMED">Confirmed</option>
+          <option value="PENDING">Pending</option>
+          <option value="CHECKED_IN">Checked In</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
       </div>
 
       <div class="loading" *ngIf="loading">
@@ -101,7 +109,7 @@ import {
           </span>
         </div>
 
-        <div class="day-view" *ngIf="view === 'day'">
+        <div class="day-view view-transition" *ngIf="view === 'day'">
           <ng-container *ngIf="viewMode === 'staff'">
             <div class="dv-empty-staff" *ngIf="staffList.length === 0">
               <strong>No staff available</strong>
@@ -122,8 +130,8 @@ import {
             </div>
             <div class="wl-fill-banner" *ngIf="fillWaitlistEntry">
               <div class="wl-fill-info">
-                <strong>Filling from waitlist:</strong>
-                {{ fillWaitlistEntry.client?.fullName || 'Walk-in' }} — {{ fillWaitlistEntry.serviceName || 'No service' }}
+                <span class="wl-fill-badge">Fill from waitlist</span>
+                <span>{{ fillWaitlistEntry.client?.fullName || 'Walk-in' }} — {{ fillWaitlistEntry.serviceName || 'No service' }}</span>
               </div>
               <button class="wl-fill-cancel" (click)="fillWaitlistEntry = null">Cancel</button>
             </div>
@@ -150,6 +158,7 @@ import {
                     <div class="dv-staff-body">
                       <div class="dv-hour-row" *ngFor="let hour of dayHours; let hi = index"
                         [class.dv-hour-row-alt]="hi % 2 === 1"
+                        [class.dv-hour-busy]="isStaffBusyAtHour(staff.id, hour)"
                         (click)="openCreateBooking(staff, hour)"></div>
                       <div class="dv-bookings-layer">
                         <div class="booking-chip" *ngFor="let b of getStaffBookings(staff.id)"
@@ -216,8 +225,8 @@ import {
           <ng-container *ngIf="viewMode === 'resources'">
             <div class="wl-fill-banner" *ngIf="fillWaitlistEntry">
               <div class="wl-fill-info">
-                <strong>Filling from waitlist:</strong>
-                {{ fillWaitlistEntry.client?.fullName || 'Walk-in' }} — {{ fillWaitlistEntry.serviceName || 'No service' }}
+                <span class="wl-fill-badge">Fill from waitlist</span>
+                <span>{{ fillWaitlistEntry.client?.fullName || 'Walk-in' }} — {{ fillWaitlistEntry.serviceName || 'No service' }}</span>
               </div>
               <button class="wl-fill-cancel" (click)="fillWaitlistEntry = null">Cancel</button>
             </div>
@@ -239,6 +248,7 @@ import {
                     <div class="dv-staff-body">
                       <div class="dv-hour-row" *ngFor="let hour of dayHours; let hi = index"
                         [class.dv-hour-row-alt]="hi % 2 === 1"
+                        [class.dv-hour-busy]="isResourceBusyAtHour(resource.id, hour)"
                         (click)="openCreateBookingFromResource(resource, hour)"></div>
                       <div class="dv-bookings-layer">
                          <div class="booking-chip" *ngFor="let b of getAllResourceBookings(resource.id)"
@@ -330,7 +340,7 @@ import {
           </ng-container>
         </div>
 
-        <div class="week-view" *ngIf="view === 'week'">
+        <div class="week-view view-transition" *ngIf="view === 'week'">
           <div class="week-header">
             <div class="week-day-header" *ngFor="let day of weekDays"
               [class.today]="isDayToday(day.date)" (click)="goToDay(day.date)">
@@ -363,7 +373,7 @@ import {
           </div>
         </div>
 
-        <div class="month-view" *ngIf="view === 'month'">
+        <div class="month-view view-transition" *ngIf="view === 'month'">
           <div class="month-grid">
             <div class="weekday-label" *ngFor="let day of ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']">{{ day }}</div>
             <div class="month-day" *ngFor="let day of monthDays"
@@ -428,7 +438,9 @@ import {
           <div class="drawer-body">
             <div class="drawer-section">
               <h3>Booking Details</h3>
-              <div class="info-row"><span>Status</span><span class="status-badge" [class]="'badge-' + (drawerBooking.status || '').toLowerCase()">{{ drawerBooking.status }}</span></div>
+              <div class="drawer-status-row">
+                <span class="status-badge" [class]="'badge-' + (drawerBooking.status || '').toLowerCase()">{{ drawerBooking.status }}</span>
+              </div>
               <div class="info-row"><span>Date</span><span>{{ drawerBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span></div>
               <div class="info-row"><span>Time</span><span>{{ drawerBooking.startTime | date:'h:mm a' }} – {{ drawerBooking.endTime | date:'h:mm a' }}</span></div>
               <div class="info-row"><span>Staff</span><span>{{ drawerBooking.staff?.fullName || 'Unassigned' }}</span></div>
@@ -709,7 +721,8 @@ import {
     .vm-btn{font-size:12px;padding:8px 16px!important}
     .res-filter{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:white}
     .filter-bar{display:flex;gap:8px;align-items:center;padding:0 0 8px}
-    .branch-filter{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:white;min-width:160px}
+    .branch-filter,.status-filter{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:white;min-width:160px}
+    .status-filter{min-width:130px}
     .res-type-badge{font-size:9px;background:#e5e7eb;color:#374151;border-radius:6px;padding:1px 6px;font-weight:600;margin-left:4px}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
     .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
@@ -744,11 +757,15 @@ import {
     .wl-icon{font-size:14px}
     .wl-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:#6366f1;color:white;font-size:10px;font-weight:700;padding:0 4px}
     .dv-content-wrapper{display:flex;flex:1;min-height:0}
-    .wl-fill-banner{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#fefce8;border-bottom:1px solid #eab308;font-size:13px}
-    .wl-fill-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .wl-fill-info strong{color:#92400e}
-    .wl-fill-cancel{font-size:11px;padding:3px 10px;background:white;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;color:#374151}
+    .wl-fill-banner{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fffbeb;border-bottom:2px solid #f59e0b;font-size:13px}
+    .wl-fill-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .wl-fill-badge{font-size:10px;font-weight:700;background:#f59e0b;color:white;border-radius:6px;padding:2px 8px;text-transform:uppercase;letter-spacing:.03em}
+    .wl-fill-cancel{font-size:11px;padding:4px 12px;background:white;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;color:#374151;font-weight:600;transition:background .12s,border-color .12s}
+    .wl-fill-cancel:hover{background:#f3f4f6;border-color:#9ca3af}
     .wl-fill-cancel:hover{background:#f3f4f6}
+    .view-transition{animation:calFadeIn .2s ease}
+    @keyframes calFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    @media(prefers-reduced-motion:reduce){.view-transition{animation:none}}
     .day-view{background:white;border:1px solid #e5e7eb;border-radius:20px;overflow:hidden}
     .dv-container{display:flex}
     .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa}
@@ -770,6 +787,8 @@ import {
     .dv-hour-row{height:56px;border-bottom:1px solid #f1f5f9;padding:2px 4px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden;cursor:pointer}
     .dv-hour-row:hover{background:#f0f4ff}
     .dv-hour-row-alt{background:#fafafa}
+    .dv-hour-busy{background:#f0f4ff!important}
+    .dv-hour-busy:hover{background:#e0e8ff!important}
     .dv-unassigned-col{background:#fafcff}
     .dv-unassigned-col .dv-staff-header{background:#eef2ff;color:#4338ca;font-style:italic;border-left:3px solid #6366f1}
     .dv-unassigned-col .booking-chip{opacity:.85}
@@ -895,23 +914,33 @@ import {
     .drawer-header{display:flex;justify-content:space-between;align-items:center;padding:24px 28px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:white;z-index:1}
     .drawer-header h2{margin:0;font-size:20px}
     .close-btn{border:0;background:transparent;font-size:28px;cursor:pointer;color:#6b7280;padding:0;line-height:1}
-    .drawer-body{padding:24px 28px;display:grid;gap:20px}
-    .drawer-section h3{font-size:13px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 12px;letter-spacing:.05em}
-    .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
+    .drawer-body{padding:24px 28px;display:grid;gap:24px}
+    .drawer-section{background:#fafafa;border-radius:14px;padding:16px 18px;border:1px solid #f3f4f6}
+    .drawer-section h3{font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin:0 0 14px;letter-spacing:.06em}
+    .info-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+    .info-row:last-child{border-bottom:0}
     .info-row span:first-child{color:#6b7280;font-weight:600}
-    .info-row span:last-child{text-align:right;max-width:60%}
-    .status-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;display:inline-block}
+    .info-row span:last-child{text-align:right;max-width:60%;font-weight:600;color:#0b0b0b}
+    .drawer-status-row{text-align:center;padding:4px 0 12px;border-bottom:1px solid #f3f4f6;margin-bottom:2px}
+    .status-badge{font-size:12px;padding:4px 14px;border-radius:20px;font-weight:700;display:inline-block;letter-spacing:.02em}
     .badge-confirmed{background:#dbeafe;color:#1d4ed8}
     .badge-completed{background:#f0fdf4;color:#16a34a}
     .badge-pending{background:#fefce8;color:#a16207}
     .badge-cancelled{background:#fef2f2;color:#dc2626}
     .badge-no_show{background:#f3f4f6;color:#6b7280}
     .badge-checked_in{background:#f3e8ff;color:#7c3aed}
-    .drawer-actions{display:flex;gap:10px;flex-wrap:wrap}
-    .drawer-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;min-height:44px}
+    .drawer-actions{display:flex;gap:10px;flex-wrap:wrap;padding:4px 0}
+    .drawer-actions button{flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;min-height:44px;transition:opacity .15s,background .15s,transform .1s}
+    .drawer-actions button:active{transform:scale(.97)}
     .btn-primary{background:#0b0b0b;color:white}
+    .btn-primary:hover{background:#1f2937}
+    .btn-primary:disabled{opacity:.5;cursor:default;background:#9ca3af}
     .btn-secondary{background:#f3f4f6;color:#374151}
+    .btn-secondary:hover{background:#e5e7eb}
+    .btn-secondary:disabled{opacity:.5;cursor:default}
     .btn-danger{background:#fee2e2;color:#991b1b}
+    .btn-danger:hover{background:#fecaca}
+    .btn-danger:disabled{opacity:.5;cursor:default}
     .reschedule-form{display:grid;gap:12px;padding:16px;background:#f9fafb;border-radius:16px}
     .reschedule-form h3{margin:0;font-size:14px;font-weight:700}
     .reschedule-form label{font-size:13px;font-weight:600;color:#374151;margin-bottom:-8px}
@@ -1067,7 +1096,7 @@ import {
       .tabs button{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
       .vm-btn{padding:4px 8px!important}
       .filter-bar{flex-wrap:wrap;gap:4px}
-      .branch-filter{font-size:11px;min-width:0;width:100%;padding:6px 10px}
+      .branch-filter,.status-filter{font-size:11px;min-width:0;width:100%;padding:6px 10px}
       .summary-bar{gap:2px;padding:4px 6px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
       .sum-card{padding:2px 4px;min-width:60px;flex:0 0 auto;border-right:1px solid #e5e7eb}
       .sum-card b{font-size:13px}
@@ -1159,7 +1188,7 @@ import {
       .edit-form{padding:10px;gap:8px}
       .confirm-action{padding:10px}
       .filter-bar{padding:0 0 4px}
-      .branch-filter{font-size:11px;padding:5px 8px;min-width:0}
+      .branch-filter,.status-filter{font-size:11px;padding:5px 8px;min-width:0}
       .res-filter{font-size:11px;padding:5px 8px}
       .dv-sidebar-stack{max-height:260px}
     }
@@ -1175,6 +1204,8 @@ export class CalendarComponent {
   viewMode: StaffResourceMode = 'staff';
   currentDate = new Date();
   bookings: CalendarBooking[] = [];
+  statusFilter = '';
+  fullBookings: CalendarBooking[] = [];
   summary: CalendarSummaryResponse | null = null;
   loading = true;
   error = '';
@@ -1192,6 +1223,10 @@ export class CalendarComponent {
     'Wrong booking details',
     'Other',
   ];
+
+  private dayViewScrollLeft = 0;
+  private dayViewScrollTop = 0;
+  private isRestoringScroll = false;
 
   readonly statusLegendItems = [
     { label: 'Confirmed', cls: 'confirmed' },
@@ -1326,7 +1361,29 @@ export class CalendarComponent {
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
   }
 
-  setView(v: 'day' | 'week' | 'month') { this.view = v; this.load(); }
+  setView(v: 'day' | 'week' | 'month') {
+    this.saveDayViewScroll();
+    this.view = v;
+    this.load();
+  }
+
+  private saveDayViewScroll() {
+    const el = document.querySelector('.dv-staff-scroll');
+    if (el) {
+      this.dayViewScrollLeft = el.scrollLeft;
+      this.dayViewScrollTop = el.scrollTop;
+    }
+  }
+
+  private restoreDayViewScroll() {
+    const el = document.querySelector('.dv-staff-scroll');
+    if (el) {
+      this.isRestoringScroll = true;
+      el.scrollLeft = this.dayViewScrollLeft;
+      el.scrollTop = this.dayViewScrollTop;
+      requestAnimationFrame(() => { this.isRestoringScroll = false; });
+    }
+  }
   goToday() { this.currentDate = new Date(); this.load(); }
 
   prev() {
@@ -1353,19 +1410,19 @@ export class CalendarComponent {
 
     if (this.view === 'day') {
       this.api.getCalendarDay(params).subscribe({
-        next: (d) => { this.bookings = Array.isArray(d) ? d : []; this.loading = false; },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.loading = false; requestAnimationFrame(() => this.restoreDayViewScroll()); },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
     if (this.view === 'week') {
       this.api.getCalendarWeek(params).subscribe({
-        next: (d) => { this.bookings = Array.isArray(d) ? d : []; this.buildWeek(); this.loading = false; },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.buildWeek(); this.loading = false; },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
     if (this.view === 'month') {
       this.api.getCalendarMonth(params).subscribe({
-        next: (d) => { this.bookings = Array.isArray(d) ? d : []; this.buildMonth(); this.loading = false; },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.buildMonth(); this.loading = false; },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
@@ -1392,6 +1449,14 @@ export class CalendarComponent {
   refresh() { this.load(); this.updateLastUpdated(); }
 
   onBranchChange() { this.load(); }
+
+  private applyStatusFilter() {
+    this.bookings = this.statusFilter ? this.fullBookings.filter(b => b.status === this.statusFilter) : this.fullBookings;
+  }
+
+  onStatusFilterChange() {
+    this.applyStatusFilter();
+  }
 
   private updateLastUpdated() {
     const now = new Date();
@@ -1540,14 +1605,15 @@ export class CalendarComponent {
     this.createBusy = false;
     this.createError = '';
     const start = new Date(slot.suggestedStart);
+    const svcName = this.aiServiceId ? (this.getServiceName(this.aiServiceId) || '') : '';
     this.createForm = {
       clientId: '',
       staffId: slot.staffId,
-      title: this.aiServiceId ? (this.getServiceName(this.aiServiceId) || 'Booking') : 'Booking',
+      title: svcName || 'Booking',
       startTime: start.toISOString().slice(0, 16),
       branchId: this.selectedBranchId,
       notes: '',
-      services: [{ serviceId: '', name: this.aiServiceId ? (this.getServiceName(this.aiServiceId) || '') : '', durationMin: 0, price: 0 }],
+      services: [{ serviceId: this.aiServiceId || '', name: svcName, durationMin: 0, price: 0 }],
     };
     this.loadClientsAndServices();
   }
@@ -2054,6 +2120,22 @@ export class CalendarComponent {
       const bStaffId = b.staffId || b.staff?.id;
       return bStaffId === staffId;
     }).length;
+  }
+
+  isStaffBusyAtHour(staffId: string, hour: number): boolean {
+    return this.getStaffBookings(staffId).some(b => {
+      const s = new Date(b.startTime).getHours();
+      const e = new Date(b.endTime).getHours();
+      return hour >= s && hour < e;
+    });
+  }
+
+  isResourceBusyAtHour(resourceId: string, hour: number): boolean {
+    return this.getAllResourceBookings(resourceId).some(b => {
+      const s = new Date(b.startTime).getHours();
+      const e = new Date(b.endTime).getHours();
+      return hour >= s && hour < e;
+    });
   }
 
   openCreateBooking(staff: Staff, hour: number) {
