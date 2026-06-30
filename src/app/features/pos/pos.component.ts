@@ -165,6 +165,44 @@ import { ServicesService } from '../services/services.service';
           </div>
         </div>
 
+        <div class="panel closing-panel" *ngIf="closingSummary() as summary">
+          <div class="panel-title">
+            <div>
+              <h2>Daily Closing Summary</h2>
+              <p>Based on currently loaded sales history.</p>
+            </div>
+          </div>
+
+          <div class="closing-grid">
+            <div class="closing-stat">
+              <span>Total Completed</span>
+              <strong>{{ summary.completedAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
+            </div>
+            <div class="closing-stat">
+              <span>Total Refunded</span>
+              <strong>{{ summary.refundedAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
+            </div>
+            <div class="closing-stat net">
+              <span>Net Sales</span>
+              <strong>{{ summary.netSales | currency:'USD':'symbol':'1.0-0' }}</strong>
+            </div>
+            <div class="closing-stat">
+              <span>Completed Count</span>
+              <strong>{{ summary.completedCount }}</strong>
+            </div>
+            <div class="closing-stat">
+              <span>Refunded Count</span>
+              <strong>{{ summary.refundedCount }}</strong>
+            </div>
+          </div>
+
+          <div class="payment-summary">
+            <div class="payment-total" *ngFor="let method of closingPaymentMethods">
+              <span>{{ method.name }}</span>
+              <strong>{{ paymentTotal(summary, method.id) | currency:'USD':'symbol':'1.0-0' }}</strong>
+            </div>
+          </div>
+        </div>
 
         <div class="panel sales-history-panel">
           <div class="panel-title">
@@ -172,7 +210,10 @@ import { ServicesService } from '../services/services.service';
               <h2>Sales History</h2>
               <p>Filter all POS sales by date, status, and payment method.</p>
             </div>
-            <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
+            <div class="panel-actions">
+              <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
+              <button class="export-btn" (click)="exportSalesCsv()" [disabled]="salesHistory.length === 0">Export CSV</button>
+            </div>
           </div>
 
           <div class="history-filters">
@@ -352,7 +393,19 @@ import { ServicesService } from '../services/services.service';
     .sale-status.refunded{color:#dc2626}
     .receipt-link{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer}
     .empty{padding:22px;text-align:center;color:#6b7280;background:#f8fafc;border-radius:16px}
-    .sales-history-panel{margin-top:18px}
+    .panel-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .export-btn{border:1px solid #0b0b0b;background:#0b0b0b;color:white;border-radius:12px;padding:10px 16px;font-weight:900;cursor:pointer}
+    .export-btn:disabled{opacity:.45;cursor:not-allowed}
+    .closing-panel,.sales-history-panel{margin-top:18px}
+    .closing-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+    .closing-stat{display:grid;gap:8px;background:#fbfdff;border:1px solid #eef2f7;border-radius:16px;padding:14px;min-width:0}
+    .closing-stat span,.payment-total span{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}
+    .closing-stat strong{font-size:20px;line-height:1.1;word-break:break-word}
+    .closing-stat.net{background:#0b0b0b;border-color:#0b0b0b;color:white}
+    .closing-stat.net span{color:#d1d5db}
+    .payment-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+    .payment-total{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f8fafc;border:1px dashed #d1d5db;border-radius:14px;padding:12px 14px;min-width:0}
+    .payment-total strong{font-size:15px;text-align:right;word-break:break-word}
     .history-filters{display:grid;grid-template-columns:repeat(4,1fr) auto auto;gap:10px;align-items:end;margin-bottom:16px}
     .mini-loading{padding:18px}
     .history-list{display:grid;gap:10px}
@@ -399,6 +452,7 @@ import { ServicesService } from '../services/services.service';
       .error,
       .kpis,
       .grid-2,
+      .closing-panel,
       .sales-history-panel,
       .drawer-backdrop,
       .drawer-head,
@@ -426,9 +480,9 @@ import { ServicesService } from '../services/services.service';
       .receipt-total strong{font-size:16px!important;font-weight:900!important;color:#000!important}
       .thankyou{margin:4mm 0 0!important;text-align:center!important;font-size:9px!important;color:#000!important}
     }
-    @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.closing-grid{grid-template-columns:repeat(2,1fr)}.payment-summary{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}}
-    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid{grid-template-columns:1fr}}
+    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 62px 88px}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.totals-grid,.closing-grid,.payment-summary{grid-template-columns:1fr}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
   `]
 })
 export class PosComponent {
@@ -440,6 +494,12 @@ export class PosComponent {
   clients: any[] = [];
   services: any[] = [];
   paymentMethods: any[] = [
+    { id: 'CASH', name: 'Cash' },
+    { id: 'CARD', name: 'Card' },
+    { id: 'UPI', name: 'UPI' },
+    { id: 'WALLET', name: 'Wallet' },
+  ];
+  closingPaymentMethods: any[] = [
     { id: 'CASH', name: 'Cash' },
     { id: 'CARD', name: 'Card' },
     { id: 'UPI', name: 'UPI' },
@@ -573,6 +633,101 @@ export class PosComponent {
     this.salesFilters = { from: '', to: '', status: '', paymentMethod: '' };
     this.loadSalesHistory();
   }
+
+  closingSummary(): any {
+    const paymentTotals: Record<string, number> = { CASH: 0, CARD: 0, UPI: 0, WALLET: 0 };
+    const summary = {
+      completedAmount: 0,
+      refundedAmount: 0,
+      netSales: 0,
+      completedCount: 0,
+      refundedCount: 0,
+      paymentTotals,
+    };
+
+    for (const sale of this.salesHistory || []) {
+      const amount = Number(sale.totalAmount) || 0;
+      const status = String(sale.status || '').toUpperCase();
+
+      if (status === 'COMPLETED') {
+        summary.completedAmount += amount;
+        summary.completedCount += 1;
+
+        const paymentMethod = String(sale.paymentMethod || 'CASH').toUpperCase();
+        if (paymentMethod in paymentTotals) paymentTotals[paymentMethod] += amount;
+      }
+
+      if (status === 'REFUNDED') {
+        summary.refundedAmount += amount;
+        summary.refundedCount += 1;
+      }
+    }
+
+    summary.netSales = summary.completedAmount - summary.refundedAmount;
+    return summary;
+  }
+
+  paymentTotal(summary: any, method: string): number {
+    return Number(summary?.paymentTotals?.[method]) || 0;
+  }
+
+  exportSalesCsv() {
+    if (!this.salesHistory.length) return;
+
+    const rows = [
+      ['Sale ID', 'Date', 'Client name', 'Payment method', 'Status', 'Total amount', 'Item names'],
+      ...this.salesHistory.map((sale) => [
+        sale.id,
+        this.formatCsvDate(sale.createdAt),
+        sale.client?.fullName || 'Walk-in',
+        sale.paymentMethod || 'CASH',
+        sale.status || '',
+        (Number(sale.totalAmount) || 0).toFixed(2),
+        this.saleItemNames(sale),
+      ]),
+    ];
+
+    const csv = rows.map((row) => row.map((value) => this.csvValue(value)).join(',')).join('\r\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `pos-sales-${this.fileDate(new Date())}.csv`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  private saleItemNames(sale: any): string {
+    return (sale.items || [])
+      .map((item: any) => String(item.name || '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private csvValue(value: any): string {
+    const text = value === null || value === undefined ? '' : String(value);
+    const escaped = text.replace(/"/g, '""');
+    return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+  }
+
+  private formatCsvDate(value: any): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || '');
+    return `${this.fileDate(date)} ${this.pad(date.getHours())}:${this.pad(date.getMinutes())}`;
+  }
+
+  private fileDate(date: Date): string {
+    return `${date.getFullYear()}-${this.pad(date.getMonth() + 1)}-${this.pad(date.getDate())}`;
+  }
+
+  private pad(value: number): string {
+    return String(value).padStart(2, '0');
+  }
+
   viewReceipt(sale: any) {
     this.selectedSale = sale;
     this.saleDetailLoading = true;
