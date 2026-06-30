@@ -94,11 +94,18 @@ import {
           <div class="sum-card"><span>Pending</span><b class="amber">{{ summary.kpis?.pending }}</b></div>
           <div class="sum-card"><span>Revenue</span><b>{{ (summary.kpis?.revenue || 0) | currency }}</b></div>
         </div>
+        <div class="status-legend">
+          <span class="legend-item" *ngFor="let item of statusLegendItems">
+            <span [class]="'legend-dot dot-' + item.cls"></span>
+            <span class="legend-label">{{ item.label }}</span>
+          </span>
+        </div>
 
         <div class="day-view" *ngIf="view === 'day'">
           <ng-container *ngIf="viewMode === 'staff'">
             <div class="dv-empty-staff" *ngIf="staffList.length === 0">
-              <p>No staff available. Add staff members to use the staff view.</p>
+              <strong>No staff available</strong>
+              <p>Add staff members in the Staff section to use the staff view.</p>
             </div>
             <div class="staff-filter-bar" *ngIf="staffList.length > 0">
               <button class="staff-filter-pill" [class.active]="!selectedStaffFilter" (click)="selectedStaffFilter=''">All Staff</button>
@@ -155,6 +162,7 @@ import {
                           (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -196,7 +204,12 @@ import {
               </div>
             </div>
             <div class="dv-empty-bookings" *ngIf="staffList.length > 0 && bookings.length === 0">
-              <p>No bookings for this day.</p>
+              <strong>No bookings for this day</strong>
+              <p>Add a booking or walk-in to get started.</p>
+              <div class="empty-actions">
+                <button (click)="openCreateBookingForDate(currentDate)" class="empty-btn">New Booking</button>
+                <button (click)="openWalkin()" class="empty-btn empty-btn-secondary">Walk-in</button>
+              </div>
             </div>
           </ng-container>
           <ng-container *ngIf="viewMode === 'resources'">
@@ -237,6 +250,7 @@ import {
                           (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -262,6 +276,7 @@ import {
                           (keydown)="openBookingFromKeyboard($event, b)">
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -303,7 +318,12 @@ import {
               </div>
             </div>
             <div class="dv-empty-bookings" *ngIf="bookings.length === 0">
-              <p>No bookings for this day.</p>
+              <strong>No bookings for this day</strong>
+              <p>Add a booking or walk-in to get started.</p>
+              <div class="empty-actions">
+                <button (click)="openCreateBookingForDate(currentDate)" class="empty-btn">New Booking</button>
+                <button (click)="openWalkin()" class="empty-btn empty-btn-secondary">Walk-in</button>
+              </div>
             </div>
           </ng-container>
         </div>
@@ -330,6 +350,7 @@ import {
                   <strong>{{ b.client?.fullName || 'Client' }}</strong>
                   <span>{{ b.title }}</span>
                   <small>{{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</small>
+                  <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                 </div>
                 <div class="week-add-action" (click)="openCreateBookingForDate(day.date); $event.stopPropagation()">+ Add</div>
               </ng-container>
@@ -370,6 +391,7 @@ import {
                   (keydown)="openBookingFromKeyboard($event, b)">
                   <span class="mp-time">{{ formatTime(b.startTime) }}</span>
                   <span class="mp-title">{{ b.client?.fullName || b.title }}</span>
+                  <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                 </div>
                 <div class="month-more" *ngIf="getMonthMoreCount(day.date) > 0"
                   (click)="openDayFromMonth(day.date); $event.stopPropagation()">
@@ -386,7 +408,12 @@ import {
         </div>
 
         <div class="empty" *ngIf="bookings.length === 0">
-          <p>No bookings for this period.</p>
+          <strong>No bookings for this period</strong>
+          <p>Try changing the date range or add a new booking.</p>
+          <div class="empty-actions">
+            <button (click)="goToday()" class="empty-btn">Go to Today</button>
+            <button (click)="openWalkin()" class="empty-btn empty-btn-secondary">Add Walk-in</button>
+          </div>
         </div>
       </ng-container>
 
@@ -689,6 +716,9 @@ import {
     .error strong{color:#991b1b}.error p{color:#7f1d1d}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
     .summary-bar{display:flex;gap:8px;flex-wrap:wrap;background:white;border:1px solid #e5e7eb;border-radius:14px;padding:8px 12px}
+    .status-legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:6px 0 2px;align-items:center}
+    .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#4b5563}
+    .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
     .sum-card{flex:1;text-align:center;padding:2px 8px;border-right:1px solid #e5e7eb;min-width:80px}
     .sum-card:last-child{border-right:0}
     .sum-card span{display:block;font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:1px}
@@ -741,8 +771,17 @@ import {
     .dv-unassigned-col .booking-chip{opacity:.85}
     .dv-unassigned-col .dv-bookings-layer .booking-chip{opacity:.85}
     .dv-empty-staff{padding:48px;text-align:center;color:#6b7280}
-    .dv-empty-bookings{padding:24px;text-align:center;color:#9ca3af;font-size:14px;border-top:1px solid #e5e7eb}
-    .booking-chip{padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;background:#f3f4f6;width:100%}
+    .dv-empty-staff strong{display:block;font-size:16px;color:#374151;margin-bottom:4px}
+    .dv-empty-staff p{font-size:13px;color:#9ca3af}
+    .dv-empty-bookings{padding:32px 24px;text-align:center;color:#6b7280;background:white;border-radius:16px;border:1px solid #e5e7eb;margin:12px}
+    .dv-empty-bookings strong{display:block;font-size:14px;color:#374151;margin-bottom:4px}
+    .dv-empty-bookings p{margin:0 0 12px}
+    .empty-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px}
+    .empty-btn{padding:7px 14px;border-radius:8px;border:1px solid #e5e7eb;background:white;font-size:11px;font-weight:700;color:#6366f1;cursor:pointer;transition:background .12s,border-color .12s}
+    .empty-btn:hover{background:#eef2ff;border-color:#6366f1}
+    .empty-btn-secondary{color:#4b5563}
+    .empty-btn-secondary:hover{background:#f3f4f6;border-color:#d1d5db}
+    .booking-chip{padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;background:#f3f4f6;width:100%;position:relative}
     .booking-chip.status-confirmed{background:#dbeafe;border-left:3px solid #3b82f6}
     .booking-chip.status-completed{background:#f0fdf4;border-left:3px solid #16a34a}
     .booking-chip.status-pending{background:#fefce8;border-left:3px solid #eab308}
@@ -753,6 +792,7 @@ import {
     .booking-chip{transition:transform .12s ease,box-shadow .12s ease}
     @media(hover:hover){.booking-chip:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.06)}}
     .booking-chip:active{transform:scale(.97)}
+    .booking-bar{position:absolute;bottom:2px;left:6px;right:6px;height:2px;border-radius:1px;background:rgba(0,0,0,.08);pointer-events:none}
     .dv-staff-body{position:relative}
     .dv-bookings-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
     .dv-bookings-layer .booking-chip{pointer-events:auto;position:absolute;overflow:hidden;z-index:1;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:3px solid #d1d5db;display:flex;flex-direction:column;gap:1px;min-height:18px}
@@ -793,7 +833,7 @@ import {
     .week-day-col:last-child{border-right:0}
     .week-day-col.today{background:#fafcff}
     .week-day-col:hover{background:#f9fafb}
-    .week-booking{padding:8px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:11px;background:#f3f4f6;border-left:3px solid transparent}
+    .week-booking{padding:8px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:11px;background:#f3f4f6;border-left:3px solid transparent;position:relative}
     .week-booking.status-confirmed{background:#dbeafe;border-left-color:#3b82f6}
     .week-booking.status-completed{background:#f0fdf4;border-left-color:#16a34a}
     .week-booking.status-pending{background:#fefce8;border-left-color:#eab308}
@@ -826,7 +866,7 @@ import {
     .month-status-num{font-size:9px;color:#6b7280;font-weight:700}
     .dot-confirmed{background:#3b82f6}.dot-completed{background:#16a34a}.dot-pending{background:#eab308}.dot-cancelled{background:#dc2626}.dot-checked_in{background:#7c3aed}
     .month-preview-list{display:grid;gap:2px}
-    .month-preview-chip{padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:2px solid transparent;display:flex;gap:4px;align-items:center;overflow:hidden}
+    .month-preview-chip{padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:2px solid transparent;display:flex;gap:4px;align-items:center;overflow:hidden;position:relative}
     .month-preview-chip.status-confirmed{background:#dbeafe;border-left-color:#3b82f6}
     .month-preview-chip.status-completed{background:#f0fdf4;border-left-color:#16a34a}
     .month-preview-chip.status-pending{background:#fefce8;border-left-color:#eab308}
@@ -841,7 +881,9 @@ import {
     .month-add-empty{font-size:11px;color:#6366f1;font-weight:700;cursor:pointer;padding:4px;text-align:center;border:1px dashed #e5e7eb;border-radius:6px;transition:border-color .15s,background .15s}
     .month-add-empty:hover{border-color:#6366f1;background:#f0f4ff}
     .month-empty{font-size:10px;color:#d1d5db;padding:2px 0}
-    .empty{padding:48px;text-align:center;color:#6b7280;background:white;border-radius:20px;border:1px solid #e5e7eb}
+    .empty{padding:48px 32px;text-align:center;max-width:420px;margin:24px auto;color:#6b7280;background:white;border-radius:20px;border:1px solid #e5e7eb}
+    .empty strong{display:block;font-size:16px;color:#374151;margin-bottom:4px}
+    .empty p{font-size:13px;color:#9ca3af;margin:0 0 16px}
     .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:flex-end;z-index:50}
     .drawer-panel{background:white;width:min(460px,100%);max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;animation:slideIn .25s ease}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
@@ -1144,6 +1186,14 @@ export class CalendarComponent {
     'Duplicate booking',
     'Wrong booking details',
     'Other',
+  ];
+
+  readonly statusLegendItems = [
+    { label: 'Confirmed', cls: 'confirmed' },
+    { label: 'Pending', cls: 'pending' },
+    { label: 'Completed', cls: 'completed' },
+    { label: 'Cancelled', cls: 'cancelled' },
+    { label: 'Checked In', cls: 'checked_in' },
   ];
 
   showEditForm = false;
@@ -1765,6 +1815,10 @@ export class CalendarComponent {
     const end = new Date(booking.endTime).getTime();
     const diff = Math.round((end - start) / 60000);
     return Math.max(15, Math.min(diff, 480));
+  }
+
+  getDurationBarPercent(booking: CalendarBooking): number {
+    return Math.min(100, 20 + this.getBookingDurationMinutes(booking) * 0.15);
   }
 
   getBookingBlockStyle(booking: CalendarBooking): any {
