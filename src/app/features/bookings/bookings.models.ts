@@ -104,3 +104,48 @@ export interface ServiceOption {
   price: number;
   description?: string | null;
 }
+
+export interface PaymentInfo {
+  id: string;
+  bookingId: string;
+  amount: number;
+  method: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ClientDetail {
+  id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  walletBalance?: number;
+}
+
+export interface ViewBillData {
+  booking: BookingListItem;
+  payments: PaymentInfo[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  taxRate: number;
+  total: number;
+  paid: number;
+  due: number;
+  paymentMethod: string;
+  staffAlert?: string;
+  clientDetail?: ClientDetail;
+  activityLog: ActivityLogEntry[];
+}
+
+export interface ActivityLogEntry {
+  action: string;
+  timestamp: string;
+  user?: string;
+  details?: string;
+}
+
+export interface AddPaymentForm {
+  amount: number;
+  method: string;
+}

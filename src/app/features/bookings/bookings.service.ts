@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import type { BookingListItem, BookingServiceLine, CreateBookingForm, ClientOption, StaffOption, BranchOption, ServiceOption } from './bookings.models';
+import type { BookingListItem, BookingServiceLine, CreateBookingForm, ClientOption, StaffOption, BranchOption, ServiceOption, PaymentInfo, ClientDetail } from './bookings.models';
 
 export interface BookingQueryParams {
   search?: string;
@@ -84,5 +84,17 @@ export class BookingsService {
 
   getServices(): Observable<ServiceOption[]> {
     return this.http.get<ServiceOption[]>('http://localhost:3000/api/services');
+  }
+
+  getBookingPayments(bookingId: string): Observable<PaymentInfo[]> {
+    return this.http.get<PaymentInfo[]>(`${this.baseUrl}/${bookingId}/payments`);
+  }
+
+  getClientDetail(clientId: string): Observable<ClientDetail> {
+    return this.http.get<ClientDetail>(`http://localhost:3000/api/clients/${clientId}`);
+  }
+
+  addPayment(bookingId: string, body: { amount: number; method: string }): Observable<any> {
+    return this.http.post('http://localhost:3000/api/payments/mark-paid', { bookingId, ...body });
   }
 }

@@ -46,8 +46,8 @@ import { AuthService } from '../auth/auth.service';
     </div>
   `,
   styles: [`
-    .app-shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh;background:#f7f7f7}
-    .sidebar{background:#0b0b0b;color:white;padding:24px 24px 0;display:flex;flex-direction:column}
+    .app-shell{display:grid;grid-template-columns:260px 1fr;height:100vh;overflow:hidden;background:#f7f7f7}
+    .sidebar{background:#0b0b0b;color:white;padding:24px 24px 0;display:flex;flex-direction:column;overflow:hidden}
     .sidebar-scroll{overflow-y:auto;flex:1;padding-bottom:24px;display:flex;flex-direction:column;gap:2px}
     .sidebar-scroll::-webkit-scrollbar{width:4px}
     .sidebar-scroll::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
@@ -59,10 +59,11 @@ import { AuthService } from '../auth/auth.service';
     .topbar{height:74px;background:white;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex-shrink:0}
     .topbar span{display:block;color:#6b7280;font-size:13px}
     .actions{display:flex;gap:12px;align-items:center}
-    .content{padding:28px;overflow-y:auto}
+    .main{display:flex;flex-direction:column;overflow:hidden}
+    .content{flex:1;padding:28px;overflow-y:auto}
     @media(max-width:900px){
       .app-shell{grid-template-columns:1fr}
-      .sidebar{position:fixed;top:0;left:0;bottom:0;width:260px;z-index:100;transform:translateX(-100%);transition:transform .25s;padding-bottom:0}
+      .sidebar{position:fixed;top:0;left:0;bottom:0;width:260px;z-index:100;transform:translateX(-100%);transition:transform .25s;padding-bottom:0;overflow:hidden}
       .sidebar.open{transform:translateX(0)}
       .mobile-toggle{display:flex;position:fixed;top:12px;left:12px;z-index:101;background:#0b0b0b;color:white;border:0;border-radius:10px;width:40px;height:40px;align-items:center;justify-content:center;font-size:22px;cursor:pointer}
     }

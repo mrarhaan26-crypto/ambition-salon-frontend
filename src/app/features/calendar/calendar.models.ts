@@ -290,3 +290,30 @@ export interface AddPaymentForm {
 }
 
 export type SlotSize = 15 | 30 | 60;
+
+export interface ConflictInfo {
+  type: 'staff' | 'client' | 'resource';
+  message: string;
+  conflictingBookingId: string;
+  conflictingTitle: string;
+  conflictingTime: string;
+}
+
+export interface RebookSlot {
+  startTime: string;
+  endTime: string;
+  staffId: string;
+  staffName: string;
+  available: boolean;
+}
+
+export interface WaitlistSuggestion {
+  rank: number;
+  matchScore: number;
+  entry: WaitlistEntry;
+}
+
+export interface NoShowRiskInfo {
+  riskLevel: 'low' | 'medium' | 'high';
+  reason: string;
+}

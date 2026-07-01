@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import {
+import type {
   CalendarBooking,
   CalendarSummaryResponse,
   CalendarResource,
@@ -74,5 +74,17 @@ export class CalendarService {
 
   addPayment(bookingId: string, body: { amount: number; method: string }): Observable<any> {
     return this.http.post(`http://localhost:3000/api/payments/mark-paid`, { bookingId, ...body });
+  }
+
+  getBookingSlots(params: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/slots`, { params });
+  }
+
+  getWaitlistSuggestions(params: any): Observable<any> {
+    return this.http.get(`http://localhost:3000/api/waitlist/suggestions`, { params });
+  }
+
+  autofillWaitlist(body: any): Observable<any> {
+    return this.http.post(`http://localhost:3000/api/waitlist/autofill`, body);
   }
 }

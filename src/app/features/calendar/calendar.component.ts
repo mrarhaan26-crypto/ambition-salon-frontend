@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { forkJoin, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CalendarService } from './calendar.service';
+import { Client360Component } from '../client-360/client-360.component';
 import { StaffService } from '../staff/staff.service';
 import { Staff } from '../staff/staff.models';
 import { ResourcesService } from '../resources/resources.service';
@@ -37,12 +38,16 @@ import {
   AddPaymentForm,
   SlotSize,
   ActivityLogEntry,
+  ConflictInfo,
+  RebookSlot,
+  WaitlistSuggestion,
+  NoShowRiskInfo,
 } from './calendar.models';
 
 @Component({
   selector: 'app-calendar',
   standalone: true,
-  imports: [CommonModule, FormsModule, CalendarWaitlist, CalendarAiScheduler],
+  imports: [CommonModule, FormsModule, CalendarWaitlist, CalendarAiScheduler, Client360Component],
   template: `
     <section class="page">
       <div class="head">
@@ -187,6 +192,7 @@ import {
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
+                          <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -225,6 +231,28 @@ import {
                   (cancelFill)="fillWaitlistEntry = null"
                   (removeEntry)="removeWaitlistEntry($event)">
                 </app-calendar-waitlist>
+                <div class="wl-actions" *ngIf="showWaitlist">
+                  <div class="wl-msg" *ngIf="waitlistMessage">{{ waitlistMessage }}</div>
+                  <button class="wl-suggest-btn" (click)="loadWaitlistSuggestions()" [disabled]="waitlistSuggestLoading">
+                    {{ waitlistSuggestLoading ? 'Loading...' : 'Find Suggestions' }}
+                  </button>
+                  <button class="wl-autofill-btn" (click)="autofillWaitlistSlot()" [disabled]="waitlistSuggestLoading">
+                    Auto-Fill Slot
+                  </button>
+                </div>
+                <div class="wl-suggestions" *ngIf="showWaitlistSuggestions">
+                  <div class="wl-suggest-header">Suggested Matches</div>
+                  <div class="wl-loading" *ngIf="waitlistSuggestLoading"><div class="spinner"></div></div>
+                  <div class="wl-error" *ngIf="waitlistSuggestError">{{ waitlistSuggestError }}</div>
+                  <div class="wl-suggestion-item" *ngFor="let ws of waitlistSuggestions">
+                    <span class="wl-s-name">{{ ws.entry?.client?.fullName || 'Client' }}</span>
+                    <span class="wl-s-score">Match: {{ ws.matchScore }}%</span>
+                    <button class="wl-s-fill" (click)="fillWaitlistEntry = ws.entry; showWaitlistSuggestions = false">Fill</button>
+                  </div>
+                  <div class="wl-empty" *ngIf="!waitlistSuggestLoading && !waitlistSuggestError && waitlistSuggestions.length === 0">
+                    No matching waitlist entries.
+                  </div>
+                </div>
               </div>
             </div>
             <div class="dv-empty-bookings" *ngIf="staffList.length > 0 && bookings.length === 0">
@@ -277,6 +305,7 @@ import {
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
+                          <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -303,6 +332,7 @@ import {
                           <strong>{{ b.client?.fullName || 'Client' }}</strong>
                           <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
+                          <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -367,17 +397,19 @@ import {
             <div class="week-day-col" *ngFor="let day of weekDays"
               [class.today]="isDayToday(day.date)">
               <ng-container *ngIf="getBookingsForDate(day.date).length > 0; else emptyDay">
-                <div class="week-booking" *ngFor="let b of getBookingsForDate(day.date)"
-                  [class]="'status-' + (b.status || '').toLowerCase()"
-                  tabindex="0" role="button"
-                  [attr.aria-label]="getBookingAriaLabel(b)"
-                  (click)="openDrawer(b); $event.stopPropagation()"
-                  (keydown)="openBookingFromKeyboard($event, b)">
-                  <strong>{{ b.client?.fullName || 'Client' }}</strong>
-                  <span>{{ b.title }}</span>
-                  <small>{{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</small>
-                  <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
-                </div>
+                  <div class="week-booking" *ngFor="let b of getBookingsForDate(day.date)"
+                    [class]="'status-' + (b.status || '').toLowerCase()"
+                    [class.has-conflict]="hasConflict(b)"
+                    tabindex="0" role="button"
+                    [attr.aria-label]="getBookingAriaLabel(b)"
+                    (click)="openDrawer(b); $event.stopPropagation()"
+                    (keydown)="openBookingFromKeyboard($event, b)">
+                    <strong>{{ b.client?.fullName || 'Client' }}</strong>
+                    <span>{{ b.title }}</span>
+                    <small>{{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</small>
+                    <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
+                    <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
+                  </div>
                 <div class="week-add-action" (click)="openCreateBookingForDate(day.date); $event.stopPropagation()">+ Add</div>
               </ng-container>
               <ng-template #emptyDay>
@@ -409,16 +441,18 @@ import {
                 </span>
               </div>
               <div class="month-preview-list" *ngIf="getBookingsForDate(day.date).length > 0">
-                <div class="month-preview-chip" *ngFor="let b of getMonthPreviewBookings(day.date)"
-                  [class]="'status-' + (b.status || '').toLowerCase()"
-                  tabindex="0" role="button"
-                  [attr.aria-label]="getBookingAriaLabel(b)"
-                  (click)="openDrawer(b); $event.stopPropagation()"
-                  (keydown)="openBookingFromKeyboard($event, b)">
-                  <span class="mp-time">{{ formatTime(b.startTime) }}</span>
-                  <span class="mp-title">{{ b.client?.fullName || b.title }}</span>
-                  <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
-                </div>
+                  <div class="month-preview-chip" *ngFor="let b of getMonthPreviewBookings(day.date)"
+                    [class]="'status-' + (b.status || '').toLowerCase()"
+                    [class.has-conflict]="hasConflict(b)"
+                    tabindex="0" role="button"
+                    [attr.aria-label]="getBookingAriaLabel(b)"
+                    (click)="openDrawer(b); $event.stopPropagation()"
+                    (keydown)="openBookingFromKeyboard($event, b)">
+                    <span class="mp-time">{{ formatTime(b.startTime) }}</span>
+                    <span class="mp-title">{{ b.client?.fullName || b.title }}</span>
+                    <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
+                    <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
+                  </div>
                 <div class="month-more" *ngIf="getMonthMoreCount(day.date) > 0"
                   (click)="openDayFromMonth(day.date); $event.stopPropagation()">
                   +{{ getMonthMoreCount(day.date) }} more
@@ -460,6 +494,7 @@ import {
                   <button (click)="closeActionMenu(); openAddPayment()"><span class="am-icon">&#x1F4B3;</span> Add Payment</button>
                   <button (click)="closeActionMenu(); openAddTip()"><span class="am-icon">&#x1F381;</span> Add Tip</button>
                   <button (click)="closeActionMenu(); doRebook()"><span class="am-icon">&#x1F504;</span> Rebook</button>
+                  <button (click)="closeActionMenu(); openSmartRebook()"><span class="am-icon">&#x1F4C5;</span> Smart Rebook</button>
                   <button (click)="closeActionMenu(); printBill()"><span class="am-icon">&#x1F5A8;</span> Print</button>
                   <button (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client</button>
                 </div>
@@ -489,6 +524,15 @@ import {
                     <span class="wl-label">Wallet</span>
                     <span class="wl-amount">{{ viewBillData.clientDetail.walletBalance | currency }}</span>
                   </div>
+                </div>
+              </div>
+
+              <!-- No-Show Risk -->
+              <div class="drawer-section" *ngIf="noShowRisk">
+                <h3>No-Show Risk</h3>
+                <div class="risk-banner" [class.risk-low]="noShowRisk.riskLevel==='low'" [class.risk-medium]="noShowRisk.riskLevel==='medium'" [class.risk-high]="noShowRisk.riskLevel==='high'">
+                  <span class="risk-icon">{{ noShowRisk.riskLevel === 'high' ? '&#x1F525;' : noShowRisk.riskLevel === 'medium' ? '&#x26A0;' : '&#x2705;' }}</span>
+                  <span>{{ noShowRisk.reason }}</span>
                 </div>
               </div>
 
@@ -544,6 +588,20 @@ import {
                 </div>
               </div>
 
+              <!-- Conflict Warnings -->
+              <div class="drawer-section conflict-section" *ngIf="getBookingConflicts(drawerBooking).length > 0">
+                <h3 class="conflict-heading">&#x26A0; Schedule Conflicts</h3>
+                <div class="conflict-item" *ngFor="let c of getBookingConflicts(drawerBooking)">
+                  <span class="conflict-icon" [class.conflict-staff]="c.type==='staff'" [class.conflict-client]="c.type==='client'" [class.conflict-resource]="c.type==='resource'">
+                    {{ c.type === 'staff' ? '&#x1F9D1;' : c.type === 'client' ? '&#x1F464;' : '&#x1F3E0;' }}
+                  </span>
+                  <div class="conflict-info">
+                    <span class="conflict-msg">{{ c.message }}</span>
+                    <span class="conflict-time">{{ c.conflictingTime }}</span>
+                  </div>
+                </div>
+              </div>
+
               <div class="drawer-section bill-actions">
                 <button class="btn-print" (click)="printBill()">&#x1F5A8; Print Bill</button>
               </div>
@@ -579,7 +637,7 @@ import {
             <div class="drawer-loading" *ngIf="viewBillLoading"><div class="spinner"></div><span>Loading bill details...</span></div>
 
             <!-- Status Workflow Buttons -->
-            <div class="status-workflow" *ngIf="drawerBooking && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">
+            <div class="status-workflow" *ngIf="drawerBooking && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">
               <div class="sw-label">Status Workflow</div>
               <div class="sw-buttons">
                 <button class="sw-btn sw-confirmed" [class.sw-active]="drawerBooking.status==='CONFIRMED'" [disabled]="drawerBooking.status==='CONFIRMED'" (click)="doStatus(drawerBooking, 'CONFIRMED')">Confirmed</button>
@@ -682,15 +740,39 @@ import {
               <div class="drawer-error" *ngIf="addTipError">{{ addTipError }}</div>
             </div>
 
+            <!-- Smart Rebook -->
+            <div class="smart-rebook-panel" *ngIf="showSmartRebook">
+              <h3>Smart Rebook Suggestions</h3>
+              <div class="drawer-loading" *ngIf="rebookLoading"><div class="spinner"></div><span>Finding available slots...</span></div>
+              <div class="drawer-error" *ngIf="rebookError">{{ rebookError }}</div>
+              <div class="rebook-list" *ngIf="!rebookLoading">
+                <div class="rebook-card" *ngFor="let s of rebookSuggestions; let i = index"
+                  (click)="bookRebookSlot(s)" role="button" tabindex="0">
+                  <div class="rebook-num">{{ i + 1 }}</div>
+                  <div class="rebook-info">
+                    <span class="rebook-time">{{ s.startTime | date:'EEE, MMM dd, h:mm a' }} – {{ s.endTime | date:'h:mm a' }}</span>
+                    <span class="rebook-staff">{{ s.staffName || 'Same staff' }}</span>
+                  </div>
+                  <button class="rebook-book-btn">Book</button>
+                </div>
+                <div class="rebook-empty" *ngIf="rebookSuggestions.length === 0">
+                  <span>No available slots found. Try a different date.</span>
+                </div>
+              </div>
+              <div class="drawer-actions">
+                <button (click)="closeSmartRebook()">Back</button>
+              </div>
+            </div>
+
             <!-- Original inline actions fallback -->
-            <div class="drawer-actions" *ngIf="drawerBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">
+            <div class="drawer-actions" *ngIf="drawerBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">
               <button class="btn-secondary" (click)="openEditForm(drawerBooking)">Edit Details</button>
               <button *ngIf="canReschedule(drawerBooking)" class="btn-secondary" (click)="showRescheduleForm(drawerBooking)">Reschedule</button>
               <button *ngIf="canCancel(drawerBooking)" class="btn-danger" (click)="openCancelForm()">Cancel Booking</button>
             </div>
 
-            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip"><div class="spinner"></div><span>Updating...</span></div>
-            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">{{ drawerError }}</div>
+            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook"><div class="spinner"></div><span>Updating...</span></div>
+            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">{{ drawerError }}</div>
           </div>
         </div>
       </div>
@@ -863,11 +945,13 @@ import {
         <strong>{{ dragGhostBooking?.client?.fullName || dragGhostBooking?.title || 'Booking' }}</strong>
         <span>{{ formatTime(dragGhostBooking?.startTime || '') }}-{{ formatTime(dragGhostBooking?.endTime || '') }}</span>
       </div>
+
+      <app-client-360 *ngIf="showClient360 && client360ClientId" [clientId]="client360ClientId" (close)="closeClient360()"></app-client-360>
     </section>
   `,
   styles: [`
-    .page{display:grid;gap:20px}
-    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+    .page{display:grid;gap:20px;flex:1;min-height:0}
+    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10;background:#f7f7f7;padding:4px 0;margin:-4px 0}
     h1{font-size:34px;margin:0}
     p{color:#6b7280;margin:6px 0 0}
     .head-actions{display:flex;gap:8px;align-items:center}
@@ -877,7 +961,7 @@ import {
     .refresh-btn:disabled{opacity:.5;cursor:default}
     .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
     .date-label{font-weight:700;font-size:16px;min-width:200px;text-align:center;color:#374151;letter-spacing:-.02em}
-    .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+    .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;position:sticky;top:54px;z-index:9;background:#f7f7f7;padding:4px 0}
     .tabs button{border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer;background:white}
     .tabs button.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
@@ -1469,6 +1553,44 @@ import {
       .wl-amount{font-size:13px}
       .action-menu-dropdown{right:auto;left:0}
       .tip-presets button{padding:8px;font-size:13px}
+      .conflict-badge{position:absolute;top:2px;right:2px;font-size:12px;color:#e53935;z-index:2}
+      .week-booking.has-conflict,.month-preview-chip.has-conflict{border-color:#e53935}
+      .conflict-section{margin-top:8px}
+      .conflict-heading{color:#e53935;font-size:13px}
+      .conflict-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5}
+      .conflict-icon{font-size:14px;width:20px;text-align:center}
+      .conflict-info{display:flex;flex-direction:column}
+      .conflict-msg{font-size:12px;color:#333}
+      .conflict-time{font-size:11px;color:#888}
+      .risk-banner{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;font-size:12px}
+      .risk-high{background:#fff3e0;color:#e65100}
+      .risk-medium{background:#fff8e1;color:#f57f17}
+      .risk-low{background:#e8f5e9;color:#2e7d32}
+      .risk-icon{font-size:16px}
+      .smart-rebook-panel h3{font-size:14px;margin:0 0 8px}
+      .rebook-list{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto}
+      .rebook-card{display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f9f9f9;border-radius:6px;cursor:pointer;transition:background .15s}
+      .rebook-card:hover{background:#e3f2fd}
+      .rebook-num{width:22px;height:22px;border-radius:50%;background:#1976d2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+      .rebook-info{display:flex;flex-direction:column;flex:1;min-width:0}
+      .rebook-time{font-size:12px;font-weight:500;color:#333}
+      .rebook-staff{font-size:11px;color:#888}
+      .rebook-book-btn{padding:4px 12px;font-size:11px;border:none;border-radius:4px;background:#1976d2;color:#fff;cursor:pointer;flex-shrink:0}
+      .rebook-book-btn:hover{background:#1565c0}
+      .rebook-empty{padding:12px;text-align:center;font-size:12px;color:#888}
+      .wl-actions{display:flex;flex-direction:column;gap:4px;padding:8px;border-top:1px solid #e0e0e0}
+      .wl-msg{padding:4px 8px;background:#e8f5e9;border-radius:4px;font-size:11px;color:#2e7d32}
+      .wl-suggest-btn,.wl-autofill-btn{padding:6px 10px;font-size:11px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer}
+      .wl-suggest-btn:hover,.wl-autofill-btn:hover{background:#f5f5f5}
+      .wl-suggestions{padding:8px;border-top:1px solid #e0e0e0}
+      .wl-suggest-header{font-size:11px;font-weight:600;margin-bottom:6px;color:#555}
+      .wl-suggestion-item{display:flex;align-items:center;gap:6px;padding:4px 0}
+      .wl-s-name{font-size:12px;flex:1}
+      .wl-s-score{font-size:10px;color:#888}
+      .wl-s-fill{padding:2px 8px;font-size:10px;border:none;border-radius:3px;background:#1976d2;color:#fff;cursor:pointer}
+      .wl-empty{padding:8px;font-size:11px;color:#888;text-align:center}
+      .wl-loading{display:flex;justify-content:center;padding:8px}
+      .wl-error{font-size:11px;color:#e53935;padding:4px 0}
     }
   `]
 })
@@ -1561,6 +1683,9 @@ export class CalendarComponent {
   addTipBusy = false;
   addTipError = '';
 
+  showClient360 = false;
+  client360ClientId = '';
+
   showWalkin = false;
   walkinBusy = false;
   walkinError = '';
@@ -1576,6 +1701,7 @@ export class CalendarComponent {
   waitlistLoading = false;
   waitlistError = '';
   fillWaitlistEntry: WaitlistEntry | null = null;
+  waitlistMessage = '';
 
   showAiPanel = false;
   aiSuggestions: AiSuggestion[] = [];
@@ -1585,6 +1711,20 @@ export class CalendarComponent {
   aiServiceDuration = 30;
   aiOptimizing = false;
   aiOptimization: AiOptimization | null = null;
+
+  conflicts: ConflictInfo[] = [];
+
+  showSmartRebook = false;
+  rebookSuggestions: RebookSlot[] = [];
+  rebookLoading = false;
+  rebookError = '';
+
+  showWaitlistSuggestions = false;
+  waitlistSuggestions: WaitlistSuggestion[] = [];
+  waitlistSuggestLoading = false;
+  waitlistSuggestError = '';
+
+  noShowRisk: NoShowRiskInfo | null = null;
 
   dragBooking: CalendarBooking | null = null;
   dragStartX = 0;
@@ -1722,19 +1862,19 @@ export class CalendarComponent {
 
     if (this.view === 'day') {
       this.api.getCalendarDay(params).subscribe({
-        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.loading = false; requestAnimationFrame(() => this.restoreDayViewScroll()); },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.detectConflicts(); this.loading = false; requestAnimationFrame(() => this.restoreDayViewScroll()); },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
     if (this.view === 'week') {
       this.api.getCalendarWeek(params).subscribe({
-        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.buildWeek(); this.loading = false; },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.detectConflicts(); this.buildWeek(); this.loading = false; },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
     if (this.view === 'month') {
       this.api.getCalendarMonth(params).subscribe({
-        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.buildMonth(); this.loading = false; },
+        next: (d) => { this.fullBookings = Array.isArray(d) ? d : []; this.applyStatusFilter(); this.detectConflicts(); this.buildMonth(); this.loading = false; },
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
@@ -1764,6 +1904,7 @@ export class CalendarComponent {
 
   private applyStatusFilter() {
     this.bookings = this.statusFilter ? this.fullBookings.filter(b => b.status === this.statusFilter) : this.fullBookings;
+    this.detectConflicts();
   }
 
   onStatusFilterChange() {
@@ -2018,17 +2159,257 @@ export class CalendarComponent {
     const time = `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}`;
     return `Booking: ${client}, ${b.title}, ${time}`;
   }
-  closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; }
+  closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false; }
 
   canCancel(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
   canReschedule(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED'].includes(b.status); }
 
+  private detectConflicts(): void {
+    const result: ConflictInfo[] = [];
+    const bookings = this.bookings;
+    for (let i = 0; i < bookings.length; i++) {
+      for (let j = i + 1; j < bookings.length; j++) {
+        const a = bookings[i];
+        const b = bookings[j];
+        if (!this.timesOverlap(a.startTime, a.endTime, b.startTime, b.endTime)) continue;
+        if (a.staffId && b.staffId && a.staffId === b.staffId && a.id !== b.id) {
+          result.push({ type: 'staff', message: `Staff overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+        }
+        if (a.clientId && b.clientId && a.clientId === b.clientId && a.id !== b.id) {
+          result.push({ type: 'client', message: `Client overlap: ${a.client?.fullName || '?'} has conflicting booking`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+        }
+        if (a.resourceId && b.resourceId && a.resourceId === b.resourceId && a.id !== b.id) {
+          result.push({ type: 'resource', message: `Resource overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+        }
+      }
+    }
+    this.conflicts = result;
+  }
+
+  getBookingConflicts(b: CalendarBooking): ConflictInfo[] {
+    if (!b) return [];
+    return this.conflicts.filter(c =>
+      c.conflictingBookingId === b.id ||
+      c.conflictingBookingId === (b.id || '')
+    );
+  }
+
+  hasConflict(b: CalendarBooking): boolean {
+    if (!b) return false;
+    const id = b.id;
+    return this.conflicts.some(c => c.conflictingBookingId === id);
+  }
+
+  private timesOverlap(s1: string, e1: string, s2: string, e2: string): boolean {
+    const a = new Date(s1).getTime();
+    const b = new Date(e1).getTime();
+    const c = new Date(s2).getTime();
+    const d = new Date(e2).getTime();
+    return a < d && c < b;
+  }
+
+  openSmartRebook(): void {
+    if (!this.drawerBooking) return;
+    this.showSmartRebook = true;
+    this.showReschedule = false;
+    this.showCancelForm = false;
+    this.showEditForm = false;
+    this.showAddPayment = false;
+    this.showAddTip = false;
+    this.loadSmartRebookSuggestions();
+  }
+
+  closeSmartRebook(): void {
+    this.showSmartRebook = false;
+    this.rebookSuggestions = [];
+    this.rebookError = '';
+  }
+
+  loadSmartRebookSuggestions(): void {
+    if (!this.drawerBooking) return;
+    const b = this.drawerBooking;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const staffId = b.staffId || '';
+    const branchId = b.branchId || this.getDefaultBranchId();
+    const svcIds = (b.services || []).map(s => s.serviceId).filter(Boolean).join(',');
+    this.rebookLoading = true;
+    this.rebookError = '';
+    this.api.getBookingSlots({
+      branchId,
+      staffId,
+      date: dateStr,
+      serviceIds: svcIds || 'none',
+      slotSizeMinutes: 30,
+    }).subscribe({
+      next: (d: any) => {
+        const slots: any[] = Array.isArray(d?.slots) ? d.slots : [];
+        const totalDuration = this.getTotalBookingDuration(b);
+        const startHour = new Date().getHours() + 1;
+        const staffName = b.staff?.fullName || '';
+        const suggestions: RebookSlot[] = [];
+        const now = new Date();
+        for (const slot of slots) {
+          if (!slot.available) continue;
+          const st = new Date(slot.startTime);
+          if (st <= now) continue;
+          const end = new Date(st.getTime() + totalDuration * 60000);
+          suggestions.push({
+            startTime: slot.startTime,
+            endTime: end.toISOString(),
+            staffId,
+            staffName,
+            available: true,
+          });
+        }
+        if (suggestions.length === 0) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(10, 0, 0, 0);
+          for (let i = 0; i < 3; i++) {
+            const st = new Date(tomorrow.getTime() + i * totalDuration * 60000 * 2);
+            suggestions.push({
+              startTime: st.toISOString(),
+              endTime: new Date(st.getTime() + totalDuration * 60000).toISOString(),
+              staffId,
+              staffName,
+              available: true,
+            });
+          }
+        }
+        this.rebookSuggestions = suggestions.slice(0, 5);
+        this.rebookLoading = false;
+      },
+      error: () => {
+        const b2 = this.drawerBooking;
+        if (b2) {
+          const staffName = b2.staff?.fullName || '';
+          const totalDuration = this.getTotalBookingDuration(b2);
+          const suggestions: RebookSlot[] = [];
+          const startHour = new Date().getHours() + 1;
+          for (let i = 0; i < 3; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + (i > 0 ? i : 0));
+            d.setHours(startHour + i * 2, 0, 0, 0);
+            suggestions.push({
+              startTime: d.toISOString(),
+              endTime: new Date(d.getTime() + totalDuration * 60000).toISOString(),
+              staffId: b2.staffId || '',
+              staffName,
+              available: true,
+            });
+          }
+          this.rebookSuggestions = suggestions;
+        }
+        this.rebookLoading = false;
+        this.rebookError = 'Used local suggestions (API unavailable).';
+      },
+    });
+  }
+
+  bookRebookSlot(slot: RebookSlot): void {
+    if (!this.drawerBooking) return;
+    this.closeSmartRebook();
+    this.closeDrawer();
+    this.showCreate = true;
+    this.createBusy = false;
+    this.createError = '';
+    const b = this.drawerBooking;
+    this.createForm = {
+      clientId: b.clientId || '',
+      staffId: slot.staffId || b.staffId || '',
+      title: b.title || 'Rebook',
+      startTime: new Date(slot.startTime).toISOString().slice(0, 16),
+      branchId: b.branchId || this.getDefaultBranchId(),
+      notes: b.notes || '',
+      resourceId: b.resourceId || undefined,
+      services: (b.services || []).map(s => ({
+        serviceId: s.serviceId || '',
+        name: s.name,
+        durationMin: s.durationMin,
+        price: s.price,
+      })),
+    };
+    this.loadClientsAndServices();
+  }
+
+  private getTotalBookingDuration(b: CalendarBooking): number {
+    if (b.services?.length) {
+      return b.services.reduce((sum, s) => sum + (s.durationMin || 0), 0) || 60;
+    }
+    const diff = new Date(b.endTime).getTime() - new Date(b.startTime).getTime();
+    return Math.max(30, Math.round(diff / 60000));
+  }
+
+  loadNoShowRisk(): void {
+    const b = this.drawerBooking;
+    if (!b || !b.clientId) { this.noShowRisk = null; return; }
+    const pastCount = this.bookings.filter(
+      bk => bk.clientId === b.clientId && bk.status === 'NO_SHOW' && bk.id !== b.id
+    ).length;
+    if (pastCount >= 3) {
+      this.noShowRisk = { riskLevel: 'high', reason: `Client has ${pastCount} no-shows — consider confirming.` };
+    } else if (pastCount >= 1) {
+      this.noShowRisk = { riskLevel: 'medium', reason: `Client has ${pastCount} past no-show(s).` };
+    } else {
+      this.noShowRisk = null;
+    }
+  }
+
+  loadWaitlistSuggestions(): void {
+    const dateStr = this.currentDate.toISOString().slice(0, 10);
+    this.waitlistSuggestLoading = true;
+    this.waitlistSuggestError = '';
+    this.api.getWaitlistSuggestions({
+      branchId: '1',
+      startTime: `${dateStr}T10:00:00Z`,
+      endTime: `${dateStr}T20:00:00Z`,
+    }).subscribe({
+      next: (d: any) => {
+        this.waitlistSuggestions = Array.isArray(d) ? d : [];
+        this.waitlistSuggestLoading = false;
+        this.showWaitlistSuggestions = true;
+      },
+      error: () => {
+        this.waitlistSuggestError = 'Waitlist suggestions unavailable.';
+        this.waitlistSuggestLoading = false;
+        this.showWaitlistSuggestions = true;
+      },
+    });
+  }
+
+  autofillWaitlistSlot(): void {
+    const dateStr = this.currentDate.toISOString().slice(0, 10);
+    this.waitlistSuggestLoading = true;
+    this.waitlistSuggestError = '';
+    this.api.autofillWaitlist({
+      branchId: '1',
+      startTime: `${dateStr}T10:00:00Z`,
+      endTime: `${dateStr}T20:00:00Z`,
+    }).subscribe({
+      next: (d: any) => {
+        this.waitlistSuggestLoading = false;
+        if (d?.matched && d?.suggestion?.entry) {
+          this.fillWaitlistEntry = d.suggestion.entry;
+          this.waitlistMessage = 'Auto-matched waitlist entry ready to fill!';
+          this.waitlistSuggestLoading = false;
+          this.showWaitlistSuggestions = false;
+        } else {
+          this.waitlistSuggestError = d?.message || 'No suitable match found.';
+        }
+      },
+      error: () => {
+        this.waitlistSuggestLoading = false;
+        this.waitlistSuggestError = 'Auto-fill failed.';
+      },
+    });
+  }
+
   closeCancelForm() { this.showCancelForm = false; this.cancelReason = ''; this.cancelCustomReason = ''; this.drawerError = ''; }
 
-  openEditForm(b: CalendarBooking) { this.showReschedule = false; this.showCancelForm = false; this.showConfirmAction = false; this.editForm.title = b.title || ''; this.editForm.notes = b.notes || ''; this.showEditForm = true; this.drawerError = ''; }
+  openEditForm(b: CalendarBooking) { this.showReschedule = false; this.showCancelForm = false; this.showConfirmAction = false; this.showSmartRebook = false; this.editForm.title = b.title || ''; this.editForm.notes = b.notes || ''; this.showEditForm = true; this.drawerError = ''; }
   closeEditForm() { this.showEditForm = false; this.editForm = { title: '', notes: '' }; this.drawerError = ''; }
-  openCancelForm() { this.showReschedule = false; this.showEditForm = false; this.showConfirmAction = false; this.showCancelForm = true; this.cancelReason = ''; this.cancelCustomReason = ''; this.drawerError = ''; }
-  openConfirmAction(status: string) { this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = true; this.confirmTargetStatus = status; this.confirmLabel = status === 'CHECKED_IN' ? 'Check In' : 'Complete'; this.drawerError = ''; }
+  openCancelForm() { this.showReschedule = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false; this.showCancelForm = true; this.cancelReason = ''; this.cancelCustomReason = ''; this.drawerError = ''; }
+  openConfirmAction(status: string) { this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showSmartRebook = false; this.showConfirmAction = true; this.confirmTargetStatus = status; this.confirmLabel = status === 'CHECKED_IN' ? 'Check In' : 'Complete'; this.drawerError = ''; }
   closeConfirmAction() { this.showConfirmAction = false; this.confirmTargetStatus = ''; this.confirmLabel = ''; this.drawerError = ''; }
   doEdit() {
     const { title, notes } = this.editForm;
@@ -2619,6 +3000,7 @@ export class CalendarComponent {
     this.showEditForm = false;
     this.showCancelForm = false;
     this.showConfirmAction = false;
+    this.showSmartRebook = false;
     this.showReschedule = true;
     this.rescheduleBusy = false;
     this.rescheduleError = '';
@@ -2766,7 +3148,7 @@ export class CalendarComponent {
     this.addPaymentForm = { amount: this.viewBillData?.due || 0, method: 'CASH' };
     this.addPaymentBusy = false;
     this.addPaymentError = '';
-    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false;
+    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false;
   }
   closeAddPayment() { this.showAddPayment = false; this.addPaymentError = ''; }
   doAddPayment() {
@@ -2783,7 +3165,7 @@ export class CalendarComponent {
     this.addTipAmount = 0;
     this.addTipBusy = false;
     this.addTipError = '';
-    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false;
+    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false;
   }
   closeAddTip() { this.showAddTip = false; this.addTipError = ''; }
   doAddTip() {
@@ -2838,8 +3220,13 @@ export class CalendarComponent {
 
   viewClientProfile() {
     if (!this.drawerBooking?.clientId) return;
-    this.closeDrawer();
-    window.open(`/app/clients?clientId=${this.drawerBooking.clientId}`, '_blank');
+    this.client360ClientId = this.drawerBooking.clientId;
+    this.showClient360 = true;
+  }
+
+  closeClient360() {
+    this.showClient360 = false;
+    this.client360ClientId = '';
   }
 
   openDrawer(b: CalendarBooking) {
@@ -2858,6 +3245,7 @@ export class CalendarComponent {
     this.cancelCustomReason = '';
     this.viewBillActiveTab = 'details';
     this.loadViewBillData(b);
+    this.loadNoShowRisk();
   }
 
   private loadViewBillData(b: CalendarBooking) {
