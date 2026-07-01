@@ -778,92 +778,154 @@ import {
       </div>
 
       <div class="drawer-overlay drawer-centered" *ngIf="showCreate" (click)="closeCreate()">
-        <div class="create-panel" (click)="$event.stopPropagation()">
+        <div class="create-panel salonist-modal" (click)="$event.stopPropagation()">
           <div class="drawer-header">
             <h2>New Booking</h2>
             <button class="close-btn" (click)="closeCreate()">&times;</button>
           </div>
           <div class="drawer-body">
-            <div class="create-form">
-              <label>Client</label>
-              <div class="client-search-wrapper">
-                <input [(ngModel)]="clientSearchQuery" (input)="onClientSearch()" placeholder="Search client by name or phone..." class="client-search-input" autocomplete="off">
-                <div class="client-search-results" *ngIf="clientSearchQuery && filteredClientList.length > 0">
-                  <button class="csr-item" *ngFor="let c of filteredClientList" (click)="selectClient(c)" type="button">
-                    <span class="csr-name">{{ c.fullName || c.name }}</span>
-                    <span class="csr-phone" *ngIf="c.phone">{{ c.phone }}</span>
-                  </button>
-                </div>
-                <div class="client-search-empty" *ngIf="clientSearchQuery && filteredClientList.length === 0">
-                  <span>No clients found. <a href="#" (click)="$event.preventDefault(); openWalkinFromCreate()">Add as walk-in?</a></span>
-                </div>
-                <div class="client-selected" *ngIf="createForm.clientId && selectedClientName">
-                  <span class="cs-tag">{{ selectedClientName }} <button class="cs-clear" (click)="clearSelectedClient()">&times;</button></span>
-                </div>
-              </div>
+            <div class="nb-loading" *ngIf="createBusy"><div class="spinner"></div><span>Creating booking...</span></div>
+            <div class="nb-error" *ngIf="createError">{{ createError }}</div>
 
-              <label>Staff</label>
-              <select [(ngModel)]="createForm.staffId">
-                <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }}</option>
-              </select>
+            <div class="nb-sections">
 
-              <label>Title</label>
-              <input [(ngModel)]="createForm.title" placeholder="e.g. Haircut & Style">
-
-              <label>Date & Time</label>
-              <input [(ngModel)]="createForm.startTime" type="datetime-local">
-
-              <label>Branch</label>
-              <select [(ngModel)]="createForm.branchId">
-                <option value="">Select branch...</option>
-                <option *ngFor="let b of branchList" [value]="b.id">{{ b.name || b.city || b.id }}</option>
-              </select>
-
-              <label>Resource</label>
-              <select [(ngModel)]="createForm.resourceId">
-                <option value="">None</option>
-                <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }} ({{ r.type }})</option>
-              </select>
-
-              <label>Services</label>
-              <div class="create-services">
-                <div class="svc-row" *ngFor="let s of createForm.services; let i = index">
-                  <select [(ngModel)]="s.serviceId" (change)="onServiceSelect(i)" class="svc-select">
-                    <option value="">Select service...</option>
-                    <option *ngFor="let svc of serviceList" [value]="svc.id">{{ svc.name }} ({{ svc.durationMin }}min — {{ svc.price | currency }})</option>
-                  </select>
-                  <span class="svc-info" *ngIf="s.durationMin">{{ s.durationMin }}min</span>
-                  <span class="svc-info" *ngIf="s.price">{{ s.price | currency }}</span>
-                  <button class="remove-btn" (click)="removeService(i)" *ngIf="createForm.services.length > 1">x</button>
-                </div>
-              </div>
-              <button class="add-btn" (click)="addService()">+ Add Service</button>
-
-              <div class="svc-totals" *ngIf="createForm.services.length > 0">
-                <div class="svc-tl">
-                  <span>Total Duration</span>
-                  <strong>{{ totalDuration }} min</strong>
-                </div>
-                <div class="svc-tl">
-                  <span>Total Price</span>
-                  <strong>{{ totalPrice | currency }}</strong>
-                </div>
-                <div class="svc-tl" *ngIf="createForm.startTime && totalDuration > 0">
-                  <span>Estimated End</span>
-                  <strong>{{ estimatedEndTime }}</strong>
+              <!-- Client Section -->
+              <div class="nb-section">
+                <div class="nb-section-title">Client</div>
+                <div class="client-search-wrapper">
+                  <input [(ngModel)]="clientSearchQuery" (input)="onClientSearch()" placeholder="Search client by name or phone..." class="client-search-input" autocomplete="off">
+                  <div class="client-search-results" *ngIf="clientSearchQuery && filteredClientList.length > 0">
+                    <button class="csr-item" *ngFor="let c of filteredClientList" (click)="selectClient(c)" type="button">
+                      <span class="csr-name">{{ c.fullName || c.name }}</span>
+                      <span class="csr-phone" *ngIf="c.phone">{{ c.phone }}</span>
+                    </button>
+                  </div>
+                  <div class="client-search-empty" *ngIf="clientSearchQuery && filteredClientList.length === 0">
+                    <span>No clients found. <a href="#" (click)="$event.preventDefault(); openWalkinFromCreate()">Add as walk-in?</a></span>
+                  </div>
+                  <div class="client-selected" *ngIf="createForm.clientId && selectedClientName">
+                    <span class="cs-tag">{{ selectedClientName }} <button class="cs-clear" (click)="clearSelectedClient()">&times;</button></span>
+                  </div>
                 </div>
               </div>
 
-              <label>Notes</label>
-              <input [(ngModel)]="createForm.notes" placeholder="Optional notes">
-
-              <div class="drawer-actions">
-                <button (click)="closeCreate()">Cancel</button>
-                <button class="btn-primary" (click)="doCreateBooking()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Create Booking' }}</button>
+              <!-- Appointment Section -->
+              <div class="nb-section">
+                <div class="nb-section-title">Appointment</div>
+                <div class="nb-grid-2">
+                  <div class="nb-field">
+                    <label>Title</label>
+                    <input [(ngModel)]="createForm.title" placeholder="e.g. Haircut & Style">
+                  </div>
+                  <div class="nb-field">
+                    <label>Date & Time</label>
+                    <input [(ngModel)]="createForm.startTime" type="datetime-local">
+                  </div>
+                  <div class="nb-field">
+                    <label>Staff</label>
+                    <select [(ngModel)]="createForm.staffId">
+                      <option value="">Select staff...</option>
+                      <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }}</option>
+                    </select>
+                  </div>
+                  <div class="nb-field">
+                    <label>Branch</label>
+                    <select [(ngModel)]="createForm.branchId">
+                      <option value="">Select branch...</option>
+                      <option *ngFor="let b of branchList" [value]="b.id">{{ b.name || b.city || b.id }}</option>
+                    </select>
+                  </div>
+                  <div class="nb-field">
+                    <label>Resource</label>
+                    <select [(ngModel)]="createForm.resourceId">
+                      <option value="">None</option>
+                      <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }} ({{ r.type }})</option>
+                    </select>
+                  </div>
+                </div>
               </div>
+
+              <!-- Services Section -->
+              <div class="nb-section">
+                <div class="nb-section-title">Services</div>
+                <div class="nb-services">
+                  <div class="nb-svc-header">
+                    <span class="nb-sh-svc">Service</span>
+                    <span class="nb-sh-qty">Qty</span>
+                    <span class="nb-sh-price">Price</span>
+                    <span class="nb-sh-disc">Disc</span>
+                    <span class="nb-sh-total">Total</span>
+                    <span class="nb-sh-action"></span>
+                  </div>
+                  <div class="nb-svc-row" *ngFor="let s of createForm.services; let i = index">
+                    <select [(ngModel)]="s.serviceId" (change)="onServiceSelect(i)" class="nb-svc-select">
+                      <option value="">Select...</option>
+                      <option *ngFor="let svc of serviceList" [value]="svc.id">{{ svc.name }} ({{ svc.durationMin }}min)</option>
+                    </select>
+                    <input type="number" [(ngModel)]="s.quantity" min="1" value="1" class="nb-svc-qty">
+                    <span class="nb-svc-val">{{ (s.price || 0) | currency }}</span>
+                    <span class="nb-svc-val">—</span>
+                    <span class="nb-svc-val nb-svc-line-total">{{ ((s.price || 0) * (s.quantity || 1)) | currency }}</span>
+                    <button class="nb-svc-remove" (click)="removeService(i)" *ngIf="createForm.services.length > 1">&times;</button>
+                  </div>
+                  <button class="nb-add-svc" (click)="addService()">+ Add Service</button>
+                </div>
+                <div class="nb-dur-est" *ngIf="totalDuration > 0">
+                  <span>Duration: <strong>{{ totalDuration }} min</strong></span>
+                  <span *ngIf="estimatedEndTime"> Ends at <strong>{{ estimatedEndTime }}</strong></span>
+                </div>
+              </div>
+
+              <!-- Billing Section -->
+              <div class="nb-section" *ngIf="createForm.services.length > 0">
+                <div class="nb-section-title">Billing Summary</div>
+                <div class="nb-billing">
+                  <div class="nb-bill-row"><span>Subtotal</span><strong>{{ totalPrice | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Discount</span><strong>{{ 0 | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Tax (GST)</span><strong>{{ 0 | currency }}</strong></div>
+                  <div class="nb-bill-row nb-bill-total"><span>Grand Total</span><strong>{{ totalPrice | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Paid</span><strong>{{ 0 | currency }}</strong></div>
+                  <div class="nb-bill-row nb-bill-due"><span>Due</span><strong>{{ totalPrice | currency }}</strong></div>
+                </div>
+              </div>
+
+              <!-- Payment Section -->
+              <div class="nb-section" *ngIf="createForm.services.length > 0">
+                <div class="nb-section-title">Payment</div>
+                <div class="nb-payment">
+                  <div class="nb-field">
+                    <label>Payment Mode</label>
+                    <select [(ngModel)]="createForm.paymentMode">
+                      <option value="">— Pay at Venue —</option>
+                      <option value="CASH">Cash</option>
+                      <option value="UPI">UPI</option>
+                      <option value="CARD">Card</option>
+                    </select>
+                  </div>
+                  <div class="nb-field" *ngIf="createForm.paymentMode">
+                    <label>Amount Paid</label>
+                    <input type="number" [(ngModel)]="createForm.paymentAmount" min="0" [max]="totalPrice" placeholder="0.00">
+                  </div>
+                </div>
+                <div class="nb-pay-note">* Payment will be recorded separately after booking is saved.</div>
+              </div>
+
+              <!-- Notes Section -->
+              <div class="nb-section">
+                <div class="nb-section-title">Notes &amp; Alerts</div>
+                <div class="nb-field">
+                  <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." rows="2"></textarea>
+                </div>
+              </div>
+
             </div>
-            <div class="drawer-loading" *ngIf="createBusy"><div class="spinner"></div><span>Creating...</span></div>
-            <div class="drawer-error" *ngIf="createError">{{ createError }}</div>
+
+            <!-- Sticky Footer -->
+            <div class="nb-footer">
+              <button class="nb-btn nb-btn-cancel" (click)="closeCreate()">Cancel</button>
+              <button class="nb-btn nb-btn-primary" (click)="doCreateBooking()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Save Booking' }}</button>
+              <button class="nb-btn nb-btn-secondary" (click)="doCreateBooking()" [disabled]="createBusy">Save &amp; Print</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1212,6 +1274,54 @@ import {
     .drawer-centered{justify-content:center;align-items:center}
     .create-panel{background:white;border-radius:24px;width:min(520px,90%);max-height:min(90dvh,100%);overflow-y:auto;-webkit-overflow-scrolling:touch;animation:fadeIn .2s ease}
     @keyframes fadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+    .salonist-modal{width:min(740px,94%)!important;border-radius:20px!important}
+    .salonist-modal .drawer-header{padding:20px 28px}
+    .salonist-modal .drawer-body{padding:0;display:flex;flex-direction:column;gap:0}
+    .nb-loading,.nb-error{padding:16px 28px}
+    .nb-loading{display:flex;align-items:center;gap:10px;font-size:13px;color:#6b7280}
+    .nb-error{background:#fef2f2;color:#991b1b;font-size:13px}
+    .nb-sections{display:flex;flex-direction:column;gap:0}
+    .nb-section{border-bottom:1px solid #f3f4f6;padding:18px 28px}
+    .nb-section:last-child{border-bottom:none}
+    .nb-section-title{font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.06em;margin-bottom:12px}
+    .nb-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .nb-field{display:flex;flex-direction:column;gap:4px}
+    .nb-field label{font-size:12px;font-weight:600;color:#374151}
+    .nb-field input,.nb-field select,.nb-field textarea{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;transition:border-color .15s}
+    .nb-field input:focus,.nb-field select:focus,.nb-field textarea:focus{border-color:#6366f1;outline:none}
+    .nb-field textarea{resize:vertical;min-height:48px}
+    .nb-services{display:flex;flex-direction:column;gap:6px}
+    .nb-svc-header{display:grid;grid-template-columns:2fr 56px 80px 60px 80px 28px;gap:6px;padding:0 4px 4px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.03em}
+    .nb-svc-row{display:grid;grid-template-columns:2fr 56px 80px 60px 80px 28px;gap:6px;align-items:center}
+    .nb-svc-select{padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;background:white}
+    .nb-svc-qty{width:100%;padding:8px 6px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;text-align:center}
+    .nb-svc-val{font-size:13px;color:#374151;text-align:right;padding:0 4px;white-space:nowrap}
+    .nb-svc-line-total{font-weight:600;color:#0b0b0b}
+    .nb-svc-remove{border:0;background:transparent;color:#ef4444;font-size:18px;cursor:pointer;padding:0;line-height:1}
+    .nb-add-svc{border:1px dashed #d1d5db;background:transparent;border-radius:8px;padding:8px;font-size:12px;font-weight:600;color:#6366f1;cursor:pointer;transition:background .15s}
+    .nb-add-svc:hover{background:#f0f4ff}
+    .nb-dur-est{display:flex;gap:16px;margin-top:8px;font-size:12px;color:#6b7280}
+    .nb-dur-est strong{color:#374151}
+    .nb-billing{display:flex;flex-direction:column;gap:5px}
+    .nb-bill-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f9fafb}
+    .nb-bill-row:last-child{border-bottom:none}
+    .nb-bill-row span{color:#6b7280}
+    .nb-bill-row strong{color:#0b0b0b}
+    .nb-bill-total strong{font-size:15px;color:#0b0b0b}
+    .nb-bill-due{border-top:2px solid #0b0b0b;padding-top:8px;margin-top:4px}
+    .nb-bill-due span{font-weight:700;color:#0b0b0b}
+    .nb-bill-due strong{font-size:16px;color:#059669}
+    .nb-payment{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .nb-pay-note{font-size:11px;color:#9ca3af;margin-top:8px;font-style:italic}
+    .nb-footer{display:flex;gap:10px;padding:16px 28px;border-top:1px solid #e5e7eb;position:sticky;bottom:0;background:white;z-index:2}
+    .nb-btn{padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;border:0;transition:opacity .15s,background .15s;flex:1;text-align:center}
+    .nb-btn:disabled{opacity:.5;cursor:default}
+    .nb-btn-cancel{background:#f3f4f6;color:#374151}
+    .nb-btn-cancel:hover{background:#e5e7eb}
+    .nb-btn-primary{background:#0b0b0b;color:white}
+    .nb-btn-primary:hover{background:#1f2937}
+    .nb-btn-secondary{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb!important}
+    .nb-btn-secondary:hover{background:#e5e7eb}
     .create-form{display:grid;gap:12px}
     .create-form label{font-size:13px;font-weight:700;color:#374151;margin-bottom:-6px}
     .create-form input,.create-form select{padding:14px;border:1px solid #e5e7eb;border-radius:14px;font-size:14px}
@@ -1656,7 +1766,7 @@ export class CalendarComponent {
   showCreate = false;
   createBusy = false;
   createError = '';
-  createForm: CreateFormModel = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', resourceId: '', services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }] };
+  createForm: CreateFormModel = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', resourceId: '', services: [{ serviceId: '', name: '', durationMin: 0, price: 0, quantity: 1 }] };
   clientList: ClientOption[] = [];
   filteredClientList: ClientOption[] = [];
   clientSearchQuery = '';
@@ -2063,10 +2173,10 @@ export class CalendarComponent {
       clientId: '',
       staffId: slot.staffId,
       title: svcName || 'Booking',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: '',
-      services: [{ serviceId: this.aiServiceId || '', name: svcName, durationMin: 0, price: 0 }],
+      services: [{ serviceId: this.aiServiceId || '', name: svcName, durationMin: 0, price: 0, quantity: 1 }],
     };
     this.loadClientsAndServices();
   }
@@ -2318,7 +2428,7 @@ export class CalendarComponent {
       clientId: b.clientId || '',
       staffId: slot.staffId || b.staffId || '',
       title: b.title || 'Rebook',
-      startTime: new Date(slot.startTime).toISOString().slice(0, 16),
+      startTime: this.toLocalDatetimeString(new Date(slot.startTime)),
       branchId: b.branchId || this.getDefaultBranchId(),
       notes: b.notes || '',
       resourceId: b.resourceId || undefined,
@@ -2465,6 +2575,11 @@ export class CalendarComponent {
     });
   }
 
+  private toLocalDatetimeString(d: Date): string {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   private getDefaultBranchId(): string {
     return this.selectedBranchId || (this.branchList.length === 1 ? this.branchList[0].id : '');
   }
@@ -2482,10 +2597,10 @@ export class CalendarComponent {
       staffId: '',
       resourceId: '',
       title: wl?.serviceName || '',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
-      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
+      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0, quantity: 1 }],
     };
     this.loadClientsAndServices();
   }
@@ -2502,10 +2617,10 @@ export class CalendarComponent {
       staffId: '',
       resourceId: '',
       title: '',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: '',
-      services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }],
+      services: [{ serviceId: '', name: '', durationMin: 0, price: 0, quantity: 1 }],
     };
     this.loadClientsAndServices();
   }
@@ -2523,10 +2638,10 @@ export class CalendarComponent {
       staffId: '',
       resourceId: resource.id,
       title: wl?.serviceName || '',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
-      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
+      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0, quantity: 1 }],
     };
     this.loadClientsAndServices();
   }
@@ -2756,7 +2871,7 @@ export class CalendarComponent {
     } else if (this.viewMode === 'resources' && this.dropTargetResourceId === null) {
       targetName = 'Unassigned';
     }
-    const payload: Record<string, any> = { startTime: targetTime.toISOString().slice(0, 16) };
+    const payload: Record<string, any> = { startTime: this.toLocalDatetimeString(targetTime) };
     if (this.viewMode === 'resources' && this.dropTargetResourceId !== (booking.resourceId || '')) {
       payload.resourceId = this.dropTargetResourceId || null;
     }
@@ -2852,10 +2967,10 @@ export class CalendarComponent {
       clientId: wl?.clientId || '',
       staffId: staff.id,
       title: wl?.serviceName || '',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
-      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
+      services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0, quantity: 1 }],
     };
     this.loadClientsAndServices();
   }
@@ -2874,7 +2989,7 @@ export class CalendarComponent {
     const start = new Date(this.currentDate);
     const now = new Date();
     start.setHours(now.getHours(), 0, 0, 0);
-    this.walkinForm = { clientName: '', staffId, startTime: start.toISOString().slice(0, 16), branchId: this.getDefaultBranchId(), serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
+    this.walkinForm = { clientName: '', staffId, startTime: this.toLocalDatetimeString(start), branchId: this.getDefaultBranchId(), serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
   }
 
   closeWalkin() { this.showWalkin = false; this.walkinError = ''; }
@@ -2934,7 +3049,7 @@ export class CalendarComponent {
     });
   }
 
-  addService() { this.createForm.services.push({ serviceId: '', name: '', durationMin: 0, price: 0 }); }
+  addService() { this.createForm.services.push({ serviceId: '', name: '', durationMin: 0, price: 0, quantity: 1 }); }
   removeService(i: number) { this.createForm.services.splice(i, 1); }
 
   onServiceSelect(i: number) {
@@ -2956,7 +3071,7 @@ export class CalendarComponent {
   }
 
   get totalPrice(): number {
-    return this.createForm.services.reduce((sum: number, s: any) => sum + (Number(s.price) || 0), 0);
+    return this.createForm.services.reduce((sum: number, s: any) => sum + (Number(s.price) || 0) * (Number(s.quantity) || 1), 0);
   }
 
   get estimatedEndTime(): string {
@@ -2966,9 +3081,26 @@ export class CalendarComponent {
     return end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
+  private validateCreateForm(): string | null {
+    if (!this.createForm.clientId && !this.createForm.isWalkIn) return 'Please select or add a client.';
+    if (!this.createForm.staffId) return 'Please select a staff member.';
+    if (!this.createForm.branchId) return 'Please select a branch.';
+    if (!this.createForm.startTime) return 'Please set the date & time.';
+    const validServices = this.createForm.services.filter(s => s.name);
+    if (validServices.length === 0) return 'Please select at least one service.';
+    return null;
+  }
+
   doCreateBooking() {
     this.createBusy = true;
     this.createError = '';
+    const validationError = this.validateCreateForm();
+    if (validationError) {
+      this.createError = validationError;
+      this.createBusy = false;
+      return;
+    }
+    const validServices = this.createForm.services.filter((s: CreateFormService) => s.name);
     const payload: Record<string, any> = {
       clientId: this.createForm.clientId,
       staffId: this.createForm.staffId,
@@ -2976,7 +3108,7 @@ export class CalendarComponent {
       startTime: this.createForm.startTime,
       branchId: this.createForm.branchId,
       notes: this.createForm.notes || undefined,
-      services: this.createForm.services.filter((s: CreateFormService) => s.name),
+      services: validServices,
     };
     if (this.createForm.resourceId) payload.resourceId = this.createForm.resourceId;
     this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
@@ -3008,7 +3140,7 @@ export class CalendarComponent {
     this.rescheduleForm = {
       staffId: b.staffId || b.staff?.id || '',
       resourceId: b.resourceId || '',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
     };
   }
 
@@ -3189,7 +3321,7 @@ export class CalendarComponent {
       clientId: this.drawerBooking.clientId || '',
       staffId: this.drawerBooking.staffId || '',
       title: this.drawerBooking.title || 'Rebook',
-      startTime: start.toISOString().slice(0, 16),
+        startTime: this.toLocalDatetimeString(start),
       branchId: this.drawerBooking.branchId || this.getDefaultBranchId(),
       notes: this.drawerBooking.notes || '',
       resourceId: this.drawerBooking.resourceId || undefined,

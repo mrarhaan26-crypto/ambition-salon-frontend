@@ -154,6 +154,8 @@ export interface CreateFormService {
   name: string;
   durationMin: number;
   price: number;
+  quantity?: number;
+  discount?: number;
 }
 
 export interface CreateFormModel {
@@ -165,6 +167,9 @@ export interface CreateFormModel {
   notes: string;
   resourceId?: string;
   services: CreateFormService[];
+  paymentMode?: string;
+  paymentAmount?: number;
+  isWalkIn?: boolean;
 }
 
 export interface EditFormModel {
