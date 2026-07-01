@@ -35,7 +35,7 @@ import {
   PaymentInfo,
   ClientDetail,
   ViewBillData,
-  AddPaymentForm,
+  SplitPaymentRow,
   SlotSize,
   ActivityLogEntry,
   ConflictInfo,
@@ -500,7 +500,33 @@ import {
               <span class="dh-subtitle">{{ drawerBooking.title }}</span>
             </div>
             <div class="dh-right">
-              <span class="status-badge" [class]="'badge-' + (drawerBooking.status || '').toLowerCase()">{{ getStatusLabel(drawerBooking.status) }}</span>
+              <div class="status-dropdown-wrapper" (click)="$event.stopPropagation()">
+                <button class="sd-trigger" [class]="'sd-' + (drawerBooking.status || '').toLowerCase()" (click)="toggleStatusDropdown()">
+                  <span class="sd-dot"></span>
+                  <span class="sd-label">{{ getStatusLabel(drawerBooking.status) }}</span>
+                  <span class="sd-arrow">&#x25BE;</span>
+                </button>
+                <div class="sd-menu" *ngIf="showStatusDropdown" (click)="$event.stopPropagation()">
+                  <button class="sd-option sd-confirmed" (click)="selectStatus('CONFIRMED')" [class.sd-current]="drawerBooking.status === 'CONFIRMED'" [disabled]="drawerBooking.status === 'CONFIRMED' || !canTransitionTo('CONFIRMED')">
+                    <span class="sd-dot"></span> Confirmed
+                  </button>
+                  <button class="sd-option sd-arrived" (click)="selectStatus('CHECKED_IN')" [class.sd-current]="drawerBooking.status === 'CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')">
+                    <span class="sd-dot"></span> Arrived
+                  </button>
+                  <button class="sd-option sd-start" (click)="selectStatus('CHECKED_IN')" [class.sd-current]="drawerBooking.status === 'CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')">
+                    <span class="sd-dot"></span> Start
+                  </button>
+                  <button class="sd-option sd-completed" (click)="selectStatus('COMPLETED')" [class.sd-current]="drawerBooking.status === 'COMPLETED'" [disabled]="drawerBooking.status === 'COMPLETED' || !canTransitionTo('COMPLETED')">
+                    <span class="sd-dot"></span> Completed
+                  </button>
+                  <button class="sd-option sd-cancel" (click)="selectStatusCancel()" [disabled]="!canCancel(drawerBooking)">
+                    <span class="sd-dot"></span> Cancel
+                  </button>
+                  <button class="sd-option sd-notcame" (click)="selectStatus('NO_SHOW')" [class.sd-current]="drawerBooking.status === 'NO_SHOW'" [disabled]="drawerBooking.status === 'NO_SHOW' || !canTransitionTo('NO_SHOW')">
+                    <span class="sd-dot"></span> Not Came
+                  </button>
+                </div>
+              </div>
               <div class="action-menu-wrapper" (click)="$event.stopPropagation()">
                 <button class="action-menu-trigger" (click)="toggleActionMenu()">&#x22EE;</button>
                 <div class="action-menu-dropdown" *ngIf="showActionMenu" (click)="$event.stopPropagation()">
@@ -511,7 +537,8 @@ import {
                   <button (click)="closeActionMenu(); doRebook()"><span class="am-icon">&#x1F504;</span> Rebook</button>
                   <button (click)="closeActionMenu(); openSmartRebook()"><span class="am-icon">&#x1F4C5;</span> Smart Rebook</button>
                   <button (click)="closeActionMenu(); printBill()"><span class="am-icon">&#x1F5A8;</span> Print</button>
-                  <button (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client</button>
+                  <button (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client / 360</button>
+                  <button *ngIf="canCancel(drawerBooking)" (click)="closeActionMenu(); openCancelForm()" class="am-danger"><span class="am-icon">&#x1F6AB;</span> Cancel Booking</button>
                 </div>
               </div>
               <button class="close-btn" (click)="closeDrawer()">&times;</button>
@@ -525,9 +552,16 @@ import {
                 <button [class.active]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'">Activity Log</button>
               </div>
 
+              <!-- Paid/Due Badge -->
+              <div class="vd-paid-due-bar" *ngIf="viewBillData.total > 0">
+                <span class="vd-paid-badge" *ngIf="viewBillData.paid > 0">Paid {{ viewBillData.paid | currency }}</span>
+                <span class="vd-due-badge" *ngIf="viewBillData.due > 0">Due {{ viewBillData.due | currency }}</span>
+                <span class="vd-overpaid-badge" *ngIf="viewBillData.paid > viewBillData.total" title="Overpaid">Overpaid {{ (viewBillData.paid - viewBillData.total) | currency }}</span>
+              </div>
+
               <!-- Client Summary -->
               <div class="drawer-section">
-                <h3>Client Summary</h3>
+                <h3>Client Summary <button class="cs-view-btn" *ngIf="drawerBooking.clientId" (click)="viewClientProfile()">View Client 360</button></h3>
                 <div class="client-summary-card">
                   <div class="cs-avatar">{{ (drawerBooking.client?.fullName || '?').charAt(0) }}</div>
                   <div class="cs-info">
@@ -535,9 +569,17 @@ import {
                     <span class="cs-contact" *ngIf="drawerBooking.client?.phone">{{ drawerBooking.client.phone }}</span>
                     <span class="cs-contact" *ngIf="drawerBooking.client?.email">{{ drawerBooking.client.email }}</span>
                   </div>
+                  <div class="cs-stats" *ngIf="viewBillData.clientDetail">
+                    <span class="cs-stat" *ngIf="viewBillData.clientDetail.totalVisits !== undefined"><span class="cs-stat-label">Visits</span><span class="cs-stat-val">{{ viewBillData.clientDetail.totalVisits }}</span></span>
+                    <span class="cs-stat" *ngIf="viewBillData.clientDetail.totalSpend !== undefined"><span class="cs-stat-label">Spent</span><span class="cs-stat-val">{{ viewBillData.clientDetail.totalSpend | currency }}</span></span>
+                  </div>
                   <div class="cs-wallet" *ngIf="viewBillData.clientDetail && viewBillData.clientDetail.walletBalance !== undefined">
                     <span class="wl-label">Wallet</span>
                     <span class="wl-amount">{{ viewBillData.clientDetail.walletBalance | currency }}</span>
+                  </div>
+                  <div class="cs-loyalty" *ngIf="viewBillData.clientDetail && viewBillData.clientDetail.loyaltyPoints !== undefined">
+                    <span class="wl-label">Loyalty</span>
+                    <span class="wl-amount">{{ viewBillData.clientDetail.loyaltyPoints }} pts</span>
                   </div>
                 </div>
               </div>
@@ -551,55 +593,120 @@ import {
                 </div>
               </div>
 
-              <!-- Appointment Details -->
+              <!-- Payment Mode Card -->
               <div class="drawer-section">
-                <h3>Appointment</h3>
-                <div class="info-row"><span>Date</span><span>{{ drawerBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span></div>
-                <div class="info-row"><span>Time</span><span>{{ drawerBooking.startTime | date:'h:mm a' }} – {{ drawerBooking.endTime | date:'h:mm a' }}</span></div>
-                <div class="info-row"><span>Staff</span><span>{{ drawerBooking.staff?.fullName || 'Unassigned' }}</span></div>
-                <div class="info-row" *ngIf="drawerBooking.resource?.name"><span>Resource</span><span>{{ drawerBooking.resource.name }} ({{ drawerBooking.resource.type }})</span></div>
-                <div class="info-row" *ngIf="drawerBooking.branch?.name"><span>Branch</span><span>{{ drawerBooking.branch.name }}</span></div>
+                <h3>Payment Mode</h3>
+                <div class="vd-paymode-card" *ngIf="viewBillData.payments.length > 0; else noPayMode">
+                  <div class="vd-paymode-methods">
+                    <span class="vd-pm-chip" *ngFor="let m of getPaymentMethodsSummary()" [class]="'vd-pm-' + m.method.toLowerCase()">
+                      {{ m.method }} <strong>{{ m.total | currency }}</strong>
+                    </span>
+                  </div>
+                  <div class="vd-paymode-total">Total Paid: <strong>{{ viewBillData.paid | currency }}</strong></div>
+                </div>
+                <ng-template #noPayMode>
+                  <div class="vd-empty-card">No payments recorded yet</div>
+                </ng-template>
               </div>
 
-              <!-- Services & Billing -->
+              <!-- Appointment Card -->
+              <div class="drawer-section">
+                <h3>Appointment</h3>
+                <div class="vd-appt-card">
+                  <div class="vd-appt-row">
+                    <span class="vd-appt-icon">&#x1F4C5;</span>
+                    <span>{{ drawerBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span>
+                  </div>
+                  <div class="vd-appt-row">
+                    <span class="vd-appt-icon">&#x1F552;</span>
+                    <span>{{ drawerBooking.startTime | date:'h:mm a' }} – {{ drawerBooking.endTime | date:'h:mm a' }}</span>
+                    <span class="vd-appt-dur" *ngIf="getBookingDuration() > 0">{{ getBookingDuration() }} min</span>
+                  </div>
+                  <div class="vd-appt-row">
+                    <span class="vd-appt-icon">&#x1F9D1;&#x200D;&#x1F3EB;</span>
+                    <span>{{ drawerBooking.staff?.fullName || 'Unassigned' }}</span>
+                  </div>
+                  <div class="vd-appt-row" *ngIf="drawerBooking.branch?.name">
+                    <span class="vd-appt-icon">&#x1F3E2;</span>
+                    <span>{{ drawerBooking.branch.name }}</span>
+                  </div>
+                  <div class="vd-appt-row" *ngIf="drawerBooking.resource?.name">
+                    <span class="vd-appt-icon">&#x1F3E0;</span>
+                    <span>{{ drawerBooking.resource.name }} ({{ drawerBooking.resource.type }})</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Notes Card -->
+              <div class="drawer-section">
+                <h3>Notes</h3>
+                <div class="vd-notes-card" *ngIf="drawerBooking.notes; else noNotes">
+                  <p>{{ drawerBooking.notes }}</p>
+                </div>
+                <ng-template #noNotes><div class="vd-empty-card">No notes</div></ng-template>
+              </div>
+
+              <!-- Staff Alert Card -->
+              <div class="drawer-section">
+                <h3>Staff Alert</h3>
+                <div class="vd-alert-card" *ngIf="viewBillData.staffAlert; else noAlert">
+                  <span class="vd-alert-icon">&#x26A0;</span>
+                  <span>{{ viewBillData.staffAlert }}</span>
+                </div>
+                <ng-template #noAlert><div class="vd-empty-card">No alerts</div></ng-template>
+              </div>
+
+              <!-- Services & Billing Table -->
               <div class="drawer-section" *ngIf="drawerBooking.services?.length">
                 <h3>Services ({{ drawerBooking.services.length }})</h3>
                 <div class="bill-svc-header">
                   <span class="bsh-item">Service</span>
+                  <span class="bsh-dur">Time</span>
                   <span class="bsh-qty">Qty</span>
                   <span class="bsh-price">Price</span>
                   <span class="bsh-total">Total</span>
                 </div>
                 <div class="bill-svc-row" *ngFor="let s of drawerBooking.services">
                   <span class="bsr-name">{{ s.name }}</span>
+                  <span class="bsr-dur">{{ s.durationMin || '—' }}m</span>
                   <span class="bsr-qty">1</span>
                   <span class="bsr-price">{{ s.price | currency }}</span>
                   <span class="bsr-total">{{ s.price | currency }}</span>
                 </div>
-                <div class="bill-divider"></div>
-                <div class="bill-summary">
-                  <div class="bl-row"><span>Subtotal</span><span>{{ viewBillData.subtotal | currency }}</span></div>
-                  <div class="bl-row" *ngIf="viewBillData.discount > 0"><span>Discount</span><span class="bl-discount">-{{ viewBillData.discount | currency }}</span></div>
-                  <div class="bl-row" *ngIf="viewBillData.tax > 0"><span>Tax/GST ({{ viewBillData.taxRate }}%)</span><span>{{ viewBillData.tax | currency }}</span></div>
-                  <div class="bl-row bl-total"><span>Total</span><span>{{ viewBillData.total | currency }}</span></div>
-                  <div class="bl-row bl-paid"><span>Paid</span><span class="bl-paid-amt">{{ viewBillData.paid | currency }}</span></div>
-                  <div class="bl-row bl-due" *ngIf="viewBillData.due > 0"><span>Due</span><span class="bl-due-amt">{{ viewBillData.due | currency }}</span></div>
-                </div>
-                <div class="bill-payment-mode" *ngIf="viewBillData.paymentMethod">
-                  <span>Payment Mode: <strong>{{ viewBillData.paymentMethod }}</strong></span>
+              </div>
+
+              <!-- Billing Summary -->
+              <div class="drawer-section" *ngIf="drawerBooking.services?.length">
+                <h3>Billing Summary</h3>
+                <div class="vd-bill-summary">
+                  <div class="vd-bs-row"><span>Subtotal</span><span>{{ viewBillData.subtotal | currency }}</span></div>
+                  <div class="vd-bs-row" *ngIf="viewBillData.discount > 0"><span>Discount</span><span class="vd-bs-discount">-{{ viewBillData.discount | currency }}</span></div>
+                  <div class="vd-bs-row" *ngIf="viewBillData.tax > 0"><span>GST ({{ viewBillData.taxRate }}%)</span><span>{{ viewBillData.tax | currency }}</span></div>
+                  <div class="vd-bs-row vd-bs-total"><span>Grand Total</span><span>{{ viewBillData.total | currency }}</span></div>
+                  <div class="vd-bs-row vd-bs-paid"><span>Total Paid</span><span>{{ viewBillData.paid | currency }}</span></div>
+                  <div class="vd-bs-row vd-bs-due" *ngIf="viewBillData.due > 0"><span>Due Amount</span><span>{{ viewBillData.due | currency }}</span></div>
+                  <div class="vd-bs-row vd-bs-overpaid" *ngIf="viewBillData.paid > viewBillData.total"><span>Overpaid</span><span>{{ (viewBillData.paid - viewBillData.total) | currency }}</span></div>
                 </div>
               </div>
 
-              <!-- Notes & Alerts -->
-              <div class="drawer-section" *ngIf="drawerBooking.notes || viewBillData.staffAlert">
-                <h3>Notes & Alerts</h3>
-                <div class="notes-content" *ngIf="drawerBooking.notes">
-                  <span class="notes-label">Notes:</span>
-                  <p>{{ drawerBooking.notes }}</p>
-                </div>
-                <div class="staff-alert" *ngIf="viewBillData.staffAlert">
-                  <span class="alert-icon">&#x26A0;</span>
-                  <span>{{ viewBillData.staffAlert }}</span>
+              <!-- Payment Timeline -->
+              <div class="drawer-section" *ngIf="viewBillData.payments.length > 0">
+                <h3>Payment Timeline ({{ viewBillData.payments.length }})</h3>
+                <div class="vd-pay-timeline">
+                  <div class="vd-pt-entry" *ngFor="let p of viewBillData.payments">
+                    <div class="vd-pt-dot" [class.vd-pt-dot-paid]="p.status==='PAID'||p.status==='COMPLETED'" [class.vd-pt-dot-pending]="p.status==='PENDING'"></div>
+                    <div class="vd-pt-info">
+                      <div class="vd-pt-row1">
+                        <span class="vd-pt-method">{{ p.method }}</span>
+                        <span class="vd-pt-amount">{{ p.amount | currency }}</span>
+                      </div>
+                      <div class="vd-pt-row2">
+                        <span class="vd-pt-status" [class.vd-pt-status-ok]="p.status==='PAID'||p.status==='COMPLETED'" [class.vd-pt-status-pending]="p.status==='PENDING'">{{ p.status }}</span>
+                        <span class="vd-pt-date">{{ p.createdAt | date:'MMM dd, h:mm a' }}</span>
+                        <span class="vd-pt-ref" *ngIf="p['reference']">Ref: {{ p['reference'] }}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -617,8 +724,11 @@ import {
                 </div>
               </div>
 
-              <div class="drawer-section bill-actions">
-                <button class="btn-print" (click)="printBill()">&#x1F5A8; Print Bill</button>
+              <!-- Action Buttons -->
+              <div class="vd-actions">
+                <button class="vd-btn vd-btn-primary" (click)="openAddPayment()">&#x1F4B3; Add Payment</button>
+                <button class="vd-btn vd-btn-secondary" (click)="openAddTip()">&#x1F381; Add Tip</button>
+                <button class="vd-btn vd-btn-secondary" (click)="printBill()">&#x1F5A8; Print Bill</button>
               </div>
             </ng-container>
 
@@ -650,19 +760,6 @@ import {
 
             <!-- Loading -->
             <div class="drawer-loading" *ngIf="viewBillLoading"><div class="spinner"></div><span>Loading bill details...</span></div>
-
-            <!-- Status Workflow Buttons -->
-            <div class="status-workflow" *ngIf="drawerBooking && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">
-              <div class="sw-label">Status Workflow</div>
-              <div class="sw-buttons">
-                <button class="sw-btn sw-confirmed" [class.sw-active]="drawerBooking.status==='CONFIRMED'" [disabled]="drawerBooking.status==='CONFIRMED'" (click)="doStatus(drawerBooking, 'CONFIRMED')">Confirmed</button>
-                <button class="sw-btn sw-arrived" [class.sw-active]="drawerBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(drawerBooking, 'CHECKED_IN')">Arrived</button>
-                <button class="sw-btn sw-start" [class.sw-active]="drawerBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(drawerBooking, 'CHECKED_IN')">Start</button>
-                <button class="sw-btn sw-completed" [class.sw-active]="drawerBooking.status==='COMPLETED'" [disabled]="drawerBooking.status==='COMPLETED'" (click)="doStatus(drawerBooking, 'COMPLETED')">Completed</button>
-                <button class="sw-btn sw-cancel" [disabled]="!canCancel(drawerBooking)" (click)="openCancelForm()">Cancel</button>
-                <button class="sw-btn sw-notcame" [disabled]="drawerBooking.status==='NO_SHOW'" (click)="doStatus(drawerBooking, 'NO_SHOW')">Not Came</button>
-              </div>
-            </div>
 
             <!-- Reschedule Form -->
             <div class="reschedule-form" *ngIf="showReschedule">
@@ -721,21 +818,43 @@ import {
               <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
             </div>
 
-            <!-- Add Payment Form -->
-            <div class="payment-form" *ngIf="showAddPayment">
-              <h3>Add Payment</h3>
-              <label>Amount</label>
-              <input [(ngModel)]="addPaymentForm.amount" type="number" min="0" step="0.01" placeholder="0.00">
-              <label>Payment Method</label>
-              <select [(ngModel)]="addPaymentForm.method">
-                <option value="CASH">Cash</option>
-                <option value="CARD">Card</option>
-                <option value="UPI">UPI</option>
-                <option value="WALLET">Wallet</option>
-              </select>
+            <!-- Split Payment Form -->
+            <div class="sp-form" *ngIf="showAddPayment">
+              <div class="sp-header">
+                <h3>Add Payment</h3>
+                <span class="sp-due-label" *ngIf="viewBillData">Due: <strong>{{ viewBillData.due | currency }}</strong></span>
+              </div>
+              <div class="sp-quick-btns">
+                <button class="sp-qb" (click)="setSplitQuick('CASH')">Full Cash</button>
+                <button class="sp-qb" (click)="setSplitQuick('UPI')">Full UPI</button>
+                <button class="sp-qb" (click)="setSplitQuick('CARD')">Full Card</button>
+                <button class="sp-qb" (click)="setSplitFiftyFifty()">50/50 Cash+UPI</button>
+                <button class="sp-qb sp-qb-clear" (click)="clearSplitRows()">Clear</button>
+              </div>
+              <div class="sp-rows">
+                <div class="sp-row" *ngFor="let row of splitPaymentRows; let i = index">
+                  <select [(ngModel)]="row.method" class="sp-method">
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CARD">Card</option>
+                    <option value="WALLET" disabled>Wallet (not supported)</option>
+                  </select>
+                  <input type="number" [(ngModel)]="row.amount" min="0" step="0.01" placeholder="Amount" class="sp-amount">
+                  <input type="text" [(ngModel)]="row.reference" placeholder="Ref (optional)" class="sp-ref" maxlength="100">
+                  <button class="sp-remove" (click)="removeSplitRow(i)" *ngIf="splitPaymentRows.length > 1">&times;</button>
+                </div>
+              </div>
+              <button class="sp-add-row" (click)="addSplitRow()">+ Add another method</button>
+              <div class="sp-summary">
+                <div class="sp-s-row"><span>Total Bill</span><strong>{{ viewBillData?.total || 0 | currency }}</strong></div>
+                <div class="sp-s-row"><span>Existing Paid</span><strong>{{ viewBillData?.paid || 0 | currency }}</strong></div>
+                <div class="sp-s-row"><span>New Payment(s)</span><strong>{{ splitTotalNew | currency }}</strong></div>
+                <div class="sp-s-row sp-s-due"><span>Due After</span><strong>{{ splitDueAfter | currency }}</strong></div>
+              </div>
+              <div class="sp-warning" *ngIf="splitTotalNew > (viewBillData?.due || 0)">Total payment exceeds due amount.</div>
               <div class="drawer-actions">
                 <button (click)="closeAddPayment()">Back</button>
-                <button class="btn-primary" (click)="doAddPayment()" [disabled]="addPaymentBusy || !addPaymentForm.amount">{{ addPaymentBusy ? 'Processing...' : 'Pay' }}</button>
+                <button class="btn-primary" (click)="doSplitPayments()" [disabled]="addPaymentBusy || !isSplitValid()">{{ addPaymentBusy ? 'Processing...' : 'Pay' }}</button>
               </div>
               <div class="drawer-error" *ngIf="addPaymentError">{{ addPaymentError }}</div>
             </div>
@@ -777,13 +896,6 @@ import {
               <div class="drawer-actions">
                 <button (click)="closeSmartRebook()">Back</button>
               </div>
-            </div>
-
-            <!-- Original inline actions fallback -->
-            <div class="drawer-actions" *ngIf="drawerBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">
-              <button class="btn-secondary" (click)="openEditForm(drawerBooking)">Edit Details</button>
-              <button *ngIf="canReschedule(drawerBooking)" class="btn-secondary" (click)="showRescheduleForm(drawerBooking)">Reschedule</button>
-              <button *ngIf="canCancel(drawerBooking)" class="btn-danger" (click)="openCancelForm()">Cancel Booking</button>
             </div>
 
             <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook"><div class="spinner"></div><span>Updating...</span></div>
@@ -1641,6 +1753,127 @@ import {
     .al-user{font-size:11px;color:#6366f1;font-weight:600}
     .al-details{font-size:12px;color:#4b5563}
     .al-empty{padding:16px;text-align:center;color:#9ca3af;font-size:13px}
+    .status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.03em}
+    .badge-confirmed{background:#ede9fe;color:#5b21b6}
+    .badge-pending{background:#fef3c7;color:#92400e}
+    .badge-checked_in{background:#dbeafe;color:#1e40af}
+    .badge-completed{background:#d1fae5;color:#065f46}
+    .badge-cancelled{background:#fce7f3;color:#9d174d}
+    .badge-no_show{background:#e5e7eb;color:#374151}
+    .status-dropdown-wrapper{position:relative}
+    .sd-trigger{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;transition:box-shadow .15s;white-space:nowrap}
+    .sd-trigger:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+    .sd-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+    .sd-arrow{font-size:10px;margin-left:2px;opacity:.7}
+    .sd-confirmed{background:#ede9fe;color:#5b21b6}.sd-confirmed .sd-dot{background:#5b21b6}
+    .sd-pending{background:#fef3c7;color:#92400e}.sd-pending .sd-dot{background:#92400e}
+    .sd-checked_in{background:#dbeafe;color:#1e40af}.sd-checked_in .sd-dot{background:#1e40af}
+    .sd-completed{background:#d1fae5;color:#065f46}.sd-completed .sd-dot{background:#065f46}
+    .sd-cancelled{background:#fce7f3;color:#9d174d}.sd-cancelled .sd-dot{background:#9d174d}
+    .sd-no_show{background:#e5e7eb;color:#374151}.sd-no_show .sd-dot{background:#6b7280}
+    .sd-menu{position:absolute;right:0;top:calc(100% + 4px);background:white;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:15;min-width:180px;padding:6px;display:grid;gap:2px;animation:fadeIn .15s ease}
+    .sd-option{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:background .12s}
+    .sd-option:hover:not(:disabled){background:#f3f4f6}
+    .sd-option:disabled{opacity:.35;cursor:default}
+    .sd-option .sd-dot{width:8px;height:8px}
+    .sd-option.sd-current{background:#f3f4f6;font-weight:700}
+    .sd-option.sd-confirmed .sd-dot{background:#5b21b6}.sd-option.sd-confirmed.sd-current{background:#ede9fe;color:#5b21b6}
+    .sd-option.sd-arrived .sd-dot{background:#1e40af}.sd-option.sd-arrived.sd-current{background:#dbeafe;color:#1e40af}
+    .sd-option.sd-start .sd-dot{background:#d97706}.sd-option.sd-start.sd-current{background:#fef3c7;color:#d97706}
+    .sd-option.sd-completed .sd-dot{background:#065f46}.sd-option.sd-completed.sd-current{background:#d1fae5;color:#065f46}
+    .sd-option.sd-cancel .sd-dot{background:#9d174d}.sd-option.sd-cancel.sd-current{background:#fce7f3;color:#9d174d}
+    .sd-option.sd-notcame .sd-dot{background:#6b7280}.sd-option.sd-notcame.sd-current{background:#e5e7eb;color:#374151}
+    .vd-paid-due-bar{display:flex;gap:8px;padding:8px 0;flex-wrap:wrap}
+    .vd-paid-badge,.vd-due-badge,.vd-overpaid-badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:16px;letter-spacing:.02em}
+    .vd-paid-badge{background:#d1fae5;color:#065f46}
+    .vd-due-badge{background:#fef3c7;color:#92400e}
+    .vd-overpaid-badge{background:#fce7f3;color:#9d174d}
+    .cs-view-btn{border:0;background:transparent;color:#6366f1;font-size:11px;font-weight:600;cursor:pointer;padding:0;float:right;text-decoration:underline}
+    .cs-view-btn:hover{color:#4338ca}
+    .cs-stats{display:flex;gap:8px;flex-shrink:0}
+    .cs-stat{text-align:center;background:#f9fafb;padding:4px 8px;border-radius:8px;min-width:48px}
+    .cs-stat-label{display:block;font-size:8px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.04em}
+    .cs-stat-val{display:block;font-size:13px;font-weight:800;color:#111827}
+    .cs-loyalty{text-align:right;background:#f0f0ff;padding:6px 10px;border-radius:10px;border:1px solid #ddd6fe;flex-shrink:0}
+    .vd-paymode-card{display:flex;flex-direction:column;gap:8px}
+    .vd-paymode-methods{display:flex;flex-wrap:wrap;gap:6px}
+    .vd-pm-chip{font-size:12px;padding:4px 10px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
+    .vd-pm-chip strong{font-weight:800}
+    .vd-pm-cash{background:#d1fae5;color:#065f46}
+    .vd-pm-upi{background:#dbeafe;color:#1e40af}
+    .vd-pm-card{background:#fce7f3;color:#9d174d}
+    .vd-pm-wallet{background:#fef3c7;color:#92400e}
+    .vd-pm-total{font-size:13px;color:#374151;font-weight:600}
+    .vd-pm-total strong{color:#059669}
+    .vd-empty-card{padding:12px;text-align:center;color:#9ca3af;font-size:12px;background:#f9fafb;border-radius:8px}
+    .vd-appt-card{display:flex;flex-direction:column;gap:6px}
+    .vd-appt-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#374151}
+    .vd-appt-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+    .vd-appt-dur{font-size:11px;color:#6b7280;background:#f3f4f6;padding:1px 8px;border-radius:8px;margin-left:auto}
+    .vd-notes-card{padding:8px 12px;background:#f9fafb;border-radius:8px;border-left:3px solid #e5e7eb}
+    .vd-notes-card p{margin:0;font-size:13px;color:#374151;line-height:1.5}
+    .vd-alert-card{display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;font-size:12px;color:#92400e}
+    .vd-alert-icon{font-size:14px;flex-shrink:0}
+    .bsh-dur{width:44px;text-align:center;font-size:10px}
+    .bsr-dur{width:44px;text-align:center;font-size:12px;color:#6b7280}
+    .vd-bill-summary{display:flex;flex-direction:column;gap:5px}
+    .vd-bs-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f9fafb}
+    .vd-bs-row:last-child{border-bottom:none}
+    .vd-bs-row span:first-child{color:#6b7280;font-weight:600}
+    .vd-bs-row span:last-child{font-weight:700;color:#374151}
+    .vd-bs-discount{color:#16a34a!important}
+    .vd-bs-total{border-top:2px solid #0b0b0b;padding-top:6px;margin-top:2px}
+    .vd-bs-total span:last-child{font-size:16px;color:#0b0b0b}
+    .vd-bs-paid span:last-child{color:#16a34a}
+    .vd-bs-due span:last-child{color:#dc2626;font-size:15px}
+    .vd-bs-overpaid span:last-child{color:#9d174d}
+    .vd-pay-timeline{display:flex;flex-direction:column;gap:0}
+    .vd-pt-entry{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6}
+    .vd-pt-entry:last-child{border-bottom:0}
+    .vd-pt-dot{width:10px;height:10px;border-radius:50%;background:#e5e7eb;margin-top:5px;flex-shrink:0;border:2px solid white;box-shadow:0 0 0 1px #e5e7eb}
+    .vd-pt-dot-paid{background:#16a34a;box-shadow:0 0 0 1px #16a34a}
+    .vd-pt-dot-pending{background:#d97706;box-shadow:0 0 0 1px #d97706}
+    .vd-pt-info{flex:1;min-width:0}
+    .vd-pt-row1{display:flex;justify-content:space-between;align-items:center}
+    .vd-pt-method{font-weight:700;font-size:13px;color:#111827}
+    .vd-pt-amount{font-weight:700;font-size:13px;color:#059669}
+    .vd-pt-row2{display:flex;gap:8px;font-size:11px;color:#6b7280;margin-top:2px;flex-wrap:wrap}
+    .vd-pt-status{font-weight:600}
+    .vd-pt-status-ok{color:#16a34a}
+    .vd-pt-status-pending{color:#d97706}
+    .vd-pt-ref{color:#6366f1}
+    .vd-actions{display:flex;gap:8px;padding:8px 0;flex-wrap:wrap}
+    .vd-btn{flex:1;border:0;border-radius:12px;padding:12px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .12s;text-align:center;min-width:100px}
+    .vd-btn-primary{background:#0b0b0b;color:white}
+    .vd-btn-primary:hover{background:#1f2937}
+    .vd-btn-secondary{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}
+    .vd-btn-secondary:hover{background:#e5e7eb}
+    .am-danger{color:#dc2626!important}
+    .am-danger:hover{background:#fef2f2!important}
+    .sp-form{display:flex;flex-direction:column;gap:12px;padding:16px;background:#f9fafb;border-radius:16px}
+    .sp-header{display:flex;justify-content:space-between;align-items:center}
+    .sp-header h3{margin:0;font-size:14px;font-weight:700}
+    .sp-due-label{font-size:13px;color:#6b7280}
+    .sp-due-label strong{color:#dc2626}
+    .sp-quick-btns{display:flex;flex-wrap:wrap;gap:6px}
+    .sp-qb{border:1px solid #e5e7eb;border-radius:16px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;background:white;color:#4b5563;transition:all .15s}
+    .sp-qb:hover{border-color:#6366f1;color:#6366f1;background:#f0f4ff}
+    .sp-qb-clear{border-color:#fecaca;color:#dc2626}
+    .sp-qb-clear:hover{border-color:#dc2626!important;background:#fef2f2!important;color:#dc2626!important}
+    .sp-rows{display:flex;flex-direction:column;gap:8px}
+    .sp-row{display:flex;gap:6px;align-items:center}
+    .sp-method{flex:0 0 100px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;background:white}
+    .sp-amount{flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;min-width:60px}
+    .sp-ref{flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;min-width:80px}
+    .sp-remove{border:0;background:transparent;color:#ef4444;font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
+    .sp-add-row{border:1px dashed #d1d5db;background:transparent;border-radius:8px;padding:8px;font-size:12px;font-weight:600;color:#6366f1;cursor:pointer;transition:background .15s}
+    .sp-add-row:hover{background:#f0f4ff}
+    .sp-summary{display:flex;flex-direction:column;gap:4px;padding:10px;background:white;border-radius:10px;border:1px solid #e5e7eb}
+    .sp-s-row{display:flex;justify-content:space-between;font-size:12px}
+    .sp-s-row strong{font-weight:700;color:#374151}
+    .sp-s-due{border-top:1px solid #e5e7eb;padding-top:6px;margin-top:2px}
+    .sp-s-due strong{color:#dc2626;font-size:14px}
+    .sp-warning{font-size:11px;color:#dc2626;background:#fef2f2;border-radius:6px;padding:6px 10px;text-align:center}
     .client-search-wrapper{position:relative}
     .client-search-input{width:100%;padding:14px;border:1px solid #e5e7eb;border-radius:14px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color .2s}
     .client-search-input:focus{border-color:#0b0b0b}
@@ -1851,10 +2084,12 @@ export class CalendarComponent {
 
   showActionMenu = false;
 
+  showStatusDropdown = false;
+
   showAddPayment = false;
-  addPaymentForm: AddPaymentForm = { amount: 0, method: 'CASH' };
   addPaymentBusy = false;
   addPaymentError = '';
+  splitPaymentRows: SplitPaymentRow[] = [{ amount: 0, method: 'CASH', reference: '' }];
 
   showAddTip = false;
   addTipAmount = 0;
@@ -2337,7 +2572,7 @@ export class CalendarComponent {
     const time = `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}`;
     return `Booking: ${client}, ${b.title}, ${time}`;
   }
-  closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false; }
+  closeDrawer() { this.drawerBooking = null; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false; this.showStatusDropdown = false; this.showActionMenu = false; }
 
   canCancel(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(b.status); }
   canReschedule(b: CalendarBooking): boolean { return b && ['PENDING', 'CONFIRMED'].includes(b.status); }
@@ -3388,8 +3623,45 @@ export class CalendarComponent {
     return true;
   }
 
-  toggleActionMenu() { this.showActionMenu = !this.showActionMenu; }
+  toggleActionMenu() { this.showActionMenu = !this.showActionMenu; this.showStatusDropdown = false; }
   closeActionMenu() { this.showActionMenu = false; }
+
+  toggleStatusDropdown() { this.showStatusDropdown = !this.showStatusDropdown; this.showActionMenu = false; }
+
+  selectStatus(status: string) {
+    this.showStatusDropdown = false;
+    if (status === 'CANCELLED') { this.openCancelForm(); return; }
+    if (!this.drawerBooking) return;
+    this.doStatus(this.drawerBooking, status);
+  }
+
+  selectStatusCancel() {
+    this.showStatusDropdown = false;
+    if (this.drawerBooking && this.canCancel(this.drawerBooking)) {
+      this.openCancelForm();
+    }
+  }
+
+  getPaymentMethodsSummary(): { method: string; total: number }[] {
+    if (!this.viewBillData?.payments) return [];
+    const map: Record<string, number> = {};
+    for (const p of this.viewBillData.payments) {
+      if (p.status === 'PAID' || p.status === 'COMPLETED') {
+        map[p.method] = (map[p.method] || 0) + (p.amount || 0);
+      }
+    }
+    return Object.entries(map).map(([method, total]) => ({ method, total }));
+  }
+
+  getBookingDuration(): number {
+    const b = this.drawerBooking;
+    if (!b) return 0;
+    if (b.services?.length) {
+      return b.services.reduce((sum, s) => sum + (s.durationMin || 0), 0);
+    }
+    const diff = new Date(b.endTime).getTime() - new Date(b.startTime).getTime();
+    return Math.max(0, Math.round(diff / 60000));
+  }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
@@ -3399,23 +3671,99 @@ export class CalendarComponent {
         this.showActionMenu = false;
       }
     }
+    if (this.showStatusDropdown) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.status-dropdown-wrapper')) {
+        this.showStatusDropdown = false;
+      }
+    }
   }
 
   openAddPayment() {
     this.showAddPayment = true;
-    this.addPaymentForm = { amount: this.viewBillData?.due || 0, method: 'CASH' };
+    const due = this.viewBillData?.due || 0;
+    this.splitPaymentRows = [{ amount: due > 0 ? due : 0, method: 'CASH', reference: '' }];
     this.addPaymentBusy = false;
     this.addPaymentError = '';
     this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.showSmartRebook = false;
   }
   closeAddPayment() { this.showAddPayment = false; this.addPaymentError = ''; }
-  doAddPayment() {
-    if (!this.addPaymentForm.amount || !this.drawerBooking) return;
-    this.addPaymentBusy = true; this.addPaymentError = '';
-    this.api.addPayment(this.drawerBooking.id, this.addPaymentForm).subscribe({
-      next: () => { this.addPaymentBusy = false; this.closeAddPayment(); this.closeDrawer(); this.load(); },
-      error: (e) => { this.addPaymentBusy = false; this.addPaymentError = e.error?.message || 'Payment failed.'; },
-    });
+
+  addSplitRow() { this.splitPaymentRows.push({ amount: 0, method: 'CASH', reference: '' }); }
+  removeSplitRow(i: number) { if (this.splitPaymentRows.length > 1) this.splitPaymentRows.splice(i, 1); }
+
+  setSplitQuick(method: string) {
+    const due = this.viewBillData?.due || 0;
+    this.splitPaymentRows = [{ amount: due > 0 ? due : 0, method, reference: '' }];
+  }
+
+  setSplitFiftyFifty() {
+    const due = this.viewBillData?.due || 0;
+    const half = Math.round((due / 2) * 100) / 100;
+    this.splitPaymentRows = [
+      { amount: half, method: 'CASH', reference: '' },
+      { amount: Math.max(0, due - half), method: 'UPI', reference: '' },
+    ];
+  }
+
+  clearSplitRows() {
+    this.splitPaymentRows = [{ amount: 0, method: 'CASH', reference: '' }];
+  }
+
+  get splitTotalNew(): number {
+    return this.splitPaymentRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  }
+
+  get splitDueAfter(): number {
+    const due = this.viewBillData?.due || 0;
+    return Math.max(0, due - this.splitTotalNew);
+  }
+
+  isSplitValid(): boolean {
+    if (!this.splitPaymentRows.length) return false;
+    for (const row of this.splitPaymentRows) {
+      if ((Number(row.amount) || 0) <= 0) return false;
+      if (!row.method) return false;
+    }
+    return true;
+  }
+
+  doSplitPayments() {
+    if (!this.drawerBooking || !this.isSplitValid()) return;
+    this.addPaymentBusy = true;
+    this.addPaymentError = '';
+    const bookingId = this.drawerBooking.id;
+    const rows = this.splitPaymentRows.filter(r => (Number(r.amount) || 0) > 0);
+    let completed = 0;
+    let totalFailures = '';
+
+    const payNext = (index: number) => {
+      if (index >= rows.length) {
+        this.addPaymentBusy = false;
+        if (totalFailures) {
+          this.addPaymentError = totalFailures;
+          if (completed > 0) {
+            this.closeAddPayment();
+            this.closeDrawer();
+            this.load();
+          }
+        } else {
+          this.closeAddPayment();
+          this.closeDrawer();
+          this.load();
+        }
+        return;
+      }
+      const row = rows[index];
+      this.api.addPayment(bookingId, { amount: row.amount, method: row.method }).subscribe({
+        next: () => { completed++; payNext(index + 1); },
+        error: (e) => {
+          totalFailures += `${row.method} ₹${row.amount}: ${e.error?.message || 'Payment failed.'} `;
+          payNext(index + 1);
+        },
+      });
+    };
+    payNext(0);
   }
 
   openAddTip() {
@@ -3521,6 +3869,7 @@ export class CalendarComponent {
       paid: 0,
       due: b.totalAmount || svcTotal,
       paymentMethod: '',
+      staffAlert: '',
       activityLog: this.buildActivityLog(b),
     };
     const paymentObs = b.id ? this.api.getBookingPayments(b.id) : null;

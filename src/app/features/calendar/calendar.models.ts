@@ -269,6 +269,7 @@ export interface ClientDetail {
   walletBalance?: number;
   totalVisits?: number;
   totalSpend?: number;
+  loyaltyPoints?: number;
 }
 
 export interface ViewBillData {
@@ -297,6 +298,12 @@ export interface ActivityLogEntry {
 export interface AddPaymentForm {
   amount: number;
   method: string;
+}
+
+export interface SplitPaymentRow {
+  amount: number;
+  method: string;
+  reference?: string;
 }
 
 export type SlotSize = 15 | 30 | 60;
