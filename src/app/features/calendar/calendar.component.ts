@@ -183,16 +183,21 @@ import {
                         <div class="booking-chip" *ngFor="let b of getStaffBookings(staff.id)"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
+                          [class.no-show]="b.status === 'NO_SHOW'"
                           [ngStyle]="getBookingBlockStyle(b)"
                           tabindex="0" role="button"
                           [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
                           (click)="openDrawer(b); $event.stopPropagation()"
                           (keydown)="openBookingFromKeyboard($event, b)">
-                          <strong>{{ b.client?.fullName || 'Client' }}</strong>
-                          <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <span class="bc-header">
+                            <strong>{{ b.client?.fullName || 'Client' }}</strong>
+                            <span class="bc-amount" *ngIf="b.totalAmount">{{ b.totalAmount | currency }}</span>
+                          </span>
+                          <span class="bc-meta">{{ b.title || '' }} <span class="bc-meta-sep" *ngIf="b.title">—</span> {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                           <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
+                          <span class="no-show-badge" *ngIf="b.status === 'NO_SHOW'" title="No Show">NS</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -296,16 +301,21 @@ import {
                          <div class="booking-chip" *ngFor="let b of getAllResourceBookings(resource.id)"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
+                          [class.no-show]="b.status === 'NO_SHOW'"
                           [ngStyle]="getBookingBlockStyle(b)"
                           tabindex="0" role="button"
                           [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
                           (click)="openDrawer(b); $event.stopPropagation()"
                           (keydown)="openBookingFromKeyboard($event, b)">
-                          <strong>{{ b.client?.fullName || 'Client' }}</strong>
-                          <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <span class="bc-header">
+                            <strong>{{ b.client?.fullName || 'Client' }}</strong>
+                            <span class="bc-amount" *ngIf="b.totalAmount">{{ b.totalAmount | currency }}</span>
+                          </span>
+                          <span class="bc-meta">{{ b.title || '' }} <span class="bc-meta-sep" *ngIf="b.title">—</span> {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                           <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
+                          <span class="no-show-badge" *ngIf="b.status === 'NO_SHOW'" title="No Show">NS</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -323,16 +333,21 @@ import {
                          <div class="booking-chip" *ngFor="let b of getAllUnassignedBookings()"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
+                          [class.no-show]="b.status === 'NO_SHOW'"
                           [ngStyle]="getBookingBlockStyle(b)"
                           tabindex="0" role="button"
                           [attr.aria-label]="getBookingAriaLabel(b)"
                           (pointerdown)="startBookingDrag($event, b)"
                           (click)="openDrawer(b); $event.stopPropagation()"
                           (keydown)="openBookingFromKeyboard($event, b)">
-                          <strong>{{ b.client?.fullName || 'Client' }}</strong>
-                          <span>{{ b.title }} — {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
+                          <span class="bc-header">
+                            <strong>{{ b.client?.fullName || 'Client' }}</strong>
+                            <span class="bc-amount" *ngIf="b.totalAmount">{{ b.totalAmount | currency }}</span>
+                          </span>
+                          <span class="bc-meta">{{ b.title || '' }} <span class="bc-meta-sep" *ngIf="b.title">—</span> {{ formatTime(b.startTime) }}-{{ formatTime(b.endTime) }}</span>
                           <i class="booking-bar" [style.width.%]="getDurationBarPercent(b)"></i>
                           <span class="conflict-badge" *ngIf="hasConflict(b)" title="Schedule conflict detected">&#x26A0;</span>
+                          <span class="no-show-badge" *ngIf="b.status === 'NO_SHOW'" title="No Show">NS</span>
                         </div>
                         <div class="current-time-line" *ngIf="isCurrentDateToday()" [ngStyle]="getCurrentTimeIndicatorStyle()">
                           <span class="current-time-label">Now</span>
@@ -843,6 +858,23 @@ import {
                     </select>
                   </div>
                 </div>
+                <div class="nb-duration-row">
+                  <label>Duration</label>
+                  <div class="nb-duration-chips">
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 15" (click)="setBookingDuration(15)" type="button">15m</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 30" (click)="setBookingDuration(30)" type="button">30m</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 45" (click)="setBookingDuration(45)" type="button">45m</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 60" (click)="setBookingDuration(60)" type="button">1h</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 90" (click)="setBookingDuration(90)" type="button">1.5h</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 120" (click)="setBookingDuration(120)" type="button">2h</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 180" (click)="setBookingDuration(180)" type="button">3h</button>
+                    <button class="nb-dur-chip" [class.active]="bookingDuration === 240" (click)="setBookingDuration(240)" type="button">4h</button>
+                    <button class="nb-dur-chip nb-dur-chip-custom" [class.active]="!durationPresets.includes(bookingDuration)" (click)="setBookingDuration(bookingDuration || 30)" type="button">Custom</button>
+                  </div>
+                  <span class="nb-end-time" *ngIf="bookingDuration > 0 && createForm.startTime">
+                    Ends at <strong>{{ estimatedEndTime }}</strong> ({{ bookingDuration }} min)
+                  </span>
+                </div>
               </div>
 
               <!-- Services Section -->
@@ -853,7 +885,7 @@ import {
                     <span class="nb-sh-svc">Service</span>
                     <span class="nb-sh-qty">Qty</span>
                     <span class="nb-sh-price">Price</span>
-                    <span class="nb-sh-disc">Disc</span>
+                    <span class="nb-sh-disc">Disc %</span>
                     <span class="nb-sh-total">Total</span>
                     <span class="nb-sh-action"></span>
                   </div>
@@ -864,8 +896,8 @@ import {
                     </select>
                     <input type="number" [(ngModel)]="s.quantity" min="1" value="1" class="nb-svc-qty">
                     <span class="nb-svc-val">{{ (s.price || 0) | currency }}</span>
-                    <span class="nb-svc-val">—</span>
-                    <span class="nb-svc-val nb-svc-line-total">{{ ((s.price || 0) * (s.quantity || 1)) | currency }}</span>
+                    <input type="number" [(ngModel)]="s.discountPct" min="0" max="100" class="nb-svc-disc" placeholder="0">
+                    <span class="nb-svc-val nb-svc-line-total">{{ getServiceLineTotal(i) | currency }}</span>
                     <button class="nb-svc-remove" (click)="removeService(i)" *ngIf="createForm.services.length > 1">&times;</button>
                   </div>
                   <button class="nb-add-svc" (click)="addService()">+ Add Service</button>
@@ -880,12 +912,18 @@ import {
               <div class="nb-section" *ngIf="createForm.services.length > 0">
                 <div class="nb-section-title">Billing Summary</div>
                 <div class="nb-billing">
-                  <div class="nb-bill-row"><span>Subtotal</span><strong>{{ totalPrice | currency }}</strong></div>
-                  <div class="nb-bill-row"><span>Discount</span><strong>{{ 0 | currency }}</strong></div>
-                  <div class="nb-bill-row"><span>Tax (GST)</span><strong>{{ 0 | currency }}</strong></div>
-                  <div class="nb-bill-row nb-bill-total"><span>Grand Total</span><strong>{{ totalPrice | currency }}</strong></div>
-                  <div class="nb-bill-row"><span>Paid</span><strong>{{ 0 | currency }}</strong></div>
-                  <div class="nb-bill-row nb-bill-due"><span>Due</span><strong>{{ totalPrice | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Subtotal</span><strong>{{ subtotalPrice | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Discount</span><strong>-{{ discountTotal | currency }}</strong></div>
+                  <div class="nb-bill-row nb-bill-tax">
+                    <span>Tax (GST)</span>
+                    <span class="nb-tax-input-wrap">
+                      <input type="number" [(ngModel)]="createForm.taxRate" min="0" max="100" class="nb-tax-input" placeholder="0"> %
+                      <strong>{{ taxTotal | currency }}</strong>
+                    </span>
+                  </div>
+                  <div class="nb-bill-row nb-bill-total"><span>Grand Total</span><strong>{{ grandTotal | currency }}</strong></div>
+                  <div class="nb-bill-row"><span>Paid</span><strong>{{ createForm.paymentAmount || 0 | currency }}</strong></div>
+                  <div class="nb-bill-row nb-bill-due"><span>Due</span><strong>{{ dueAmount | currency }}</strong></div>
                 </div>
               </div>
 
@@ -914,7 +952,12 @@ import {
               <div class="nb-section">
                 <div class="nb-section-title">Notes &amp; Alerts</div>
                 <div class="nb-field">
-                  <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." rows="2"></textarea>
+                  <label>Booking Note</label>
+                  <textarea [(ngModel)]="createForm.notes" placeholder="Optional note for this booking..." rows="2"></textarea>
+                </div>
+                <div class="nb-field" style="margin-top:8px">
+                  <label>Staff Alert</label>
+                  <textarea [(ngModel)]="createForm.staffAlert" placeholder="Alert for staff (e.g. allergies, special requests)..." rows="2"></textarea>
                 </div>
               </div>
 
@@ -1012,8 +1055,8 @@ import {
     </section>
   `,
   styles: [`
-    .page{display:grid;gap:20px;flex:1;min-height:0}
-    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10;background:#f7f7f7;padding:4px 0;margin:-4px 0}
+    .page{display:flex;flex-direction:column;gap:20px;flex:1;min-height:0}
+    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:#f7f7f7;padding:4px 0;margin:-4px 0}
     h1{font-size:34px;margin:0}
     p{color:#6b7280;margin:6px 0 0}
     .head-actions{display:flex;gap:8px;align-items:center}
@@ -1023,7 +1066,7 @@ import {
     .refresh-btn:disabled{opacity:.5;cursor:default}
     .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
     .date-label{font-weight:700;font-size:16px;min-width:200px;text-align:center;color:#374151;letter-spacing:-.02em}
-    .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;position:sticky;top:54px;z-index:9;background:#f7f7f7;padding:4px 0}
+    .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:#f7f7f7;padding:4px 0}
     .tabs button{border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer;background:white}
     .tabs button.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
@@ -1075,15 +1118,15 @@ import {
     .view-transition{animation:calFadeIn .2s ease}
     @keyframes calFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){.view-transition{animation:none}}
-    .day-view{background:white;border:1px solid #e5e7eb;border-radius:20px;overflow:hidden}
-    .dv-container{display:flex}
-    .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa}
+    .day-view{background:white;border:1px solid #e5e7eb;border-radius:20px;display:flex;flex-direction:column;min-height:520px;flex:1}
+    .dv-container{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+    .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa;position:sticky;left:0;z-index:3}
     .dv-header-gap{height:52px;border-bottom:1px solid #e5e7eb}
     .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #f1f5f9;cursor:pointer}
     .dv-time-row:hover{background:#eef2ff}
     .dv-time-label{font-size:11px;color:#6b7280;font-weight:600}
-    .dv-staff-scroll{display:flex;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
-    .dv-staff-col{min-width:200px;flex:1 0 200px;border-right:1px solid #e5e7eb}
+    .dv-staff-scroll{display:flex;flex:1;min-width:0}
+    .dv-staff-col{min-width:240px;flex:0 0 240px;border-right:1px solid #e5e7eb}
     .dv-staff-col:last-child{border-right:0}
     .dv-staff-header{min-height:52px;display:flex;align-items:center;font-weight:700;font-size:13px;border-bottom:1px solid #e5e7eb;background:#f9fafb;position:sticky;top:0;z-index:2;padding:6px 10px}
     .staff-header-content{display:flex;align-items:center;gap:8px;width:100%}
@@ -1313,6 +1356,19 @@ import {
     .nb-bill-due strong{font-size:16px;color:#059669}
     .nb-payment{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .nb-pay-note{font-size:11px;color:#9ca3af;margin-top:8px;font-style:italic}
+    .nb-duration-row{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid #f3f4f6}
+    .nb-duration-row>label{font-size:12px;font-weight:600;color:#374151}
+    .nb-duration-chips{display:flex;flex-wrap:wrap;gap:6px}
+    .nb-dur-chip{border:1px solid #e5e7eb;border-radius:16px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#4b5563;transition:all .15s;min-height:30px}
+    .nb-dur-chip:hover{border-color:#6366f1;color:#6366f1;background:#f0f4ff}
+    .nb-dur-chip.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
+    .nb-dur-chip-custom{border-style:dashed}
+    .nb-end-time{font-size:12px;color:#6b7280;padding:4px 0}
+    .nb-end-time strong{color:#059669;font-weight:700}
+    .nb-svc-disc{width:100%;padding:8px 4px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;text-align:center}
+    .nb-tax-input-wrap{display:flex;align-items:center;gap:6px}
+    .nb-tax-input{width:50px;padding:4px 6px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;text-align:center}
+    .nb-bill-tax span:first-child{display:flex;align-items:center}
     .nb-footer{display:flex;gap:10px;padding:16px 28px;border-top:1px solid #e5e7eb;position:sticky;bottom:0;background:white;z-index:2}
     .nb-btn{padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;border:0;transition:opacity .15s,background .15s;flex:1;text-align:center}
     .nb-btn:disabled{opacity:.5;cursor:default}
@@ -1365,7 +1421,7 @@ import {
     }
     @media(max-width:1024px){
       .day-view{border-radius:16px}
-      .dv-staff-col{min-width:180px;flex:1 0 180px}
+      .dv-staff-col{min-width:180px;flex:0 0 180px}
       .dv-hour-row{height:50px}
       .dv-time-row{height:50px}
       .drawer-header{padding:20px 24px}
@@ -1384,7 +1440,7 @@ import {
       .week-header{min-width:700px}
       .week-body{min-width:700px}
       .week-day-col{min-width:100px}
-      .dv-staff-col{min-width:160px;flex:1 0 160px}
+      .dv-staff-col{min-width:160px;flex:0 0 160px}
       .dv-hour-row{height:48px}
       .dv-time-row{height:48px}
       .head-actions{flex-wrap:wrap;justify-content:center}
@@ -1405,7 +1461,7 @@ import {
       .summary-bar{gap:2px;padding:6px 8px}
       .sum-card{padding:2px 4px;min-width:50px}
       .sum-card b{font-size:14px}
-      .dv-staff-col{min-width:150px;flex:1 0 150px}
+      .dv-staff-col{min-width:150px;flex:0 0 150px}
       .dv-hour-row{height:44px}
       .dv-time-row{height:44px}
       .dv-time-col{width:48px}
@@ -1435,8 +1491,7 @@ import {
       .waitlist-toggle-btn,.ai-toggle-btn{margin-left:0}
       .dv-sidebar-stack{min-width:200px;max-width:260px;border-left-width:0;border-top:1px solid #e0e0e0}
       .dv-content-wrapper{flex-direction:column}
-      .dv-container{overflow-x:auto;-webkit-overflow-scrolling:touch}
-      .dv-staff-scroll{overflow-x:auto}
+      .dv-container{overflow:auto;-webkit-overflow-scrolling:touch}
       .drawer-panel{max-height:100dvh}
       .res-filter{font-size:12px;padding:6px 10px}
     }
@@ -1464,7 +1519,7 @@ import {
       .day-view{border-radius:10px;border-left:0;border-right:0}
       .dv-time-col{width:36px}
       .dv-time-label{font-size:9px}
-      .dv-staff-col{min-width:130px;flex:1 0 130px}
+      .dv-staff-col{min-width:130px;flex:0 0 130px}
       .dv-hour-row{height:38px}
       .dv-time-row{height:38px}
       .dv-header-gap{height:40px}
@@ -1615,7 +1670,7 @@ import {
       .sum-card span{font-size:8px}
       .sum-card b{font-size:12px}
       .dv-time-col{width:34px}
-      .dv-staff-col{min-width:120px;flex:1 0 120px}
+      .dv-staff-col{min-width:120px;flex:0 0 120px}
       .dv-hour-row{height:36px}
       .dv-time-row{height:36px}
       .dv-header-gap{height:38px}
@@ -1664,6 +1719,19 @@ import {
       .action-menu-dropdown{right:auto;left:0}
       .tip-presets button{padding:8px;font-size:13px}
       .conflict-badge{position:absolute;top:2px;right:2px;font-size:12px;color:#e53935;z-index:2}
+      .no-show-badge{position:absolute;bottom:2px;right:2px;font-size:9px;font-weight:700;color:#dc2626;background:#fef2f2;border-radius:3px;padding:0 4px;line-height:1.4;z-index:2}
+      .booking-chip .bc-header{display:flex;justify-content:space-between;align-items:center;gap:4px;width:100%}
+      .booking-chip .bc-header strong{font-size:10px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+      .booking-chip .bc-amount{font-size:9px;font-weight:700;color:#059669;white-space:nowrap;flex-shrink:0}
+      .booking-chip .bc-meta{font-size:9px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%}
+      .booking-chip .bc-meta-sep{color:#9ca3af}
+      .booking-chip.no-show{opacity:.65}
+      .dv-bookings-layer .booking-chip .bc-header{display:flex;justify-content:space-between;align-items:center;gap:4px;width:100%}
+      .dv-bookings-layer .booking-chip .bc-header strong{font-size:10px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+      .dv-bookings-layer .booking-chip .bc-amount{font-size:9px;font-weight:700;color:#059669;white-space:nowrap;flex-shrink:0}
+      .dv-bookings-layer .booking-chip .bc-meta{display:block;font-size:9px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+      .dv-bookings-layer .booking-chip .bc-meta-sep{color:#9ca3af}
+      .dv-bookings-layer .booking-chip.no-show{opacity:.65}
       .week-booking.has-conflict,.month-preview-chip.has-conflict{border-color:#e53935}
       .conflict-section{margin-top:8px}
       .conflict-heading{color:#e53935;font-size:13px}
@@ -1930,7 +1998,7 @@ export class CalendarComponent {
   }
 
   private saveDayViewScroll() {
-    const el = document.querySelector('.dv-staff-scroll');
+    const el = document.querySelector('.dv-container');
     if (el) {
       this.dayViewScrollLeft = el.scrollLeft;
       this.dayViewScrollTop = el.scrollTop;
@@ -1938,7 +2006,7 @@ export class CalendarComponent {
   }
 
   private restoreDayViewScroll() {
-    const el = document.querySelector('.dv-staff-scroll');
+    const el = document.querySelector('.dv-container');
     if (el) {
       this.isRestoringScroll = true;
       el.scrollLeft = this.dayViewScrollLeft;
@@ -2970,7 +3038,12 @@ export class CalendarComponent {
         startTime: this.toLocalDatetimeString(start),
       branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
+      staffAlert: '',
       services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0, quantity: 1 }],
+      durationMin: 30,
+      manualDuration: false,
+      discountTotal: 0,
+      taxRate: 0,
     };
     this.loadClientsAndServices();
   }
@@ -3049,8 +3122,23 @@ export class CalendarComponent {
     });
   }
 
-  addService() { this.createForm.services.push({ serviceId: '', name: '', durationMin: 0, price: 0, quantity: 1 }); }
+  addService() { this.createForm.services.push({ serviceId: '', name: '', durationMin: 0, price: 0, quantity: 1, discountPct: 0 }); }
   removeService(i: number) { this.createForm.services.splice(i, 1); }
+
+  readonly durationPresets = [15, 30, 45, 60, 90, 120, 180, 240];
+
+  get bookingDuration(): number {
+    if (this.createForm.manualDuration && this.createForm.durationMin) {
+      return this.createForm.durationMin;
+    }
+    const total = this.totalDuration;
+    return total > 0 ? total : (this.createForm.durationMin || 30);
+  }
+
+  setBookingDuration(min: number) {
+    this.createForm.durationMin = min;
+    this.createForm.manualDuration = true;
+  }
 
   onServiceSelect(i: number) {
     const svcId = this.createForm.services[i].serviceId;
@@ -3059,6 +3147,10 @@ export class CalendarComponent {
       this.createForm.services[i].name = svc.name;
       this.createForm.services[i].durationMin = svc.durationMin;
       this.createForm.services[i].price = svc.price;
+      this.createForm.services[i].discountPct = this.createForm.services[i].discountPct || 0;
+      if (!this.createForm.manualDuration) {
+        this.createForm.durationMin = this.totalDuration;
+      }
     } else {
       this.createForm.services[i].name = '';
       this.createForm.services[i].durationMin = 0;
@@ -3074,10 +3166,43 @@ export class CalendarComponent {
     return this.createForm.services.reduce((sum: number, s: any) => sum + (Number(s.price) || 0) * (Number(s.quantity) || 1), 0);
   }
 
+  getServiceLineTotal(i: number): number {
+    const s = this.createForm.services[i];
+    const base = (Number(s.price) || 0) * (Number(s.quantity) || 1);
+    const pct = Number(s.discountPct) || 0;
+    return pct > 0 ? base * (1 - pct / 100) : base;
+  }
+
+  get subtotalPrice(): number {
+    let sum = 0;
+    for (let i = 0; i < this.createForm.services.length; i++) {
+      sum += this.getServiceLineTotal(i);
+    }
+    return sum;
+  }
+
+  get discountTotal(): number {
+    return this.totalPrice - this.subtotalPrice;
+  }
+
+  get taxTotal(): number {
+    const rate = Number(this.createForm.taxRate) || 0;
+    return rate > 0 ? this.subtotalPrice * (rate / 100) : 0;
+  }
+
+  get grandTotal(): number {
+    return this.subtotalPrice + this.taxTotal;
+  }
+
+  get dueAmount(): number {
+    const paid = Number(this.createForm.paymentAmount) || 0;
+    return Math.max(0, this.grandTotal - paid);
+  }
+
   get estimatedEndTime(): string {
-    if (!this.createForm.startTime || !this.totalDuration) return '';
+    if (!this.createForm.startTime || !this.bookingDuration) return '';
     const start = new Date(this.createForm.startTime);
-    const end = new Date(start.getTime() + this.totalDuration * 60000);
+    const end = new Date(start.getTime() + this.bookingDuration * 60000);
     return end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
@@ -3108,6 +3233,7 @@ export class CalendarComponent {
       startTime: this.createForm.startTime,
       branchId: this.createForm.branchId,
       notes: this.createForm.notes || undefined,
+      staffAlert: this.createForm.staffAlert || undefined,
       services: validServices,
     };
     if (this.createForm.resourceId) payload.resourceId = this.createForm.resourceId;

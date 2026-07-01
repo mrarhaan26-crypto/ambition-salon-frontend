@@ -155,7 +155,7 @@ export interface CreateFormService {
   durationMin: number;
   price: number;
   quantity?: number;
-  discount?: number;
+  discountPct?: number;
 }
 
 export interface CreateFormModel {
@@ -165,11 +165,16 @@ export interface CreateFormModel {
   startTime: string;
   branchId: string;
   notes: string;
+  staffAlert?: string;
   resourceId?: string;
   services: CreateFormService[];
+  durationMin?: number;
+  manualDuration?: boolean;
   paymentMode?: string;
   paymentAmount?: number;
   isWalkIn?: boolean;
+  discountTotal?: number;
+  taxRate?: number;
 }
 
 export interface EditFormModel {
