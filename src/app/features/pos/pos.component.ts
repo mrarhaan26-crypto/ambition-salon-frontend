@@ -244,7 +244,8 @@ import { Staff } from '../staff/staff.models';
               </div>
               <div class="sale-right">
                 <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
-                <span class="sale-method">{{ sale.paymentMethod || 'CASH' }}</span>
+                <span class="sale-method">{{ paymentLabel(sale) }}</span>
+                <span class="sale-method" *ngIf="paymentStatus(sale) && paymentStatus(sale) !== sale.status">{{ paymentStatus(sale) }}</span>
                 <span class="sale-method" *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</span>
                 <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
                 <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
@@ -355,7 +356,8 @@ import { Staff } from '../staff/staff.models';
               </div>
               <div>
                 <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
-                <small>{{ sale.paymentMethod || 'CASH' }}</small>
+                <small>{{ paymentLabel(sale) }}</small>
+                <small *ngIf="paymentStatus(sale) && paymentStatus(sale) !== sale.status">{{ paymentStatus(sale) }}</small>
                 <small *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</small>
               </div>
               <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
@@ -370,7 +372,7 @@ import { Staff } from '../staff/staff.models';
           <div class="drawer-head">
             <div>
               <h2>Receipt</h2>
-              <p>{{ selectedSale.id }}</p>
+              <p>{{ receiptNumber(selectedSale) }}</p>
             </div>
             <button class="icon-btn" (click)="closeReceipt()">x</button>
           </div>
@@ -392,7 +394,8 @@ import { Staff } from '../staff/staff.models';
               <div><span>Receipt #</span><strong>{{ receiptNumber(selectedSale) }}</strong></div>
               <div><span>Client</span><strong>{{ selectedSale.client?.fullName || 'Walk-in' }}</strong></div>
               <div><span>Date</span><strong>{{ selectedSale.createdAt | date:'MMM dd, yyyy h:mm a' }}</strong></div>
-              <div><span>Payment</span><strong>{{ selectedSale.paymentMethod || 'CASH' }}</strong></div>
+              <div><span>Payment</span><strong>{{ paymentLabel(selectedSale) }}</strong></div>
+              <div *ngIf="paymentStatus(selectedSale)"><span>Payment status</span><strong>{{ paymentStatus(selectedSale) }}</strong></div>
               <div><span>Status</span><strong>{{ selectedSale.status }}</strong></div>
               <div><span>Items</span><strong>{{ receiptItemCount(selectedSale) }}</strong></div>
               <div *ngIf="staffLabel(selectedSale)"><span>Cashier</span><strong>{{ staffLabel(selectedSale) }}</strong></div>
@@ -978,7 +981,7 @@ export class PosComponent {
     this.api.getSales(query).subscribe({
       next: (sales) => {
         const payment = this.salesFilters.paymentMethod;
-        this.salesHistory = payment ? (sales || []).filter((sale: any) => sale.paymentMethod === payment) : (sales || []);
+        this.salesHistory = payment ? (sales || []).filter((sale: any) => this.paymentLabel(sale).toUpperCase() === payment) : (sales || []);
         this.salesLoading = false;
       },
       error: (err) => {
@@ -1022,7 +1025,7 @@ export class PosComponent {
         summary.completedAmount += amount;
         summary.completedCount += 1;
 
-        const paymentMethod = String(sale.paymentMethod || 'CASH').toUpperCase();
+        const paymentMethod = this.paymentLabel(sale).toUpperCase();
         if (paymentMethod in paymentTotals) paymentTotals[paymentMethod] += amount;
       }
 
@@ -1045,20 +1048,23 @@ export class PosComponent {
 
     const summary = this.closingSummary();
     const rows: any[][] = [
-      ['Sale ID', 'Date', 'Client name', 'Payment method', 'Status', 'Total amount', 'Item names'],
+      ['Sale ID', 'Receipt number', 'Date', 'Client name', 'Payment method', 'Payment status', 'Staff/cashier', 'Status', 'Total amount', 'Item names'],
       ...this.salesHistory.map((sale) => [
         sale.id,
+        this.receiptNumber(sale),
         this.formatCsvDate(sale.createdAt),
         sale.client?.fullName || 'Walk-in',
-        sale.paymentMethod || 'CASH',
+        this.paymentLabel(sale),
+        this.paymentStatus(sale),
+        this.staffLabel(sale),
         sale.status || '',
         (Number(sale.totalAmount) || 0).toFixed(2),
         this.saleItemNames(sale),
       ]),
       [],
-      ['', '', '', '', 'Completed total', summary.completedAmount.toFixed(2), ''],
-      ['', '', '', '', 'Refunded total', summary.refundedAmount.toFixed(2), ''],
-      ['', '', '', '', 'Net sales', summary.netSales.toFixed(2), ''],
+      ['', '', '', '', '', '', '', 'Completed total', summary.completedAmount.toFixed(2), ''],
+      ['', '', '', '', '', '', '', 'Refunded total', summary.refundedAmount.toFixed(2), ''],
+      ['', '', '', '', '', '', '', 'Net sales', summary.netSales.toFixed(2), ''],
     ];
 
     const csv = rows.map((row) => row.map((value) => this.csvValue(value)).join(',')).join('\r\n');
@@ -1103,10 +1109,21 @@ export class PosComponent {
   }
 
   receiptNumber(sale: any): string {
+    const receiptNo = sale?.receipt?.receiptNumber || sale?.receiptNumber;
+    if (receiptNo) return String(receiptNo);
+
     const id = String(sale?.id || '');
     return id ? id.slice(-8).toUpperCase() : 'PENDING';
   }
 
+  paymentLabel(sale: any): string {
+    return String(sale?.payment?.method || sale?.paymentMethod || 'CASH').toUpperCase();
+  }
+
+  paymentStatus(sale: any): string {
+    const status = sale?.payment?.status || sale?.paymentStatus || '';
+    return status ? String(status).toUpperCase() : '';
+  }
   staffLabel(sale: any): string {
     if (sale?.staff?.fullName) return sale.staff.fullName;
     const staffId = sale?.staffId || (sale?.id === this.selectedSale?.id ? this.selectedSale?.staffId : '');
@@ -1222,8 +1239,8 @@ export class PosComponent {
         this.selectedServiceId = '';
         this.selectedProductId = '';
         this.checkoutForm = this.defaultCheckoutForm();
-      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
-      this.checkoutNote = '';
+        this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
+        this.checkoutNote = '';
         this.load();
         this.loadSalesHistory();
         this.viewReceipt(sale);
