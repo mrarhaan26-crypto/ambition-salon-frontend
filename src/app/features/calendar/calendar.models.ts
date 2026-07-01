@@ -53,6 +53,8 @@ export interface CalendarBooking {
   resource?: CalendarResource;
   branch?: CalendarBranch;
   services?: CalendarBookingService[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CalendarDayResponse {
@@ -240,3 +242,51 @@ export interface BranchOption {
   name?: string;
   city?: string;
 }
+
+export interface PaymentInfo {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ClientDetail {
+  id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  walletBalance?: number;
+  totalVisits?: number;
+  totalSpend?: number;
+}
+
+export interface ViewBillData {
+  booking: CalendarBooking;
+  clientDetail?: ClientDetail;
+  payments: PaymentInfo[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  taxRate: number;
+  total: number;
+  paid: number;
+  due: number;
+  paymentMethod: string;
+  staffAlert?: string;
+  activityLog: ActivityLogEntry[];
+}
+
+export interface ActivityLogEntry {
+  action: string;
+  timestamp: string;
+  user?: string;
+  details?: string;
+}
+
+export interface AddPaymentForm {
+  amount: number;
+  method: string;
+}
+
+export type SlotSize = 15 | 30 | 60;

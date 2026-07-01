@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, OnDestroy, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CalendarService } from './calendar.service';
 import { StaffService } from '../staff/staff.service';
 import { Staff } from '../staff/staff.models';
@@ -30,6 +31,12 @@ import {
   CalendarQueryParams,
   ViewMode,
   StaffResourceMode,
+  PaymentInfo,
+  ClientDetail,
+  ViewBillData,
+  AddPaymentForm,
+  SlotSize,
+  ActivityLogEntry,
 } from './calendar.models';
 
 @Component({
@@ -83,6 +90,13 @@ import {
           <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
+        <span class="tabs-divider"></span>
+        <span class="slot-label">Slot:</span>
+        <div class="slot-toggle">
+          <button [class.active]="slotSize === 15" (click)="setSlotSize(15)" class="slot-btn">15m</button>
+          <button [class.active]="slotSize === 30" (click)="setSlotSize(30)" class="slot-btn">30m</button>
+          <button [class.active]="slotSize === 60" (click)="setSlotSize(60)" class="slot-btn">60m</button>
+        </div>
       </div>
 
       <div class="loading" *ngIf="loading">
@@ -432,38 +446,152 @@ import {
       <div class="drawer-overlay" *ngIf="drawerBooking" (click)="closeDrawer()">
         <div class="drawer-panel" (click)="$event.stopPropagation()">
           <div class="drawer-header">
-            <h2>{{ drawerBooking.title }}</h2>
-            <button class="close-btn" (click)="closeDrawer()">&times;</button>
+            <div class="dh-left">
+              <h2>{{ drawerBooking.client?.fullName || 'Booking' }}</h2>
+              <span class="dh-subtitle">{{ drawerBooking.title }}</span>
+            </div>
+            <div class="dh-right">
+              <span class="status-badge" [class]="'badge-' + (drawerBooking.status || '').toLowerCase()">{{ getStatusLabel(drawerBooking.status) }}</span>
+              <div class="action-menu-wrapper" (click)="$event.stopPropagation()">
+                <button class="action-menu-trigger" (click)="toggleActionMenu()">&#x22EE;</button>
+                <div class="action-menu-dropdown" *ngIf="showActionMenu" (click)="$event.stopPropagation()">
+                  <button (click)="closeActionMenu(); openEditForm(drawerBooking)"><span class="am-icon">&#x270E;</span> Edit Booking</button>
+                  <button *ngIf="canReschedule(drawerBooking)" (click)="closeActionMenu(); showRescheduleForm(drawerBooking)"><span class="am-icon">&#x1F552;</span> Reschedule Booking</button>
+                  <button (click)="closeActionMenu(); openAddPayment()"><span class="am-icon">&#x1F4B3;</span> Add Payment</button>
+                  <button (click)="closeActionMenu(); openAddTip()"><span class="am-icon">&#x1F381;</span> Add Tip</button>
+                  <button (click)="closeActionMenu(); doRebook()"><span class="am-icon">&#x1F504;</span> Rebook</button>
+                  <button (click)="closeActionMenu(); printBill()"><span class="am-icon">&#x1F5A8;</span> Print</button>
+                  <button (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client</button>
+                </div>
+              </div>
+              <button class="close-btn" (click)="closeDrawer()">&times;</button>
+            </div>
           </div>
           <div class="drawer-body">
-            <div class="drawer-section">
-              <h3>Booking Details</h3>
-              <div class="drawer-status-row">
-                <span class="status-badge" [class]="'badge-' + (drawerBooking.status || '').toLowerCase()">{{ drawerBooking.status }}</span>
+            <ng-container *ngIf="viewBillData && !viewBillLoading && viewBillActiveTab === 'details'; else mainTabs">
+              <!-- View Bill Content -->
+              <div class="bill-tabs">
+                <button [class.active]="viewBillActiveTab==='details'" (click)="viewBillActiveTab='details'">Bill Details</button>
+                <button [class.active]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'">Activity Log</button>
               </div>
-              <div class="info-row"><span>Date</span><span>{{ drawerBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span></div>
-              <div class="info-row"><span>Time</span><span>{{ drawerBooking.startTime | date:'h:mm a' }} – {{ drawerBooking.endTime | date:'h:mm a' }}</span></div>
-              <div class="info-row"><span>Staff</span><span>{{ drawerBooking.staff?.fullName || 'Unassigned' }}</span></div>
-              <div class="info-row" *ngIf="drawerBooking.resourceId"><span>Resource</span><span>{{ resourceNameForId(drawerBooking.resourceId) }}</span></div>
-              <div class="info-row" *ngIf="drawerBooking.totalAmount"><span>Amount</span><span>{{ drawerBooking.totalAmount | currency }}</span></div>
-              <div class="info-row" *ngIf="drawerBooking.notes"><span>Notes</span><span>{{ drawerBooking.notes }}</span></div>
-            </div>
 
-            <div class="drawer-section" *ngIf="drawerBooking.services?.length">
-              <h3>Services</h3>
-              <div class="svc-info-row" *ngFor="let s of drawerBooking.services">
-                <span>{{ s.name }}</span>
-                <span>{{ s.durationMin }}min {{ s.price ? '· ' + (s.price | currency) : '' }}</span>
+              <!-- Client Summary -->
+              <div class="drawer-section">
+                <h3>Client Summary</h3>
+                <div class="client-summary-card">
+                  <div class="cs-avatar">{{ (drawerBooking.client?.fullName || '?').charAt(0) }}</div>
+                  <div class="cs-info">
+                    <span class="cs-name">{{ drawerBooking.client?.fullName || 'Walk-in Client' }}</span>
+                    <span class="cs-contact" *ngIf="drawerBooking.client?.phone">{{ drawerBooking.client.phone }}</span>
+                    <span class="cs-contact" *ngIf="drawerBooking.client?.email">{{ drawerBooking.client.email }}</span>
+                  </div>
+                  <div class="cs-wallet" *ngIf="viewBillData.clientDetail && viewBillData.clientDetail.walletBalance !== undefined">
+                    <span class="wl-label">Wallet</span>
+                    <span class="wl-amount">{{ viewBillData.clientDetail.walletBalance | currency }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Appointment Details -->
+              <div class="drawer-section">
+                <h3>Appointment</h3>
+                <div class="info-row"><span>Date</span><span>{{ drawerBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span></div>
+                <div class="info-row"><span>Time</span><span>{{ drawerBooking.startTime | date:'h:mm a' }} – {{ drawerBooking.endTime | date:'h:mm a' }}</span></div>
+                <div class="info-row"><span>Staff</span><span>{{ drawerBooking.staff?.fullName || 'Unassigned' }}</span></div>
+                <div class="info-row" *ngIf="drawerBooking.resource?.name"><span>Resource</span><span>{{ drawerBooking.resource.name }} ({{ drawerBooking.resource.type }})</span></div>
+                <div class="info-row" *ngIf="drawerBooking.branch?.name"><span>Branch</span><span>{{ drawerBooking.branch.name }}</span></div>
+              </div>
+
+              <!-- Services & Billing -->
+              <div class="drawer-section" *ngIf="drawerBooking.services?.length">
+                <h3>Services ({{ drawerBooking.services.length }})</h3>
+                <div class="bill-svc-header">
+                  <span class="bsh-item">Service</span>
+                  <span class="bsh-qty">Qty</span>
+                  <span class="bsh-price">Price</span>
+                  <span class="bsh-total">Total</span>
+                </div>
+                <div class="bill-svc-row" *ngFor="let s of drawerBooking.services">
+                  <span class="bsr-name">{{ s.name }}</span>
+                  <span class="bsr-qty">1</span>
+                  <span class="bsr-price">{{ s.price | currency }}</span>
+                  <span class="bsr-total">{{ s.price | currency }}</span>
+                </div>
+                <div class="bill-divider"></div>
+                <div class="bill-summary">
+                  <div class="bl-row"><span>Subtotal</span><span>{{ viewBillData.subtotal | currency }}</span></div>
+                  <div class="bl-row" *ngIf="viewBillData.discount > 0"><span>Discount</span><span class="bl-discount">-{{ viewBillData.discount | currency }}</span></div>
+                  <div class="bl-row" *ngIf="viewBillData.tax > 0"><span>Tax/GST ({{ viewBillData.taxRate }}%)</span><span>{{ viewBillData.tax | currency }}</span></div>
+                  <div class="bl-row bl-total"><span>Total</span><span>{{ viewBillData.total | currency }}</span></div>
+                  <div class="bl-row bl-paid"><span>Paid</span><span class="bl-paid-amt">{{ viewBillData.paid | currency }}</span></div>
+                  <div class="bl-row bl-due" *ngIf="viewBillData.due > 0"><span>Due</span><span class="bl-due-amt">{{ viewBillData.due | currency }}</span></div>
+                </div>
+                <div class="bill-payment-mode" *ngIf="viewBillData.paymentMethod">
+                  <span>Payment Mode: <strong>{{ viewBillData.paymentMethod }}</strong></span>
+                </div>
+              </div>
+
+              <!-- Notes & Alerts -->
+              <div class="drawer-section" *ngIf="drawerBooking.notes || viewBillData.staffAlert">
+                <h3>Notes & Alerts</h3>
+                <div class="notes-content" *ngIf="drawerBooking.notes">
+                  <span class="notes-label">Notes:</span>
+                  <p>{{ drawerBooking.notes }}</p>
+                </div>
+                <div class="staff-alert" *ngIf="viewBillData.staffAlert">
+                  <span class="alert-icon">&#x26A0;</span>
+                  <span>{{ viewBillData.staffAlert }}</span>
+                </div>
+              </div>
+
+              <div class="drawer-section bill-actions">
+                <button class="btn-print" (click)="printBill()">&#x1F5A8; Print Bill</button>
+              </div>
+            </ng-container>
+
+            <!-- Activity Log Tab -->
+            <ng-template #mainTabs>
+              <div class="bill-tabs" *ngIf="drawerBooking">
+                <button [class.active]="viewBillActiveTab==='details'" (click)="viewBillActiveTab='details'">Bill Details</button>
+                <button [class.active]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'">Activity Log</button>
+              </div>
+            </ng-template>
+
+            <div class="activity-log-section" *ngIf="viewBillActiveTab==='activity' && viewBillData">
+              <div class="drawer-section">
+                <h3>Activity Log</h3>
+                <div class="al-empty" *ngIf="viewBillData.activityLog.length === 0">
+                  <span>No activity recorded yet.</span>
+                </div>
+                <div class="al-entry" *ngFor="let entry of viewBillData.activityLog">
+                  <div class="al-dot"></div>
+                  <div class="al-content">
+                    <span class="al-action">{{ entry.action }}</span>
+                    <span class="al-time">{{ entry.timestamp | date:'MMM dd, h:mm a' }}</span>
+                    <span class="al-user" *ngIf="entry.user">{{ entry.user }}</span>
+                    <span class="al-details" *ngIf="entry.details">{{ entry.details }}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="drawer-section">
-              <h3>Client</h3>
-              <div class="info-row"><span>Name</span><span class="client-name">{{ drawerBooking.client?.fullName || 'N/A' }}</span></div>
-              <div class="info-row" *ngIf="drawerBooking.client?.phone"><span>Phone</span><span>{{ drawerBooking.client.phone }}</span></div>
-              <div class="info-row" *ngIf="drawerBooking.client?.email"><span>Email</span><span>{{ drawerBooking.client.email }}</span></div>
+            <!-- Loading -->
+            <div class="drawer-loading" *ngIf="viewBillLoading"><div class="spinner"></div><span>Loading bill details...</span></div>
+
+            <!-- Status Workflow Buttons -->
+            <div class="status-workflow" *ngIf="drawerBooking && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">
+              <div class="sw-label">Status Workflow</div>
+              <div class="sw-buttons">
+                <button class="sw-btn sw-confirmed" [class.sw-active]="drawerBooking.status==='CONFIRMED'" [disabled]="drawerBooking.status==='CONFIRMED'" (click)="doStatus(drawerBooking, 'CONFIRMED')">Confirmed</button>
+                <button class="sw-btn sw-arrived" [class.sw-active]="drawerBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(drawerBooking, 'CHECKED_IN')">Arrived</button>
+                <button class="sw-btn sw-start" [class.sw-active]="drawerBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(drawerBooking, 'CHECKED_IN')">Start</button>
+                <button class="sw-btn sw-completed" [class.sw-active]="drawerBooking.status==='COMPLETED'" [disabled]="drawerBooking.status==='COMPLETED'" (click)="doStatus(drawerBooking, 'COMPLETED')">Completed</button>
+                <button class="sw-btn sw-cancel" [disabled]="!canCancel(drawerBooking)" (click)="openCancelForm()">Cancel</button>
+                <button class="sw-btn sw-notcame" [disabled]="drawerBooking.status==='NO_SHOW'" (click)="doStatus(drawerBooking, 'NO_SHOW')">Not Came</button>
+              </div>
             </div>
 
+            <!-- Reschedule Form -->
             <div class="reschedule-form" *ngIf="showReschedule">
               <h3>Reschedule Booking</h3>
               <label>Staff</label>
@@ -485,6 +613,7 @@ import {
               <div class="drawer-error" *ngIf="rescheduleError">{{ rescheduleError }}</div>
             </div>
 
+            <!-- Cancel Form -->
             <div class="cancel-form" *ngIf="showCancelForm">
               <h3>Cancel Booking</h3>
               <label>Reason for cancellation</label>
@@ -504,6 +633,7 @@ import {
               <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
             </div>
 
+            <!-- Edit Form -->
             <div class="edit-form" *ngIf="showEditForm">
               <h3>Edit Details</h3>
               <label>Title</label>
@@ -518,27 +648,49 @@ import {
               <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
             </div>
 
-            <div class="confirm-action" *ngIf="showConfirmAction">
-              <h3>{{ confirmLabel }}?</h3>
-              <p>Mark this booking as {{ confirmTargetStatus === 'CHECKED_IN' ? 'checked in' : 'completed' }}?</p>
+            <!-- Add Payment Form -->
+            <div class="payment-form" *ngIf="showAddPayment">
+              <h3>Add Payment</h3>
+              <label>Amount</label>
+              <input [(ngModel)]="addPaymentForm.amount" type="number" min="0" step="0.01" placeholder="0.00">
+              <label>Payment Method</label>
+              <select [(ngModel)]="addPaymentForm.method">
+                <option value="CASH">Cash</option>
+                <option value="CARD">Card</option>
+                <option value="UPI">UPI</option>
+                <option value="WALLET">Wallet</option>
+              </select>
               <div class="drawer-actions">
-                <button (click)="closeConfirmAction()">Back</button>
-                <button class="btn-primary" (click)="doStatus(drawerBooking, confirmTargetStatus)" [disabled]="drawerBusy">{{ drawerBusy ? 'Updating...' : 'Confirm' }}</button>
+                <button (click)="closeAddPayment()">Back</button>
+                <button class="btn-primary" (click)="doAddPayment()" [disabled]="addPaymentBusy || !addPaymentForm.amount">{{ addPaymentBusy ? 'Processing...' : 'Pay' }}</button>
               </div>
-              <div class="drawer-loading" *ngIf="drawerBusy"><div class="spinner"></div><span>Updating...</span></div>
-              <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
+              <div class="drawer-error" *ngIf="addPaymentError">{{ addPaymentError }}</div>
             </div>
 
-            <div class="drawer-actions" *ngIf="drawerBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction">
+            <!-- Add Tip Form -->
+            <div class="payment-form" *ngIf="showAddTip">
+              <h3>Add Tip</h3>
+              <label>Tip Amount</label>
+              <input [(ngModel)]="addTipAmount" type="number" min="0" step="0.01" placeholder="0.00">
+              <div class="tip-presets">
+                <button *ngFor="let t of [5,10,20]" (click)="addTipAmount = t" [class.active]="addTipAmount === t">{{ t | currency }}</button>
+              </div>
+              <div class="drawer-actions">
+                <button (click)="closeAddTip()">Back</button>
+                <button class="btn-primary" (click)="doAddTip()" [disabled]="addTipBusy || !addTipAmount">{{ addTipBusy ? 'Processing...' : 'Add Tip' }}</button>
+              </div>
+              <div class="drawer-error" *ngIf="addTipError">{{ addTipError }}</div>
+            </div>
+
+            <!-- Original inline actions fallback -->
+            <div class="drawer-actions" *ngIf="drawerBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">
               <button class="btn-secondary" (click)="openEditForm(drawerBooking)">Edit Details</button>
               <button *ngIf="canReschedule(drawerBooking)" class="btn-secondary" (click)="showRescheduleForm(drawerBooking)">Reschedule</button>
               <button *ngIf="canCancel(drawerBooking)" class="btn-danger" (click)="openCancelForm()">Cancel Booking</button>
-              <button *ngIf="drawerBooking.status === 'CONFIRMED'" class="btn-primary" (click)="openConfirmAction('CHECKED_IN')">Check In</button>
-              <button *ngIf="drawerBooking.status === 'CHECKED_IN'" class="btn-primary" (click)="openConfirmAction('COMPLETED')">Complete</button>
             </div>
 
-            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction"><div class="spinner"></div><span>Updating...</span></div>
-            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction">{{ drawerError }}</div>
+            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip"><div class="spinner"></div><span>Updating...</span></div>
+            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip">{{ drawerError }}</div>
           </div>
         </div>
       </div>
@@ -552,10 +704,21 @@ import {
           <div class="drawer-body">
             <div class="create-form">
               <label>Client</label>
-              <select [(ngModel)]="createForm.clientId">
-                <option value="">Select client...</option>
-                <option *ngFor="let c of clientList" [value]="c.id">{{ c.fullName || c.name }}</option>
-              </select>
+              <div class="client-search-wrapper">
+                <input [(ngModel)]="clientSearchQuery" (input)="onClientSearch()" placeholder="Search client by name or phone..." class="client-search-input" autocomplete="off">
+                <div class="client-search-results" *ngIf="clientSearchQuery && filteredClientList.length > 0">
+                  <button class="csr-item" *ngFor="let c of filteredClientList" (click)="selectClient(c)" type="button">
+                    <span class="csr-name">{{ c.fullName || c.name }}</span>
+                    <span class="csr-phone" *ngIf="c.phone">{{ c.phone }}</span>
+                  </button>
+                </div>
+                <div class="client-search-empty" *ngIf="clientSearchQuery && filteredClientList.length === 0">
+                  <span>No clients found. <a href="#" (click)="$event.preventDefault(); openWalkinFromCreate()">Add as walk-in?</a></span>
+                </div>
+                <div class="client-selected" *ngIf="createForm.clientId && selectedClientName">
+                  <span class="cs-tag">{{ selectedClientName }} <button class="cs-clear" (click)="clearSelectedClient()">&times;</button></span>
+                </div>
+              </div>
 
               <label>Staff</label>
               <select [(ngModel)]="createForm.staffId">
@@ -1141,6 +1304,109 @@ import {
       .drawer-centered .create-panel{width:100%;max-height:100dvh;border-radius:0}
       .dv-sidebar-stack{min-width:100%;max-width:100%;border-top:1px solid #e0e0e0;max-height:300px}
     }
+    .slot-toggle{display:inline-flex;gap:2px;background:#f3f4f6;border-radius:8px;padding:2px}
+    .slot-btn{border:0;background:transparent;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;color:#6b7280;transition:all .12s}
+    .slot-btn.active{background:white;color:#0b0b0b;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .slot-btn:hover:not(.active){color:#374151}
+    .slot-label{font-size:11px;font-weight:700;color:#6b7280;margin-right:2px}
+    .dh-left{flex:1;min-width:0}
+    .dh-left h2{margin:0;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dh-subtitle{font-size:13px;color:#6b7280;display:block;margin-top:2px}
+    .dh-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .action-menu-wrapper{position:relative}
+    .action-menu-trigger{border:0;background:#f3f4f6;border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;transition:background .12s}
+    .action-menu-trigger:hover{background:#e5e7eb}
+    .action-menu-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:white;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:10;min-width:200px;padding:6px;display:grid;gap:2px;animation:fadeIn .15s ease}
+    .action-menu-dropdown button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:background .12s}
+    .action-menu-dropdown button:hover{background:#f3f4f6;color:#0b0b0b}
+    .am-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+    .client-summary-card{display:flex;align-items:center;gap:14px}
+    .cs-avatar{width:44px;height:44px;border-radius:50%;background:#0b0b0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0}
+    .cs-info{flex:1;min-width:0;display:grid;gap:2px}
+    .cs-name{font-weight:700;font-size:15px;color:#111827}
+    .cs-contact{font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cs-wallet{text-align:right;background:#f0fdf4;padding:6px 12px;border-radius:10px;border:1px solid #bbf7d0;flex-shrink:0}
+    .wl-label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;color:#16a34a;letter-spacing:.04em}
+    .wl-amount{font-size:15px;font-weight:800;color:#15803d}
+    .bill-tabs{display:flex;gap:4px;padding:2px 0}
+    .bill-tabs button{border:0;background:transparent;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#6b7280;transition:all .12s}
+    .bill-tabs button.active{background:#f3f4f6;color:#0b0b0b}
+    .bill-tabs button:hover:not(.active){color:#374151}
+    .bill-svc-header{display:flex;gap:8px;padding:6px 0;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #e5e7eb}
+    .bsh-item{flex:2}
+    .bsh-qty{width:36px;text-align:center}
+    .bsh-price{width:70px;text-align:right}
+    .bsh-total{width:70px;text-align:right}
+    .bill-svc-row{display:flex;gap:8px;padding:8px 0;font-size:13px;align-items:center;border-bottom:1px solid #f3f4f6}
+    .bsr-name{flex:2;font-weight:600;color:#111827}
+    .bsr-qty{width:36px;text-align:center;color:#6b7280}
+    .bsr-price{width:70px;text-align:right;color:#6b7280}
+    .bsr-total{width:70px;text-align:right;font-weight:700;color:#0b0b0b}
+    .bill-divider{height:1px;background:#e5e7eb;margin:4px 0}
+    .bill-summary{display:grid;gap:6px;padding:4px 0}
+    .bl-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0}
+    .bl-row span:first-child{color:#6b7280;font-weight:600}
+    .bl-row span:last-child{font-weight:700;color:#374151}
+    .bl-discount{color:#16a34a!important}
+    .bl-total{border-top:2px solid #e5e7eb;padding-top:8px;margin-top:4px}
+    .bl-total span:last-child{font-size:16px;color:#0b0b0b}
+    .bl-paid span:last-child{color:#16a34a}
+    .bl-paid-amt{color:#16a34a}
+    .bl-due span:last-child{color:#dc2626}
+    .bl-due-amt{color:#dc2626}
+    .bill-payment-mode{font-size:12px;color:#6b7280;padding:6px 0 0;border-top:1px solid #f3f4f6;margin-top:6px}
+    .bill-payment-mode strong{color:#374151}
+    .notes-content{padding:4px 0}
+    .notes-label{font-size:12px;font-weight:700;color:#6b7280;display:block;margin-bottom:4px}
+    .notes-content p{margin:0;font-size:13px;color:#374151;line-height:1.5}
+    .staff-alert{display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 12px;font-size:12px;color:#92400e;margin-top:8px}
+    .alert-icon{font-size:14px;flex-shrink:0}
+    .bill-actions button{width:100%;border:0;border-radius:12px;padding:12px;font-weight:700;cursor:pointer;font-size:13px;transition:all .12s}
+    .btn-print{background:#f3f4f6;color:#374151}
+    .btn-print:hover{background:#e5e7eb}
+    .status-workflow{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px 16px}
+    .sw-label{font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.06em;margin-bottom:10px}
+    .sw-buttons{display:flex;flex-wrap:wrap;gap:6px}
+    .sw-btn{border:1px solid #e5e7eb;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#374151;transition:all .12s;flex:1;min-width:80px;text-align:center}
+    .sw-btn:hover:not(:disabled){background:#f3f4f6;border-color:#d1d5db}
+    .sw-btn:disabled{opacity:.4;cursor:default}
+    .sw-btn.sw-active{background:#0b0b0b;color:white;border-color:#0b0b0b}
+    .sw-confirmed.sw-active{background:#1d4ed8;border-color:#1d4ed8}
+    .sw-arrived.sw-active{background:#7c3aed;border-color:#7c3aed}
+    .sw-start.sw-active{background:#7c3aed;border-color:#7c3aed}
+    .sw-completed.sw-active{background:#16a34a;border-color:#16a34a}
+    .payment-form{display:grid;gap:12px;padding:16px;background:#f9fafb;border-radius:16px}
+    .payment-form h3{margin:0;font-size:14px;font-weight:700}
+    .payment-form label{font-size:13px;font-weight:600;color:#374151;margin-bottom:-8px}
+    .payment-form input,.payment-form select{padding:12px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px}
+    .tip-presets{display:flex;gap:8px}
+    .tip-presets button{flex:1;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;background:white;color:#374151;transition:all .12s}
+    .tip-presets button.active{background:#f0fdf4;border-color:#16a34a;color:#16a34a}
+    .tip-presets button:hover:not(.active){background:#f3f4f6}
+    .activity-log-section .al-entry{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6}
+    .activity-log-section .al-entry:last-child{border-bottom:0}
+    .al-dot{width:8px;height:8px;border-radius:50%;background:#6366f1;margin-top:6px;flex-shrink:0}
+    .al-content{display:grid;gap:2px}
+    .al-action{font-size:13px;font-weight:600;color:#111827}
+    .al-time{font-size:11px;color:#6b7280}
+    .al-user{font-size:11px;color:#6366f1;font-weight:600}
+    .al-details{font-size:12px;color:#4b5563}
+    .al-empty{padding:16px;text-align:center;color:#9ca3af;font-size:13px}
+    .client-search-wrapper{position:relative}
+    .client-search-input{width:100%;padding:14px;border:1px solid #e5e7eb;border-radius:14px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color .2s}
+    .client-search-input:focus{border-color:#0b0b0b}
+    .client-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:white;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:10;max-height:200px;overflow-y:auto}
+    .csr-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:0;background:transparent;font-size:13px;cursor:pointer;text-align:left;transition:background .12s}
+    .csr-item:hover{background:#f3f4f6}
+    .csr-name{font-weight:600;color:#111827}
+    .csr-phone{color:#6b7280;font-size:12px;margin-left:auto}
+    .client-search-empty{padding:10px 14px;font-size:12px;color:#9ca3af;text-align:center}
+    .client-search-empty a{color:#6366f1;font-weight:600;cursor:pointer;text-decoration:none}
+    .client-search-empty a:hover{text-decoration:underline}
+    .client-selected{padding:6px 0}
+    .cs-tag{display:inline-flex;align-items:center;gap:6px;background:#eef2ff;color:#4338ca;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600}
+    .cs-clear{border:0;background:transparent;color:#4338ca;font-size:18px;cursor:pointer;padding:0;line-height:1;opacity:.6}
+    .cs-clear:hover{opacity:1}
     @media(max-width:480px){
       .head h1{font-size:18px}
       .head-actions{justify-content:center;gap:4px}
@@ -1187,10 +1453,22 @@ import {
       .cancel-form{padding:10px;gap:8px}
       .edit-form{padding:10px;gap:8px}
       .confirm-action{padding:10px}
+      .payment-form{padding:10px;gap:8px}
       .filter-bar{padding:0 0 4px}
       .branch-filter,.status-filter{font-size:11px;padding:5px 8px;min-width:0}
       .res-filter{font-size:11px;padding:5px 8px}
       .dv-sidebar-stack{max-height:260px}
+      .slot-toggle{gap:1px}
+      .slot-btn{padding:3px 6px;font-size:10px}
+      .sw-buttons{gap:4px}
+      .sw-btn{min-width:60px;padding:4px 10px;font-size:11px}
+      .bill-svc-header{font-size:9px}
+      .bill-svc-row{font-size:11px}
+      .bsh-price,.bsh-total,.bsr-price,.bsr-total{width:56px}
+      .cs-wallet{padding:4px 8px}
+      .wl-amount{font-size:13px}
+      .action-menu-dropdown{right:auto;left:0}
+      .tip-presets button{padding:8px;font-size:13px}
     }
   `]
 })
@@ -1258,8 +1536,30 @@ export class CalendarComponent {
   createError = '';
   createForm: CreateFormModel = { clientId: '', staffId: '', title: '', startTime: '', branchId: '', notes: '', resourceId: '', services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }] };
   clientList: ClientOption[] = [];
+  filteredClientList: ClientOption[] = [];
+  clientSearchQuery = '';
+  private clientSearchSubject = new Subject<string>();
   serviceList: ServiceOption[] = [];
   branchList: BranchOption[] = [];
+
+  slotSize: SlotSize = 30;
+  showSlotSelector = false;
+
+  viewBillData: ViewBillData | null = null;
+  viewBillLoading = false;
+  viewBillActiveTab: 'details' | 'activity' = 'details';
+
+  showActionMenu = false;
+
+  showAddPayment = false;
+  addPaymentForm: AddPaymentForm = { amount: 0, method: 'CASH' };
+  addPaymentBusy = false;
+  addPaymentError = '';
+
+  showAddTip = false;
+  addTipAmount = 0;
+  addTipBusy = false;
+  addTipError = '';
 
   showWalkin = false;
   walkinBusy = false;
@@ -1328,7 +1628,19 @@ export class CalendarComponent {
     return `Month · ${this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
   }
 
-  ngOnInit() { this.load(); this.startAutoRefresh(); }
+  ngOnInit() {
+    this.load();
+    this.startAutoRefresh();
+    this.clientSearchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(query => {
+      this.filteredClientList = this.clientList.filter(c =>
+        (c.fullName || c.name || '').toLowerCase().includes(query.toLowerCase()) ||
+        (c.phone || '').includes(query)
+      );
+    });
+  }
   ngOnDestroy() { this.stopAutoRefresh(); }
 
   @HostListener('document:keydown', ['$event'])
@@ -1611,7 +1923,7 @@ export class CalendarComponent {
       staffId: slot.staffId,
       title: svcName || 'Booking',
       startTime: start.toISOString().slice(0, 16),
-      branchId: this.selectedBranchId,
+      branchId: this.getDefaultBranchId(),
       notes: '',
       services: [{ serviceId: this.aiServiceId || '', name: svcName, durationMin: 0, price: 0 }],
     };
@@ -1695,7 +2007,6 @@ export class CalendarComponent {
     return msg;
   }
 
-  openDrawer(b: CalendarBooking) { if (this.dragLockClick) { this.dragLockClick = false; return; } this.drawerBooking = b; this.drawerBusy = false; this.drawerError = ''; this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false; this.cancelReason = ''; this.cancelCustomReason = ''; }
   openBookingFromKeyboard(event: KeyboardEvent, booking: CalendarBooking): void {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -1773,6 +2084,10 @@ export class CalendarComponent {
     });
   }
 
+  private getDefaultBranchId(): string {
+    return this.selectedBranchId || (this.branchList.length === 1 ? this.branchList[0].id : '');
+  }
+
   openCreateBookingUnassigned(hour: number) {
     if (this.dragLockClick) { this.dragLockClick = false; return; }
     this.showCreate = true;
@@ -1787,7 +2102,7 @@ export class CalendarComponent {
       resourceId: '',
       title: wl?.serviceName || '',
       startTime: start.toISOString().slice(0, 16),
-      branchId: this.selectedBranchId,
+      branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
       services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
     };
@@ -1807,7 +2122,7 @@ export class CalendarComponent {
       resourceId: '',
       title: '',
       startTime: start.toISOString().slice(0, 16),
-      branchId: this.selectedBranchId,
+      branchId: this.getDefaultBranchId(),
       notes: '',
       services: [{ serviceId: '', name: '', durationMin: 0, price: 0 }],
     };
@@ -1828,7 +2143,7 @@ export class CalendarComponent {
       resourceId: resource.id,
       title: wl?.serviceName || '',
       startTime: start.toISOString().slice(0, 16),
-      branchId: this.selectedBranchId,
+      branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
       services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
     };
@@ -2157,7 +2472,7 @@ export class CalendarComponent {
       staffId: staff.id,
       title: wl?.serviceName || '',
       startTime: start.toISOString().slice(0, 16),
-      branchId: this.selectedBranchId,
+      branchId: this.getDefaultBranchId(),
       notes: wl?.notes || '',
       services: [{ serviceId: '', name: wl?.serviceName || '', durationMin: 0, price: 0 }],
     };
@@ -2178,7 +2493,7 @@ export class CalendarComponent {
     const start = new Date(this.currentDate);
     const now = new Date();
     start.setHours(now.getHours(), 0, 0, 0);
-    this.walkinForm = { clientName: '', staffId, startTime: start.toISOString().slice(0, 16), branchId: this.selectedBranchId, serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
+    this.walkinForm = { clientName: '', staffId, startTime: start.toISOString().slice(0, 16), branchId: this.getDefaultBranchId(), serviceId: '', serviceName: '', serviceDuration: 30, servicePrice: 0 };
   }
 
   closeWalkin() { this.showWalkin = false; this.walkinError = ''; }
@@ -2332,18 +2647,6 @@ export class CalendarComponent {
     });
   }
 
-  private loadClientsAndServices() {
-    this.http.get<ClientOption[]>('http://localhost:3000/api/clients').subscribe({
-      next: (d) => this.clientList = Array.isArray(d) ? d : [],
-    });
-    this.http.get<ServiceOption[]>('http://localhost:3000/api/services').subscribe({
-      next: (d) => this.serviceList = Array.isArray(d) ? d : [],
-    });
-    this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
-      next: (d) => this.branchList = Array.isArray(d) ? d : [],
-    });
-  }
-
   goToDay(date: Date) {
     this.currentDate = new Date(date);
     this.view = 'day';
@@ -2418,5 +2721,247 @@ export class CalendarComponent {
 
   private isSameDay(a: Date, b: Date): boolean {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  setSlotSize(size: SlotSize) {
+    this.slotSize = size;
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      CONFIRMED: 'Confirmed',
+      PENDING: 'Pending',
+      CHECKED_IN: 'Arrived',
+      COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+      NO_SHOW: 'Not Came',
+    };
+    return labels[status] || status;
+  }
+
+  canTransitionTo(status: string): boolean {
+    if (!this.drawerBooking) return false;
+    if (this.drawerBooking.status === 'COMPLETED' || this.drawerBooking.status === 'CANCELLED' || this.drawerBooking.status === 'NO_SHOW') return false;
+    if (status === 'CHECKED_IN') return this.drawerBooking.status === 'CONFIRMED' || this.drawerBooking.status === 'PENDING';
+    if (status === 'COMPLETED') return this.drawerBooking.status === 'CHECKED_IN';
+    if (status === 'NO_SHOW') return this.drawerBooking.status !== 'NO_SHOW' && !['COMPLETED','CANCELLED'].includes(this.drawerBooking.status);
+    return true;
+  }
+
+  toggleActionMenu() { this.showActionMenu = !this.showActionMenu; }
+  closeActionMenu() { this.showActionMenu = false; }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    if (this.showActionMenu) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.action-menu-wrapper')) {
+        this.showActionMenu = false;
+      }
+    }
+  }
+
+  openAddPayment() {
+    this.showAddPayment = true;
+    this.addPaymentForm = { amount: this.viewBillData?.due || 0, method: 'CASH' };
+    this.addPaymentBusy = false;
+    this.addPaymentError = '';
+    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false;
+  }
+  closeAddPayment() { this.showAddPayment = false; this.addPaymentError = ''; }
+  doAddPayment() {
+    if (!this.addPaymentForm.amount || !this.drawerBooking) return;
+    this.addPaymentBusy = true; this.addPaymentError = '';
+    this.api.addPayment(this.drawerBooking.id, this.addPaymentForm).subscribe({
+      next: () => { this.addPaymentBusy = false; this.closeAddPayment(); this.closeDrawer(); this.load(); },
+      error: (e) => { this.addPaymentBusy = false; this.addPaymentError = e.error?.message || 'Payment failed.'; },
+    });
+  }
+
+  openAddTip() {
+    this.showAddTip = true;
+    this.addTipAmount = 0;
+    this.addTipBusy = false;
+    this.addTipError = '';
+    this.showReschedule = false; this.showCancelForm = false; this.showEditForm = false; this.showConfirmAction = false;
+  }
+  closeAddTip() { this.showAddTip = false; this.addTipError = ''; }
+  doAddTip() {
+    if (!this.addTipAmount || !this.drawerBooking) return;
+    this.addTipBusy = true; this.addTipError = '';
+    this.api.addPayment(this.drawerBooking.id, { amount: this.addTipAmount, method: 'TIP' }).subscribe({
+      next: () => { this.addTipBusy = false; this.closeAddTip(); this.closeDrawer(); this.load(); },
+      error: (e) => { this.addTipBusy = false; this.addTipError = e.error?.message || 'Tip failed.'; },
+    });
+  }
+
+  doRebook() {
+    if (!this.drawerBooking) return;
+    this.closeDrawer();
+    const start = new Date();
+    start.setHours(start.getHours() + 1, 0, 0, 0);
+    this.showCreate = true;
+    this.createBusy = false;
+    this.createError = '';
+    this.createForm = {
+      clientId: this.drawerBooking.clientId || '',
+      staffId: this.drawerBooking.staffId || '',
+      title: this.drawerBooking.title || 'Rebook',
+      startTime: start.toISOString().slice(0, 16),
+      branchId: this.drawerBooking.branchId || this.getDefaultBranchId(),
+      notes: this.drawerBooking.notes || '',
+      resourceId: this.drawerBooking.resourceId || undefined,
+      services: (this.drawerBooking.services || []).map(s => ({
+        serviceId: s.serviceId || '',
+        name: s.name,
+        durationMin: s.durationMin,
+        price: s.price,
+      })),
+    };
+    this.loadClientsAndServices();
+  }
+
+  printBill() {
+    this.closeActionMenu();
+    const printContent = document.querySelector('.drawer-panel')?.cloneNode(true) as HTMLElement;
+    if (!printContent) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const styles = Array.from(document.styleSheets).map(sheet => {
+      try { return Array.from(sheet.cssRules || []).map(r => r.cssText).join(''); }
+      catch(e) { return ''; }
+    }).join('');
+    win.document.write(`<html><head><title>Bill - ${this.drawerBooking?.client?.fullName || 'Booking'}</title><style>${styles} body{padding:24px} .action-menu-wrapper,.action-menu-trigger,.close-btn,.sw-buttons,.status-workflow,.drawer-actions,.bill-actions{display:none!important}</style></head><body>${printContent.innerHTML}</body></html>`);
+    win.document.close();
+    win.print();
+  }
+
+  viewClientProfile() {
+    if (!this.drawerBooking?.clientId) return;
+    this.closeDrawer();
+    window.open(`/app/clients?clientId=${this.drawerBooking.clientId}`, '_blank');
+  }
+
+  openDrawer(b: CalendarBooking) {
+    if (this.dragLockClick) { this.dragLockClick = false; return; }
+    this.drawerBooking = b;
+    this.drawerBusy = false;
+    this.drawerError = '';
+    this.showReschedule = false;
+    this.showCancelForm = false;
+    this.showEditForm = false;
+    this.showConfirmAction = false;
+    this.showAddPayment = false;
+    this.showAddTip = false;
+    this.showActionMenu = false;
+    this.cancelReason = '';
+    this.cancelCustomReason = '';
+    this.viewBillActiveTab = 'details';
+    this.loadViewBillData(b);
+  }
+
+  private loadViewBillData(b: CalendarBooking) {
+    this.viewBillLoading = true;
+    this.viewBillData = null;
+    const svcTotal = (b.services || []).reduce((sum, s) => sum + (s.price || 0), 0);
+    const baseData: ViewBillData = {
+      booking: b,
+      payments: [],
+      subtotal: svcTotal,
+      discount: 0,
+      tax: 0,
+      taxRate: 0,
+      total: b.totalAmount || svcTotal,
+      paid: 0,
+      due: b.totalAmount || svcTotal,
+      paymentMethod: '',
+      activityLog: this.buildActivityLog(b),
+    };
+    const paymentObs = b.id ? this.api.getBookingPayments(b.id) : null;
+    const clientObs = b.clientId ? this.api.getClientDetail(b.clientId) : null;
+    if (paymentObs || clientObs) {
+      const obs: any[] = [];
+      if (paymentObs) obs.push(paymentObs);
+      if (clientObs) obs.push(clientObs);
+      forkJoin(obs).subscribe({
+        next: (results: any[]) => {
+          let payments: PaymentInfo[] = [];
+          let clientDetail: ClientDetail | undefined;
+          if (paymentObs) {
+            payments = results[0] || [];
+            baseData.payments = payments;
+            const paid = payments.filter(p => p.status === 'PAID' || p.status === 'COMPLETED').reduce((s, p) => s + (p.amount || 0), 0);
+            baseData.paid = paid;
+            baseData.due = Math.max(0, baseData.total - paid);
+            const lastPay = payments.find(p => p.status === 'PAID' || p.status === 'COMPLETED');
+            if (lastPay) baseData.paymentMethod = lastPay.method;
+          }
+          if (clientObs) {
+            const ci = clientObs ? results[paymentObs ? 1 : 0] : null;
+            if (ci) {
+              baseData.clientDetail = ci;
+            }
+          }
+          this.viewBillData = baseData;
+          this.viewBillLoading = false;
+        },
+        error: () => {
+          this.viewBillData = baseData;
+          this.viewBillLoading = false;
+        },
+      });
+    } else {
+      this.viewBillData = baseData;
+      this.viewBillLoading = false;
+    }
+  }
+
+  private buildActivityLog(b: CalendarBooking): ActivityLogEntry[] {
+    const entries: ActivityLogEntry[] = [];
+    const now = new Date().toISOString();
+    if (b.createdAt) entries.push({ action: 'Booking created', timestamp: b.createdAt, details: `Status: ${b.status}` });
+    if (b.updatedAt && b.updatedAt !== b.createdAt) entries.push({ action: 'Booking updated', timestamp: b.updatedAt });
+    if (b.status === 'COMPLETED') entries.push({ action: 'Booking completed', timestamp: b.updatedAt || b.createdAt || now });
+    if (b.status === 'CANCELLED') entries.push({ action: 'Booking cancelled', timestamp: b.updatedAt || b.createdAt || now });
+    if (b.status === 'CHECKED_IN') entries.push({ action: 'Client arrived', timestamp: b.updatedAt || b.createdAt || now });
+    if (b.status === 'NO_SHOW') entries.push({ action: 'Client did not arrive', timestamp: b.updatedAt || b.createdAt || now });
+    return entries;
+  }
+
+  onClientSearch() {
+    this.clientSearchSubject.next(this.clientSearchQuery);
+  }
+
+  get selectedClientName(): string {
+    const c = this.clientList.find(c => c.id === this.createForm.clientId);
+    return c ? (c.fullName || c.name || '') : '';
+  }
+
+  selectClient(c: ClientOption) {
+    this.createForm.clientId = c.id;
+    this.clientSearchQuery = '';
+    this.filteredClientList = [];
+  }
+
+  clearSelectedClient() {
+    this.createForm.clientId = '';
+    this.selectedClientName;
+  }
+
+  openWalkinFromCreate() {
+    this.closeCreate();
+    this.openWalkin();
+  }
+
+  loadClientsAndServices() {
+    this.http.get<ClientOption[]>('http://localhost:3000/api/clients').subscribe({
+      next: (d) => { this.clientList = Array.isArray(d) ? d : []; this.filteredClientList = this.clientList; },
+    });
+    this.http.get<ServiceOption[]>('http://localhost:3000/api/services').subscribe({
+      next: (d) => this.serviceList = Array.isArray(d) ? d : [],
+    });
+    this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
+      next: (d) => this.branchList = Array.isArray(d) ? d : [],
+    });
   }
 }

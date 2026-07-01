@@ -10,6 +10,8 @@ import {
   AiOptimization,
   CalendarQueryParams,
   CancelBookingPayload,
+  PaymentInfo,
+  ClientDetail,
 } from './calendar.models';
 
 @Injectable({ providedIn: 'root' })
@@ -60,5 +62,17 @@ export class CalendarService {
 
   getAiOptimizeDay(query: CalendarQueryParams): Observable<AiOptimization> {
     return this.http.get<AiOptimization>(`${this.aiBase}/optimize-day`, { params: query as any });
+  }
+
+  getBookingPayments(bookingId: string): Observable<PaymentInfo[]> {
+    return this.http.get<PaymentInfo[]>(`http://localhost:3000/api/payments`, { params: { bookingId } as any });
+  }
+
+  getClientDetail(clientId: string): Observable<ClientDetail> {
+    return this.http.get<ClientDetail>(`http://localhost:3000/api/clients/${clientId}`);
+  }
+
+  addPayment(bookingId: string, body: { amount: number; method: string }): Observable<any> {
+    return this.http.post(`http://localhost:3000/api/payments/mark-paid`, { bookingId, ...body });
   }
 }
