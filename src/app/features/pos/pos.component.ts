@@ -1210,6 +1210,7 @@ export class PosComponent {
 
     const items = this.cart.map((item) => ({
       serviceId: item.serviceId || null,
+      productId: item.productId || null,
       name: String(item.name || 'Item').trim(),
       quantity: this.safeQuantity(item.quantity),
       unitPrice: Number(item.unitPrice) || 0,
@@ -1219,11 +1220,11 @@ export class PosComponent {
     const tax = this.taxAmount();
 
     if (discount > 0) {
-      items.push({ serviceId: null, name: 'Discount', quantity: 1, unitPrice: -discount });
+      items.push({ serviceId: null, productId: null, name: 'Discount', quantity: 1, unitPrice: -discount });
     }
 
     if (tax > 0) {
-      items.push({ serviceId: null, name: 'Tax', quantity: 1, unitPrice: tax });
+      items.push({ serviceId: null, productId: null, name: 'Tax', quantity: 1, unitPrice: tax });
     }
 
     this.api.checkout({

@@ -16,6 +16,7 @@ export interface PosSaleItem {
   id: string;
   saleId: string;
   serviceId: string | null;
+  productId: string | null;
   name: string;
   quantity: number;
   unitPrice: number;
