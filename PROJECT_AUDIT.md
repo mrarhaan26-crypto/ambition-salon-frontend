@@ -394,7 +394,7 @@ Largest code hotspots by line count:
 
 ### Phase 16.1 - Stabilize Project Shape
 
-- Decide whether root `src/modules` is obsolete; if yes, remove it in a dedicated cleanup after approval.
+- [x] Decide whether root `src/modules` is obsolete; if yes, remove it in a dedicated cleanup after approval.
 - Remove or archive `Backend_NestJS/package.json.bak` after approval.
 - Normalize formatting for one-line/minified TypeScript files.
 - Document canonical app roots:
