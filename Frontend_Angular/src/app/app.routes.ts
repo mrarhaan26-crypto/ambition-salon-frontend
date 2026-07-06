@@ -18,7 +18,7 @@ import { ServicesComponent } from './features/services/services.component';
 import { PosComponent } from './features/pos/pos.component';
 import { InventoryComponent } from './features/inventory/inventory.component';
 import { ReportsComponent } from './features/reports/reports.component';
-import { CalendarComponent } from './features/calendar/calendar.component';
+import { CalendarShellComponent } from './features/calendar/calendar-shell.component';
 import { BookingsComponent } from './features/bookings/bookings.component';
 import { MarketingComponent } from './features/marketing/marketing.component';
 import { SettingsComponent } from './features/settings/settings.component';
@@ -68,7 +68,7 @@ const appModuleRoutes: Routes = [
   { path: 'pos', component: PosComponent },
   { path: 'inventory', component: InventoryComponent },
   { path: 'reports', component: ReportsComponent },
-  { path: 'calendar', component: CalendarComponent },
+  { path: 'calendar', component: CalendarShellComponent },
   { path: 'bookings', component: BookingsComponent },
   { path: 'marketing', component: MarketingComponent },
   { path: 'settings', component: SettingsComponent },
