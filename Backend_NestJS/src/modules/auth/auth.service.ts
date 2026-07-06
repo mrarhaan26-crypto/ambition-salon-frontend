@@ -22,7 +22,7 @@ export class AuthService {
   }
 
   async register(body: any) {
-    const { name, fullName, email, password, role } = body;
+    const { name, fullName, email, password } = body;
 
     const finalFullName = fullName || name;
 
@@ -45,7 +45,7 @@ export class AuthService {
         fullName: finalFullName,
         email,
         passwordHash,
-        role: role || 'OWNER',
+        role: 'OWNER',
       },
     });
 
