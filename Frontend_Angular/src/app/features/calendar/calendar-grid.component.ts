@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { CalendarView } from './calendar.constants';
 import { CalendarDayViewComponent } from './calendar-day-view.component';
 import { CalendarWeekViewComponent } from './calendar-week-view.component';
 import { CalendarMonthViewComponent } from './calendar-month-view.component';
+import type { CalendarBooking } from './calendar.models';
 
 @Component({
   selector: 'app-calendar-grid',
@@ -26,16 +27,35 @@ import { CalendarMonthViewComponent } from './calendar-month-view.component';
         </div>
       </div>
 
-      <div class="empty-state" *ngIf="!loading && empty" role="status" aria-label="No calendar data">
+      <div class="empty-state" *ngIf="!loading && empty" role="status" aria-label="No appointments">
         <div class="empty-icon" aria-hidden="true">&#128197;</div>
-        <h3 class="empty-title">No Appointments Yet</h3>
-        <p class="empty-desc">Your calendar is ready. Appointments will appear here once the booking engine is connected.</p>
+        <h3 class="empty-title">No Appointments</h3>
+        <p class="empty-desc">There are no appointments for this period. Click a time slot to create one, or adjust your filters.</p>
       </div>
 
-      <div class="view-container" *ngIf="!loading && !empty" [style.display]="view === 'day' ? 'block' : view === 'week' ? 'block' : 'block'">
-        <app-calendar-day-view *ngIf="view === 'day'" [currentDate]="currentDate"></app-calendar-day-view>
-        <app-calendar-week-view *ngIf="view === 'week'" [currentDate]="currentDate"></app-calendar-week-view>
-        <app-calendar-month-view *ngIf="view === 'month'" [currentDate]="currentDate"></app-calendar-month-view>
+      <div class="view-container" *ngIf="!loading && !empty">
+        <app-calendar-day-view
+          *ngIf="view === 'day'"
+          [currentDate]="currentDate"
+          [appointments]="appointments"
+          [staffColorMap]="staffColorMap"
+          (appointmentClick)="appointmentClick.emit($event)"
+          (slotClick)="slotClick.emit($event)"
+        ></app-calendar-day-view>
+        <app-calendar-week-view
+          *ngIf="view === 'week'"
+          [currentDate]="currentDate"
+          [appointments]="appointments"
+          [staffColorMap]="staffColorMap"
+          (appointmentClick)="appointmentClick.emit($event)"
+          (dayClick)="dayClick.emit($event)"
+        ></app-calendar-week-view>
+        <app-calendar-month-view
+          *ngIf="view === 'month'"
+          [currentDate]="currentDate"
+          [appointments]="appointments"
+          (daySelect)="daySelect.emit($event)"
+        ></app-calendar-month-view>
       </div>
     </div>
   `,
@@ -43,8 +63,6 @@ import { CalendarMonthViewComponent } from './calendar-month-view.component';
     .calendar-grid { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 16px; border: 1px solid var(--border, #e5e7eb); margin: 0; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
     .view-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     app-calendar-day-view, app-calendar-week-view, app-calendar-month-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-    /* Loading Skeleton */
     .loading-skeleton { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
     .sk-header { display: flex; flex-direction: column; gap: 8px; }
     .sk-line { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--soft, #f7f7f7) 25%, #e8e8e8 50%, var(--soft, #f7f7f7) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
@@ -55,8 +73,6 @@ import { CalendarMonthViewComponent } from './calendar-month-view.component';
     .sk-cell { aspect-ratio: 1; }
     .sk-block { width: 100%; height: 100%; border-radius: 8px; background: linear-gradient(90deg, var(--soft, #f7f7f7) 25%, #e8e8e8 50%, var(--soft, #f7f7f7) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-    /* Empty State */
     .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; gap: 12px; text-align: center; }
     .empty-icon { font-size: 48px; opacity: 0.3; }
     .empty-title { font-size: 18px; font-weight: 700; margin: 0; color: var(--text, #111); }
@@ -68,4 +84,10 @@ export class CalendarGridComponent {
   @Input() currentDate: Date = new Date();
   @Input() loading = false;
   @Input() empty = true;
+  @Input() appointments: CalendarBooking[] = [];
+  @Input() staffColorMap: Record<string, string> = {};
+  @Output() appointmentClick = new EventEmitter<string>();
+  @Output() slotClick = new EventEmitter<{ date: Date; hour: number }>();
+  @Output() daySelect = new EventEmitter<Date>();
+  @Output() dayClick = new EventEmitter<Date>();
 }

@@ -1,12 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
-import { BUSINESS_HOURS_START, BUSINESS_HOURS_END } from './calendar.constants';
-import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import { BUSINESS_HOURS_START, BUSINESS_HOURS_END, HOUR_HEIGHT_PX } from './calendar.constants';
+import { isToday, getHoursArray, formatHour, buildAppointmentCardData } from './calendar.utils';
+import type { CalendarBooking } from './calendar.models';
+import type { AppointmentCardData } from './calendar-appointment.models';
+import { AppointmentCardComponent } from './appointment-card.component';
 
 @Component({
   selector: 'app-calendar-day-view',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppointmentCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="day-view" role="grid" aria-label="Day view for {{ currentDate | date:'fullDate' }}">
@@ -18,6 +21,7 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
             [class.today-num]="isTodayFn(currentDate)"
           >{{ currentDate.getDate() }}</span>
           <span class="dv-day-month">{{ currentDate | date:'MMMM yyyy' }}</span>
+          <span class="dv-count" *ngIf="appointments.length > 0">{{ appointments.length }} appointment{{ appointments.length !== 1 ? 's' : '' }}</span>
         </div>
         <div class="dv-bh" *ngIf="isTodayFn(currentDate)">
           <span class="dv-bh-dot"></span>
@@ -39,10 +43,24 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
               class="dv-hour-slot"
               [class.business-hours]="hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END"
               [class.dv-hour-alt]="hi % 2 === 1"
+              (click)="onSlotClick(hour)"
+              [attr.aria-label]="'Time slot: ' + formatHourFn(hour)"
             >
               <div class="dv-hour-line"></div>
               <div class="dv-half-line"></div>
             </div>
+
+            <div class="dv-appointments-layer">
+              <ng-container *ngFor="let apt of appointmentCards; trackBy: trackById">
+                <app-appointment-card
+                  [data]="apt"
+                  [top]="apt.top"
+                  [height]="apt.height"
+                  (cardClick)="onAppointmentClick($event)"
+                ></app-appointment-card>
+              </ng-container>
+            </div>
+
             <div class="dv-current-time" *ngIf="isTodayFn(currentDate)" [style.top.px]="getCurrentTimePosition()">
               <span class="dv-now-dot" aria-label="Current time indicator"></span>
               <span class="dv-now-line"></span>
@@ -55,15 +73,9 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
   styles: [`
     .day-view { display: flex; flex-direction: column; height: 100%; }
     .dv-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border, #e5e7eb);
-      background: #fff;
-      position: sticky;
-      top: 0;
-      z-index: 2;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border, #e5e7eb);
+      background: #fff; position: sticky; top: 0; z-index: 2;
     }
     .dv-header-info { display: flex; align-items: center; gap: 12px; }
     .dv-day-name { font-size: 14px; color: var(--muted, #6b7280); font-weight: 500; }
@@ -73,6 +85,7 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
       border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     }
     .dv-day-month { font-size: 14px; color: var(--muted, #6b7280); }
+    .dv-count { font-size: 12px; font-weight: 600; color: var(--muted, #6b7280); background: var(--soft, #f7f7f7); padding: 4px 10px; border-radius: 12px; }
     .dv-bh { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted, #6b7280); }
     .dv-bh-dot { width: 6px; height: 6px; background: #50C878; border-radius: 50%; }
     .dv-body { display: flex; flex: 1; overflow-y: auto; }
@@ -82,10 +95,13 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
     .dv-grid { flex: 1; position: relative; }
     .dv-day-col { position: relative; height: 100%; }
     .dv-day-col.today { background: #f0f7ff; }
-    .dv-hour-slot { height: 60px; position: relative; }
+    .dv-hour-slot { height: 60px; position: relative; cursor: pointer; }
+    .dv-hour-slot:hover { background: rgba(0,0,0,0.02); }
     .dv-hour-slot.dv-hour-alt { background: rgba(0,0,0,0.01); }
     .dv-hour-line { position: absolute; top: 0; left: 0; right: 0; border-top: 1px solid var(--border, #e5e7eb); }
     .dv-half-line { position: absolute; top: 30px; left: 0; right: 0; border-top: 1px dashed var(--border, #e5e7eb); opacity: 0.5; }
+    .dv-appointments-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+    .dv-appointments-layer app-appointment-card { pointer-events: auto; }
     .dv-current-time { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
     .dv-now-dot {
       position: absolute; left: -5px; top: -5px; width: 10px; height: 10px;
@@ -97,20 +113,37 @@ import { isToday, isSameDay, getHoursArray, formatHour } from './calendar.utils'
 })
 export class CalendarDayViewComponent {
   @Input() currentDate: Date = new Date();
+  @Input() appointments: CalendarBooking[] = [];
+  @Input() staffColorMap: Record<string, string> = {};
+  @Output() appointmentClick = new EventEmitter<string>();
+  @Output() slotClick = new EventEmitter<{ date: Date; hour: number }>();
 
   BUSINESS_HOURS_START = BUSINESS_HOURS_START;
   BUSINESS_HOURS_END = BUSINESS_HOURS_END;
   hours = getHoursArray(0, 24);
 
+  get appointmentCards(): (AppointmentCardData & { top: number; height: number })[] {
+    return this.appointments.map(b => buildAppointmentCardData(b, this.staffColorMap));
+  }
+
+  trackById(_index: number, item: AppointmentCardData): string { return item.id; }
+
   isTodayFn(d: Date): boolean { return isToday(d); }
 
-  formatHourFn(hour: number): string {
-    return formatHour(hour);
-  }
+  formatHourFn(hour: number): string { return formatHour(hour); }
 
   getCurrentTimePosition(): number {
     const now = new Date();
-    const minutes = now.getHours() * 60 + now.getMinutes();
-    return (minutes / 60) * 60;
+    return (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_HEIGHT_PX;
   }
+
+  onAppointmentClick(id: string): void {
+    this.appointmentClick.emit(id);
+  }
+
+  onSlotClick(hour: number): void {
+    this.slotClick.emit({ date: this.currentDate, hour });
+  }
+
+
 }
