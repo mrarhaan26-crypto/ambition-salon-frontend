@@ -90,6 +90,7 @@ import type { SidebarStaff } from './calendar-sidebar.component';
       [defaultTime]="dialogDefaultTime"
       [defaultStaffId]="dialogDefaultStaffId"
       [defaultBranchId]="dialogDefaultBranchId"
+      [appointments]="allAppointments"
       (save)="onDialogSave($event)"
       (delete)="onDialogDelete($event)"
       (close)="closeDialog()"
@@ -178,6 +179,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   private cleanupFns: (() => void)[] = [];
   private allAppointments: CalendarBooking[] = [];
   private activeStaffFilter: string[] = [];
+  private branches: { id: string; name?: string; city?: string }[] = [];
 
   ngOnInit(): void {
     this.subs.push(
@@ -276,6 +278,14 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   }
 
   private loadStaffColors(): void {
+    this.bookingsService.getBranches().subscribe({
+      next: (branches) => {
+        this.branches = branches || [];
+        this.dialogDefaultBranchId = this.branches[0]?.id || '';
+      },
+      error: () => { this.branches = []; },
+    });
+
     this.bookingsService.getStaff().subscribe({
       next: (staff) => {
         const colors = ['#4A90D9', '#50C878', '#E57373', '#FFB74D', '#9575CD', '#26A69A', '#F06292', '#A1887F', '#4DB6AC', '#7986CB'];
@@ -400,7 +410,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.dialogDefaultDate = dateStr;
     this.dialogDefaultTime = `${hourStr}:00`;
     this.dialogDefaultStaffId = '';
-    this.dialogDefaultBranchId = '';
+    this.dialogDefaultBranchId = this.dialogDefaultBranchId || this.branches[0]?.id || '';
     this.selectedBooking = null;
     this.dialogVisible = true;
   }
@@ -411,7 +421,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.dialogDefaultDate = dateStr;
     this.dialogDefaultTime = `${hourStr}:00`;
     this.dialogDefaultStaffId = event.staffId;
-    this.dialogDefaultBranchId = '';
+    this.dialogDefaultBranchId = this.dialogDefaultBranchId || this.branches[0]?.id || '';
     this.selectedBooking = null;
     this.dialogVisible = true;
   }
@@ -449,6 +459,12 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
       });
     } else {
       const { data } = event;
+      const tempId = `temp-${Date.now()}`;
+      const optimisticBooking = this.toOptimisticBooking(tempId, data);
+      this.allAppointments = [...this.allAppointments, optimisticBooking];
+      this.applyFilters();
+      this.closeDialog();
+
       const payload = {
         clientId: data.clientId,
         staffId: data.staffId,
@@ -461,9 +477,16 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
         resourceId: data.resourceId || undefined,
       };
       this.bookingsService.create(payload as any).subscribe({
-        next: () => {
-          this.closeDialog();
-          this.loadAppointments();
+        next: (created) => {
+          this.allAppointments = this.allAppointments.map((booking) =>
+            booking.id === tempId ? created as any : booking
+          );
+          this.applyFilters();
+        },
+        error: (err) => {
+          console.error('[CalendarShell] create failed:', err);
+          this.allAppointments = this.allAppointments.filter((booking) => booking.id !== tempId);
+          this.applyFilters();
         },
       });
     }
@@ -483,5 +506,32 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.selectedBooking = null;
     this.dialogDefaultDate = '';
     this.dialogDefaultTime = '';
+  }
+
+  private toOptimisticBooking(id: string, data: DialogAppointmentData): CalendarBooking {
+    return {
+      id,
+      title: data.title || data.services.map(service => service.name).join(', ') || 'Appointment',
+      status: data.status,
+      startTime: data.startTime,
+      endTime: data.endTime || this.addMinutes(data.startTime, data.durationMin || 0),
+      clientId: data.clientId,
+      staffId: data.staffId,
+      branchId: data.branchId,
+      resourceId: data.resourceId,
+      notes: data.notes,
+      totalAmount: data.estimatedTotal,
+      client: data.clientName ? { id: data.clientId, fullName: data.clientName } : undefined,
+      staff: data.staffName ? { id: data.staffId, fullName: data.staffName } : undefined,
+      branch: data.branchName ? { id: data.branchId, name: data.branchName } : undefined,
+      services: data.services,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private addMinutes(startTime: string, minutes: number): string {
+    const start = new Date(startTime);
+    return new Date(start.getTime() + Math.max(0, minutes) * 60000).toISOString();
   }
 }

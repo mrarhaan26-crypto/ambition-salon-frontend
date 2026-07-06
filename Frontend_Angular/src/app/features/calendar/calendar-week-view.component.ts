@@ -47,7 +47,13 @@ import { getDurationMinutes } from './calendar.utils';
             [class.weekend]="day.getDay() === 0 || day.getDay() === 6"
             (click)="onDayColClick(day)"
           >
-            <div *ngFor="let hour of hours" class="wv-hour-cell" [class.business-hours]="hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END">
+            <div
+              *ngFor="let hour of hours"
+              class="wv-hour-cell"
+              [class.business-hours]="hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END"
+              (click)="onSlotClick(day, hour, $event)"
+              [attr.aria-label]="'Time slot: ' + (day | date:'fullDate') + ' ' + formatHourFn(hour)"
+            >
               <div class="wv-hour-line"></div>
             </div>
 
@@ -129,6 +135,7 @@ export class CalendarWeekViewComponent implements OnInit, OnDestroy {
   @Input() appointments: CalendarBooking[] = [];
   @Input() staffColorMap: Record<string, string> = {};
   @Output() appointmentClick = new EventEmitter<string>();
+  @Output() slotClick = new EventEmitter<{ date: Date; hour: number }>();
   @Output() dayClick = new EventEmitter<Date>();
 
   @ViewChild('wvBodyRef') bodyRef?: ElementRef<HTMLElement>;
@@ -183,6 +190,14 @@ export class CalendarWeekViewComponent implements OnInit, OnDestroy {
   onDayColClick(day: Date): void {
     if (this.dragEngine.stateService.isActive) return;
     this.dayClick.emit(day);
+  }
+
+  onSlotClick(day: Date, hour: number, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.dragEngine.stateService.isActive) return;
+    const date = new Date(day);
+    date.setHours(hour, 0, 0, 0);
+    this.slotClick.emit({ date, hour });
   }
 
   onCardDragStart(event: { appointmentId: string; clientX: number; clientY: number }, day: Date): void {

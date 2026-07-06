@@ -27,13 +27,13 @@ import type { CalendarBooking } from './calendar.models';
         </div>
       </div>
 
-      <div class="empty-state" *ngIf="!loading && empty" role="status" aria-label="No appointments">
+      <div class="empty-state" *ngIf="!loading && empty && view === 'month'" role="status" aria-label="No appointments">
         <div class="empty-icon" aria-hidden="true">&#128197;</div>
         <h3 class="empty-title">No Appointments</h3>
         <p class="empty-desc">There are no appointments for this period. Click a time slot to create one, or adjust your filters.</p>
       </div>
 
-      <div class="view-container" *ngIf="!loading && !empty">
+      <div class="view-container" *ngIf="!loading && (!empty || view !== 'month')">
         <app-calendar-day-view
           *ngIf="view === 'day'"
           [currentDate]="currentDate"
@@ -48,6 +48,7 @@ import type { CalendarBooking } from './calendar.models';
           [appointments]="appointments"
           [staffColorMap]="staffColorMap"
           (appointmentClick)="appointmentClick.emit($event)"
+          (slotClick)="slotClick.emit($event)"
           (dayClick)="dayClick.emit($event)"
         ></app-calendar-week-view>
         <app-calendar-month-view
