@@ -15,6 +15,9 @@ import { getDurationMinutes } from './calendar.utils';
       [class]="'status-' + (data.status || '').toLowerCase()"
       [class.vip]="data.isVIP"
       [class.has-notes]="data.notes"
+      [class.apt-dragging]="dragging"
+      [class.apt-resizing-top]="resizingEdge === 'top'"
+      [class.apt-resizing-bottom]="resizingEdge === 'bottom'"
       [style.top.px]="top"
       [style.height.px]="height"
       [style.left]="left"
@@ -22,10 +25,22 @@ import { getDurationMinutes } from './calendar.utils';
       tabindex="0"
       role="button"
       [attr.aria-label]="getAriaLabel()"
+      [attr.aria-grabbed]="dragging"
       (click)="onClick()"
       (keydown.enter)="onClick()"
       (keydown.space)="onClick(); $event.preventDefault()"
+      (pointerdown)="onPointerDown($event)"
     >
+      <div class="apt-resize-handle apt-resize-top" 
+        (pointerdown)="onResizeStart($event, 'top'); $event.stopPropagation()"
+        [attr.aria-label]="'Resize top edge'"
+        role="separator"
+        tabindex="0"
+        aria-orientation="horizontal"
+        (keydown.enter)="onResizeStart($event, 'top')"
+        (keydown.space)="onResizeStart($event, 'top'); $event.preventDefault()"
+      ></div>
+
       <div class="apt-color-strip" [style.background]="data.staffColor || getStatusColor()" aria-hidden="true"></div>
 
       <div class="apt-body">
@@ -63,6 +78,16 @@ import { getDurationMinutes } from './calendar.utils';
           </span>
         </div>
       </div>
+
+      <div class="apt-resize-handle apt-resize-bottom"
+        (pointerdown)="onResizeStart($event, 'bottom'); $event.stopPropagation()"
+        [attr.aria-label]="'Resize bottom edge'"
+        role="separator"
+        tabindex="0"
+        aria-orientation="horizontal"
+        (keydown.enter)="onResizeStart($event, 'bottom')"
+        (keydown.space)="onResizeStart($event, 'bottom'); $event.preventDefault()"
+      ></div>
     </div>
   `,
   styles: [`
@@ -74,14 +99,16 @@ import { getDurationMinutes } from './calendar.utils';
       background: #fff;
       border: 1px solid var(--border, #e5e7eb);
       border-left: none;
-      overflow: hidden;
-      cursor: pointer;
+      overflow: visible;
+      cursor: grab;
       transition: box-shadow 0.15s, transform 0.1s;
       z-index: 1;
       display: flex;
       min-height: 24px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      touch-action: none;
     }
+    .apt-card:active { cursor: grabbing; }
     .apt-card:hover {
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       z-index: 3;
@@ -90,6 +117,30 @@ import { getDurationMinutes } from './calendar.utils';
       outline: 2px solid var(--black, #0b0b0b);
       outline-offset: 2px;
       z-index: 4;
+    }
+    .apt-card.apt-dragging {
+      opacity: 0.4;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .apt-resize-handle {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 6px;
+      z-index: 2;
+      cursor: ns-resize;
+      touch-action: none;
+    }
+    .apt-resize-handle:focus-visible {
+      outline: 2px solid var(--black, #0b0b0b);
+      outline-offset: 1px;
+    }
+    .apt-resize-top { top: -2px; }
+    .apt-resize-bottom { bottom: -2px; }
+    .apt-card.apt-resizing-top .apt-resize-top,
+    .apt-card.apt-resizing-bottom .apt-resize-bottom {
+      background: rgba(99,102,241,0.2);
     }
     .apt-color-strip {
       width: 4px;
@@ -233,10 +284,36 @@ export class AppointmentCardComponent {
   @Input() height = 0;
   @Input() left = '4px';
   @Input() width = 'auto';
+  @Input() dragging = false;
+  @Input() resizingEdge: 'top' | 'bottom' | null = null;
   @Output() cardClick = new EventEmitter<string>();
+  @Output() dragStart = new EventEmitter<{ appointmentId: string; clientX: number; clientY: number }>();
+  @Output() resizeStartEvent = new EventEmitter<{ appointmentId: string; edge: 'top' | 'bottom'; clientX: number; clientY: number }>();
 
   onClick(): void {
-    this.cardClick.emit(this.data.id);
+    if (!this.dragging) {
+      this.cardClick.emit(this.data.id);
+    }
+  }
+
+  onPointerDown(e: PointerEvent): void {
+    if (e.target instanceof HTMLElement && e.target.closest('.apt-resize-handle')) return;
+    this.dragStart.emit({
+      appointmentId: this.data.id,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+  }
+
+  onResizeStart(e: PointerEvent | KeyboardEvent, edge: 'top' | 'bottom'): void {
+    const clientX = 'clientX' in e ? e.clientX : 0;
+    const clientY = 'clientY' in e ? e.clientY : 0;
+    this.resizeStartEvent.emit({
+      appointmentId: this.data.id,
+      edge,
+      clientX,
+      clientY,
+    });
   }
 
   getAriaLabel(): string {
