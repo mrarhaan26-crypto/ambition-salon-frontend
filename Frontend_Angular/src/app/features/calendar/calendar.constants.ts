@@ -4,7 +4,7 @@ export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', '
 export const BUSINESS_HOURS_START = 9;
 export const BUSINESS_HOURS_END = 20;
 export const BUSINESS_HOURS = BUSINESS_HOURS_END - BUSINESS_HOURS_START;
-export const VIEWS = ['day', 'week', 'month'] as const;
+export const VIEWS = ['day', 'week', 'month', 'timeline'] as const;
 export type CalendarView = (typeof VIEWS)[number];
 
 export const APPOINTMENT_STATUSES = [

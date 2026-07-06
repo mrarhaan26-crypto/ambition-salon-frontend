@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ChangeDetectionStrategy, inject, OnInit, OnDestroy } from '@angular/core';
-import { Subject, switchMap, of, catchError, finalize, Subscription } from 'rxjs';
+import { Subject, switchMap, of, catchError, finalize, Subscription, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { CalendarView } from './calendar.constants';
 import { CalendarService } from './calendar.service';
 import type { CalendarBooking } from './calendar.models';
@@ -10,11 +11,14 @@ import { CalendarSidebarComponent } from './calendar-sidebar.component';
 import { CalendarGridComponent } from './calendar-grid.component';
 import { AppointmentDialogComponent } from './appointment-dialog.component';
 import { BookingsService } from '../bookings/bookings.service';
+import { StaffTimelineComponent } from './calendar-staff-timeline/calendar-staff-timeline.component';
+import { StaffTimelineService } from './calendar-staff-timeline/calendar-staff-timeline.service';
+import type { StaffTimelineViewData } from './calendar-staff-timeline/calendar-staff-timeline.models';
 
 @Component({
   selector: 'app-calendar-shell',
   standalone: true,
-  imports: [CommonModule, CalendarToolbarComponent, CalendarSidebarComponent, CalendarGridComponent, AppointmentDialogComponent],
+  imports: [CommonModule, CalendarToolbarComponent, CalendarSidebarComponent, CalendarGridComponent, AppointmentDialogComponent, StaffTimelineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="calendar-page" role="application" aria-label="Calendar">
@@ -42,6 +46,7 @@ import { BookingsService } from '../bookings/bookings.service';
         </app-calendar-sidebar>
 
         <app-calendar-grid
+          *ngIf="view !== 'timeline'"
           [view]="view"
           [currentDate]="currentDate"
           [loading]="loading"
@@ -54,6 +59,16 @@ import { BookingsService } from '../bookings/bookings.service';
           (dayClick)="onDaySelect($event)"
         >
         </app-calendar-grid>
+
+        <ng-container *ngIf="view === 'timeline'">
+          <app-staff-timeline
+            [date]="timelineDate"
+            [loading]="timelineLoading"
+            [data]="timelineData"
+            (appointmentClick)="onAppointmentClick($event)"
+            (slotClick)="onTimelineSlotClick($event)"
+          ></app-staff-timeline>
+        </ng-container>
       </div>
     </section>
 
@@ -91,6 +106,13 @@ import { BookingsService } from '../bookings/bookings.service';
       overflow: hidden;
       padding: 16px;
     }
+    app-staff-timeline {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 16px;
+    }
     app-calendar-sidebar {
       flex-shrink: 0;
     }
@@ -102,12 +124,14 @@ import { BookingsService } from '../bookings/bookings.service';
     }
     @media (max-width: 768px) {
       app-calendar-grid { padding: 8px; }
+      app-staff-timeline { padding: 8px; }
     }
   `]
 })
 export class CalendarShellComponent implements OnInit, OnDestroy {
   private calendarService = inject(CalendarService);
   private bookingsService = inject(BookingsService);
+  private staffTimelineService = inject(StaffTimelineService);
 
   view: CalendarView = 'month';
   currentDate = new Date();
@@ -116,6 +140,14 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   appointments: CalendarBooking[] = [];
   staffColorMap: Record<string, string> = {};
   searchQuery = '';
+
+  timelineLoading = false;
+  timelineData: StaffTimelineViewData = {
+    staffList: [], appointments: [], groups: [],
+    hours: [], currentTimePercent: 0, todayDate: '',
+    totalStaff: 0, totalAppointments: 0, filteredStaff: 0,
+  };
+  timelineDate = '';
 
   dialogVisible = false;
   selectedBooking: CalendarBooking | null = null;
@@ -131,6 +163,9 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.subs.push(
       this.refresh$.pipe(
         switchMap(() => {
+          if (this.view === 'timeline') {
+            return this.loadTimelineData();
+          }
           this.loading = true;
           return this.loadForCurrentView().pipe(
             catchError(() => of([] as CalendarBooking[])),
@@ -138,7 +173,9 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
           );
         }),
       ).subscribe(bookings => {
-        this.appointments = bookings;
+        if (this.view !== 'timeline') {
+          this.appointments = bookings as CalendarBooking[];
+        }
       })
     );
     this.loadStaffColors();
@@ -149,7 +186,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.subs.forEach(s => s.unsubscribe());
   }
 
-  private loadForCurrentView() {
+  private loadForCurrentView(): Observable<CalendarBooking[]> {
     const date = this.currentDate.toISOString().slice(0, 10);
     const params: Record<string, string> = { date };
     if (this.searchQuery) params['search'] = this.searchQuery;
@@ -159,6 +196,19 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
       return this.calendarService.getCalendarWeek({ ...params, startDate: weekStart });
     }
     return this.calendarService.getCalendarMonth(params);
+  }
+
+  private loadTimelineData(): Observable<CalendarBooking[]> {
+    this.timelineLoading = true;
+    const date = this.currentDate.toISOString().slice(0, 10);
+    this.timelineDate = date;
+
+    this.staffTimelineService.loadTimelineData(date).subscribe(data => {
+      this.timelineData = data;
+      this.timelineLoading = false;
+    });
+
+    return of([] as CalendarBooking[]);
   }
 
   private getWeekStart(date: Date): Date {
@@ -196,6 +246,8 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
       d.setDate(d.getDate() + direction);
     } else if (this.view === 'week') {
       d.setDate(d.getDate() + 7 * direction);
+    } else if (this.view === 'timeline') {
+      d.setDate(d.getDate() + direction);
     } else {
       d.setMonth(d.getMonth() + direction);
     }
@@ -233,6 +285,17 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.dialogDefaultDate = dateStr;
     this.dialogDefaultTime = `${hourStr}:00`;
     this.dialogDefaultStaffId = '';
+    this.dialogDefaultBranchId = '';
+    this.selectedBooking = null;
+    this.dialogVisible = true;
+  }
+
+  onTimelineSlotClick(event: { staffId: string; hour: number }): void {
+    const dateStr = this.currentDate.toISOString().slice(0, 10);
+    const hourStr = event.hour.toString().padStart(2, '0');
+    this.dialogDefaultDate = dateStr;
+    this.dialogDefaultTime = `${hourStr}:00`;
+    this.dialogDefaultStaffId = event.staffId;
     this.dialogDefaultBranchId = '';
     this.selectedBooking = null;
     this.dialogVisible = true;
