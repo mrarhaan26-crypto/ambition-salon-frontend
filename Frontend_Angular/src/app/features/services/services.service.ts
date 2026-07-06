@@ -2,11 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SalonService, ServiceCategory } from './services.models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ServicesService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/services';
+  private baseUrl = environment.apiUrl + '/services';
 
   getAll(query?: any): Observable<SalonService[]> {
     return this.http.get<SalonService[]>(this.baseUrl, { params: query });

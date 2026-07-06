@@ -2,11 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Notification, UnreadCount } from './notifications.models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/notifications';
+  private baseUrl = environment.apiUrl + '/notifications';
 
   getAll(params?: { read?: string; archived?: string }): Observable<Notification[]> {
     let httpParams = new HttpParams();

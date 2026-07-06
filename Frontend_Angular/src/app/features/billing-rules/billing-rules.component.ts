@@ -167,11 +167,11 @@ export class BillingRulesComponent {
   loadAll() {
     this.loading = true; this.error = '';
     this.api.getRules().subscribe({ next: (d) => { this.rules = d; this.loading = false; }, error: () => { this.error = 'Failed to load billing rules.'; this.loading = false; } });
-    this.api.getTaxes().subscribe({ next: (d) => this.taxes = d });
-    this.api.getDiscounts().subscribe({ next: (d) => this.discounts = d });
+    this.api.getTaxes().subscribe({ next: (d) => this.taxes = d, error: () => this.error = 'Failed to load taxes.' });
+    this.api.getDiscounts().subscribe({ next: (d) => this.discounts = d, error: () => this.error = 'Failed to load discounts.' });
   }
 
-  saveRules() { this.api.updateRules(this.rules).subscribe(); }
+  saveRules() { this.api.updateRules(this.rules).subscribe({ error: () => this.error = 'Failed to save billing rules.' }); }
   createTax() { this.api.createTax(this.taxForm).subscribe({ next: () => { this.showTaxForm = false; this.api.getTaxes().subscribe({ next: (d) => this.taxes = d }); } }); }
   toggleTax(t: any) { this.api.updateTax(t.id, { isActive: !t.isActive }).subscribe({ next: () => this.api.getTaxes().subscribe({ next: (d) => this.taxes = d }) }); }
   deleteTax(t: any) { if (confirm('Delete tax?')) this.api.removeTax(t.id).subscribe({ next: () => this.api.getTaxes().subscribe({ next: (d) => this.taxes = d }) }); }

@@ -3,6 +3,7 @@ import { Component, EventEmitter, inject, Input, OnInit, Output } from '@angular
 import { HttpClient } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import type { ClientProfile, ClientBookingItem, ClientPaymentItem } from './client-360.models';
+import { environment } from '../../../environments/environment';
 
 type C360Tab = 'overview' | 'sales' | 'appointments' | 'packages' | 'memberships' | 'wallet' | 'rewards' | 'notes' | 'documents' | 'treatments';
 
@@ -314,8 +315,8 @@ export class Client360Component implements OnInit {
     this.loadingAppointments = true;
     this.loadingPayments = true;
 
-    const profileObs = this.http.get<ClientProfile>(`http://localhost:3000/api/clients/${this.clientId}`);
-    const bookingsObs = this.http.get<ClientBookingItem[]>(`http://localhost:3000/api/bookings?clientId=${this.clientId}`);
+    const profileObs = this.http.get<ClientProfile>(`${environment.apiUrl}/clients/${this.clientId}`);
+    const bookingsObs = this.http.get<ClientBookingItem[]>(`${environment.apiUrl}/bookings?clientId=${this.clientId}`);
 
     forkJoin({ profile: profileObs, bookings: bookingsObs }).subscribe({
       next: (results) => {
@@ -332,7 +333,7 @@ export class Client360Component implements OnInit {
       },
     });
 
-    this.http.get<ClientPaymentItem[]>(`http://localhost:3000/api/payments?clientId=${this.clientId}`).subscribe({
+    this.http.get<ClientPaymentItem[]>(`${environment.apiUrl}/payments?clientId=${this.clientId}`).subscribe({
       next: (d: ClientPaymentItem[]) => { this.payments = Array.isArray(d) ? d : []; this.loadingPayments = false; },
       error: () => { this.loadingPayments = false; },
     });

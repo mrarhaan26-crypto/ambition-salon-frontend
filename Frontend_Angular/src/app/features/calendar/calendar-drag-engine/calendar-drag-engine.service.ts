@@ -53,7 +53,7 @@ export class DragEngineService {
   startDrag(target: DragTarget, clientX: number, clientY: number, inputType: 'mouse' | 'touch' | 'keyboard' | 'longpress' = 'mouse'): void {
     if (!this.adapter) return;
     const container = this.adapter.getContainer();
-    const pos = this.clientToPosition(clientX, clientY, container);
+    const pos = this.clientToPosition(clientX, clientY, container, new Date(target.startTime));
 
     this.state.startDrag({ target, inputType, origin: pos, current: pos });
     this.state.updateSnapped(target.startTime, target.endTime);
@@ -214,12 +214,12 @@ export class DragEngineService {
     if (!this.adapter) return;
 
     const container = this.adapter.getContainer();
-    const pos = this.clientToPosition(e.clientX, e.clientY, container);
+    const session = this.state.current;
+    const pos = this.clientToPosition(e.clientX, e.clientY, container, new Date(session.target.startTime));
 
     this.state.updatePosition(pos);
 
     const autoScrollDir = this.autoScroll.update(e.clientX, e.clientY);
-    const session = this.state.current;
 
     if (this.state.isResizing) {
       const snappedStart = session.resizeEdge === 'bottom' ? session.target.startTime : snapDate(pos.date).toISOString();
@@ -290,12 +290,12 @@ export class DragEngineService {
     });
   }
 
-  private clientToPosition(clientX: number, clientY: number, container: HTMLElement): DragPosition {
+  private clientToPosition(clientX: number, clientY: number, container: HTMLElement, baseDate?: Date): DragPosition {
     const rect = container.getBoundingClientRect();
     const relativeY = clientY - rect.top + container.scrollTop;
     const minutes = Math.max(0, (relativeY / 60) * 60);
     const hour = Math.floor(minutes / 60);
-    const date = new Date();
+    const date = baseDate ? new Date(baseDate) : new Date();
     date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
 
     return {

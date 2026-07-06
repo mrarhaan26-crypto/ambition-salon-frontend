@@ -70,13 +70,14 @@ export class CheckInEngineService {
       updatedAt: now.toISOString(),
     };
 
+    const checkInResult: CheckInResult = { entry, checkInType, isEarly, isLate, waitTimeMinutes: estimatedWaitMinutes };
     this.cache.setEntry(entry);
     this.lookupIndex.indexEntry(entry);
 
-    this.events.emit('queue:joined', { entry, checkInResult: result });
+    this.events.emit('queue:joined', { entry, checkInResult });
     this.events.emit('queue:checked_in', { entry });
 
-    return { entry, checkInType, isEarly, isLate, waitTimeMinutes: estimatedWaitMinutes };
+    return checkInResult;
   }
 
   walkInCheckIn(clientName: string, services: { name: string; durationMin: number; price: number }[], createdBy: string, staffId?: string): CheckInResult {

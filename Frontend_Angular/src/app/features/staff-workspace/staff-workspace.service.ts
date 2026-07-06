@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class StaffWorkspaceService {
   private http = inject(HttpClient);
-  private base = 'http://localhost:3000/api/staff-workspace';
+  private base = environment.apiUrl + '/staff-workspace';
 
   getFull(query?: any): Observable<any> { return this.http.get(this.base, { params: query }); }
   getToday(staffId: string): Observable<any> { return this.http.get(`${this.base}/today`, { params: { staffId } }); }

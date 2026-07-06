@@ -3,10 +3,11 @@ import { Component, inject, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { forkJoin, Subject } from 'rxjs';
+import { forkJoin, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BookingsService, BookingQueryParams } from './bookings.service';
 import { Client360Component } from '../client-360/client-360.component';
+import { environment } from '../../../environments/environment';
 import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingServiceFormLine, BookingStatus, ClientOption, StaffOption, BranchOption, ServiceOption, ViewBillData, PaymentInfo, ClientDetail, ActivityLogEntry, AddPaymentForm } from './bookings.models';
 
 @Component({
@@ -804,7 +805,7 @@ export class BookingsComponent implements OnDestroy {
     this.load();
     this.loadPickers();
 
-    this.route.queryParams.subscribe((params) => {
+    this.queryParamSub = this.route.queryParams.subscribe((params) => {
       const clientId = params['clientId'];
       if (clientId) {
         this.filterClientId = clientId;
@@ -829,10 +830,10 @@ export class BookingsComponent implements OnDestroy {
   }
 
   loadPickers() {
-    this.api.getClients().subscribe({ next: (d) => this.clients = d });
-    this.api.getStaff().subscribe({ next: (d) => this.staffList = d });
-    this.api.getBranches().subscribe({ next: (d) => this.branches = d });
-    this.api.getServices().subscribe({ next: (d) => this.catalogServices = d });
+    this.api.getClients().subscribe({ next: (d) => this.clients = d, error: () => {} });
+    this.api.getStaff().subscribe({ next: (d) => this.staffList = d, error: () => {} });
+    this.api.getBranches().subscribe({ next: (d) => this.branches = d, error: () => {} });
+    this.api.getServices().subscribe({ next: (d) => this.catalogServices = d, error: () => {} });
   }
 
   load() {
@@ -978,7 +979,14 @@ export class BookingsComponent implements OnDestroy {
     });
   }
 
-  ngOnDestroy() {}
+  private queryParamSub: Subscription | null = null;
+
+  ngOnDestroy() {
+    if (this.queryParamSub) {
+      this.queryParamSub.unsubscribe();
+      this.queryParamSub = null;
+    }
+  }
 
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
@@ -1056,7 +1064,7 @@ export class BookingsComponent implements OnDestroy {
     this.showReschedule = true;
     this.rescheduleBusy = false;
     this.rescheduleError = '';
-    this.http.get<any[]>('http://localhost:3000/api/resources').subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/resources`).subscribe({
       next: (d) => this.resourceList = Array.isArray(d) ? d : [],
     });
     const start = new Date(b.startTime);

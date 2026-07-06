@@ -117,7 +117,7 @@ import { Staff } from '../staff/staff.models';
                   <button type="button" (click)="addSelectedProduct()" [disabled]="!selectedProductId">Add</button>
                 </div>
                 <div class="product-flags" *ngIf="!productsLoading && products.length > 0">
-                  <small class="product-hint">Products are added as POS line items. Stock is not deducted automatically yet.</small>
+                  <small class="product-hint">Products are added as POS line items. Stock is deducted at checkout.</small>
                   <span class="stock-chip" *ngIf="lowStockProducts().length > 0">{{ lowStockProducts().length }} low stock</span>
                 </div>
                 <div class="empty product-empty" *ngIf="!productsLoading && products.length === 0">
@@ -821,7 +821,6 @@ export class PosComponent {
     const product = this.products.find((item) => item.id === this.selectedProductId);
     if (!product) return;
 
-    // TODO: Deduct stock only after POS sale items support inventory-linked product sales transactionally.
     this.cart.push({
       serviceId: null,
       productId: product.id,

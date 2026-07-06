@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { CalendarService } from '../calendar.service';
 import { StaffService } from '../../staff/staff.service';
@@ -30,12 +30,19 @@ export class StaffTimelineService {
     const params: Record<string, string> = { date };
     if (branchId) params['branchId'] = branchId;
 
-    return this.calendarService.getCalendarDay(params).pipe(
-      map(bookings => {
-        return {
-          ...this.getEmptyTimelineViewData(date),
-          appointments: bookings.map(b => computeTimelineAppointment(b, b.staffId ?? '', '#4A90D9')),
-        };
+    return forkJoin({
+      staff: this.staffService.getAll(params).pipe(catchError(() => of([] as Staff[]))),
+      bookings: this.calendarService.getCalendarDay(params).pipe(catchError(() => of([] as CalendarBooking[]))),
+    }).pipe(
+      map(({ staff, bookings }) => {
+        const viewData = this.buildTimelineViewData(staff, date);
+        const staffColorMap: Record<string, string> = {};
+        viewData.staffList.forEach(s => { staffColorMap[s.id] = s.color; });
+        const appointments = bookings.map(b => {
+          const color = b.staffId ? (staffColorMap[b.staffId] || '#4A90D9') : '#4A90D9';
+          return computeTimelineAppointment(b, b.staffId ?? '', color);
+        });
+        return { ...viewData, appointments, totalAppointments: appointments.length };
       }),
       catchError(() => of(this.getEmptyTimelineViewData(date))),
     );

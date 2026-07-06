@@ -15,6 +15,7 @@ import { ServicesService } from '../services/services.service';
 import { SalonService } from '../services/services.models';
 import { CalendarWaitlist } from './calendar-waitlist/calendar-waitlist';
 import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-scheduler';
+import { environment } from '../../../environments/environment';
 import {
   CalendarBooking,
   CalendarSummaryResponse,
@@ -2223,6 +2224,7 @@ export class CalendarComponent {
   newClientBusy = false;
   newClientError = '';
   private clientSearchSubject = new Subject<string>();
+  private searchSubs: import('rxjs').Subscription[] = [];
   serviceList: ServiceOption[] = [];
   filteredServiceList: ServiceOption[] = [];
   serviceSearchQuery = '';
@@ -2340,16 +2342,30 @@ export class CalendarComponent {
   ngOnInit() {
     this.load();
     this.startAutoRefresh();
-    this.clientSearchSubject.pipe(
-      debounceTime(300),
-      distinctUntilChanged()
-    ).subscribe(query => this.searchClients(query));
-    this.serviceSearchSubject.pipe(
-      debounceTime(250),
-      distinctUntilChanged()
-    ).subscribe(query => this.searchServices(query));
+    this.searchSubs.push(
+      this.clientSearchSubject.pipe(
+        debounceTime(300),
+        distinctUntilChanged()
+      ).subscribe(query => this.searchClients(query))
+    );
+    this.searchSubs.push(
+      this.serviceSearchSubject.pipe(
+        debounceTime(250),
+        distinctUntilChanged()
+      ).subscribe(query => this.searchServices(query))
+    );
   }
-  ngOnDestroy() { this.stopAutoRefresh(); }
+  ngOnDestroy() {
+    this.stopAutoRefresh();
+    this.searchSubs.forEach(s => s.unsubscribe());
+    this.clientSearchSubject.complete();
+    this.serviceSearchSubject.complete();
+    if (this.dragBooking) {
+      document.removeEventListener('pointermove', this.boundPointerMove);
+      document.removeEventListener('pointerup', this.boundPointerUp);
+      document.removeEventListener('pointercancel', this.boundPointerUp);
+    }
+  }
 
   @HostListener('document:keydown', ['$event'])
   handleCalendarShortcut(event: KeyboardEvent): void {
@@ -2511,13 +2527,15 @@ export class CalendarComponent {
     if (this.resourceFilter) params.type = this.resourceFilter;
     this.resourcesApi.getAll(params).subscribe({
       next: (d) => this.resourceList = Array.isArray(d) ? d : [],
+      error: () => {},
     });
   }
 
   private loadBranches() {
     if (this.branchList.length === 0) {
-      this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
+      this.http.get<BranchOption[]>(`${environment.apiUrl}/branches`).subscribe({
         next: (d) => this.branchList = Array.isArray(d) ? d : [],
+        error: () => {},
       });
     }
   }
@@ -2533,7 +2551,7 @@ export class CalendarComponent {
     this.waitlistLoading = true;
     this.waitlistError = '';
     const dateStr = this.currentDate.toISOString().slice(0, 10);
-    this.http.get<WaitlistEntry[]>('http://localhost:3000/api/waitlist', {
+    this.http.get<WaitlistEntry[]>(`${environment.apiUrl}/waitlist`, {
       params: { branchId: '1', status: 'WAITING', from: dateStr, to: dateStr }
     }).subscribe({
       next: (d) => {
@@ -2548,10 +2566,11 @@ export class CalendarComponent {
   }
 
   removeWaitlistEntry(id: string): void {
-    this.http.delete(`http://localhost:3000/api/waitlist/${id}`).subscribe({
+    this.http.delete(`${environment.apiUrl}/waitlist/${id}`).subscribe({
       next: () => {
         this.waitlistEntries = this.waitlistEntries.filter(e => e.id !== id);
       },
+      error: () => {},
     });
   }
 
@@ -2985,7 +3004,7 @@ export class CalendarComponent {
     const booking = this.drawerBooking;
     if (!booking) { this.drawerError = 'No booking selected.'; return; }
     this.editBusy = true; this.drawerError = '';
-    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
+    this.http.patch(`${environment.apiUrl}/bookings/${booking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
       next: () => { this.editBusy = false; this.closeEditForm(); this.closeDrawer(); this.load(); },
       error: (e) => { this.editBusy = false; this.drawerError = this.extractCalendarError(e); },
     });
@@ -3350,7 +3369,7 @@ export class CalendarComponent {
     if (!booking) { this.cancelDropReschedule(); return; }
     this.dropConfirmBusy = true;
     this.dropConfirmError = '';
-    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}/reschedule`, this.dropConfirmPayload).subscribe({
+    this.http.patch(`${environment.apiUrl}/bookings/${booking.id}/reschedule`, this.dropConfirmPayload).subscribe({
       next: () => {
         this.dropConfirmBusy = false;
         this.showDropConfirm = false;
@@ -3489,7 +3508,7 @@ export class CalendarComponent {
     if (existing) {
       this.createWalkinBooking(existing.id);
     } else {
-      this.http.post<{ id: string }>('http://localhost:3000/api/clients', { fullName: name }).subscribe({
+      this.http.post<{ id: string }>(`${environment.apiUrl}/clients`, { fullName: name }).subscribe({
         next: (client) => this.createWalkinBooking(client.id),
         error: () => { this.walkinBusy = false; this.walkinError = 'Failed to create client.'; },
       });
@@ -3511,7 +3530,7 @@ export class CalendarComponent {
       }],
     };
     if (this.walkinForm.notes) payload.notes = this.walkinForm.notes;
-    this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/bookings`, payload).subscribe({
       next: () => { this.walkinBusy = false; this.showWalkin = false; this.load(); },
       error: (e) => { this.walkinBusy = false; this.walkinError = this.extractCalendarError(e); },
     });
@@ -3635,14 +3654,14 @@ export class CalendarComponent {
       services: validServices,
     };
     if (this.createForm.resourceId) payload.resourceId = this.createForm.resourceId;
-    this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/bookings`, payload).subscribe({
       next: () => {
         this.createBusy = false; this.showCreate = false;
         if (this.fillWaitlistEntry) {
           const wlId = this.fillWaitlistEntry.id;
           this.fillWaitlistEntry = null;
           this.resetCreateLookupState();
-          this.http.post(`http://localhost:3000/api/waitlist/${wlId}/booked`, {}).subscribe({
+          this.http.post(`${environment.apiUrl}/waitlist/${wlId}/booked`, {}).subscribe({
             next: () => { this.loadWaitlist(); },
             error: () => { this.loadWaitlist(); },
           });
@@ -3680,7 +3699,7 @@ export class CalendarComponent {
     if (this.rescheduleForm.resourceId !== (b.resourceId || '')) {
       payload.resourceId = this.rescheduleForm.resourceId || null;
     }
-    this.http.patch(`http://localhost:3000/api/bookings/${b.id}/reschedule`, payload).subscribe({
+    this.http.patch(`${environment.apiUrl}/bookings/${b.id}/reschedule`, payload).subscribe({
       next: () => { this.rescheduleBusy = false; this.closeDrawer(); this.load(); },
       error: (e) => { this.rescheduleBusy = false; this.rescheduleError = this.extractCalendarError(e); },
     });
@@ -4404,8 +4423,9 @@ export class CalendarComponent {
   loadClientsAndServices() {
     this.loadClients();
     this.loadServices();
-    this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
+    this.http.get<BranchOption[]>(`${environment.apiUrl}/branches`).subscribe({
       next: (d) => this.branchList = Array.isArray(d) ? d : [],
+      error: () => {},
     });
   }
 

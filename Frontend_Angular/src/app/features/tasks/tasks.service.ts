@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class TasksService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/tasks';
+  private baseUrl = environment.apiUrl + '/tasks';
 
   getAll(query?: any): Observable<any[]> {
     return this.http.get<any[]>(this.baseUrl, { params: query });
@@ -28,7 +29,7 @@ export class TasksService {
   }
 
   complete(id: string): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/complete`, {});
+    return this.http.post(`${this.baseUrl}/${id}/complete`, {});
   }
 
   getMyTasks(): Observable<any[]> {

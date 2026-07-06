@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy, inject } from '@angular/core';
 import { STAFF_STATUS_LABELS, STAFF_STATUS_COLORS } from './calendar-staff-timeline.constants';
 import type { StaffTimelineStaff } from './calendar-staff-timeline.models';
 import { getStaffInitials } from './calendar-staff-timeline-engine';
+import { ResourceEngineService } from '../calendar-resource-engine/calendar-resource-engine.service';
 
 @Component({
   selector: 'app-staff-header-card',
@@ -52,8 +53,9 @@ import { getStaffInitials } from './calendar-staff-timeline-engine';
         <div class="shc-capacity-fill" [style.width.%]="staff.occupancyPercent" [style.background]="capacityColor"></div>
       </div>
 
-      <div class="shc-placeholders" aria-hidden="true">
-        <span class="shc-placeholder-badge shc-placeholder-future-resource" title="Future Resource Assignment">R</span>
+      <div class="shc-resource" *ngIf="resourceName">
+        <span class="shc-resource-label">Resource:</span>
+        <span class="shc-resource-name">{{ resourceName }}</span>
       </div>
     </div>
   `,
@@ -100,18 +102,29 @@ import { getStaffInitials } from './calendar-staff-timeline-engine';
     .shc-capacity-fill {
       height: 100%; border-radius: 2px; transition: width .3s ease;
     }
-    .shc-placeholders { display: flex; gap: 4px; }
-    .shc-placeholder-badge {
-      font-size: 8px; font-weight: 700; padding: 1px 5px;
-      border-radius: 4px; border: 1px dashed #d1d5db; color: #9ca3af;
-    }
+    .shc-resource { display: flex; align-items: center; gap: 4px; font-size: 10px; }
+    .shc-resource-label { color: #9ca3af; font-weight: 600; }
+    .shc-resource-name { color: #6366f1; font-weight: 700; }
   `],
 })
 export class StaffHeaderCardComponent {
+  private resourceEngine = inject(ResourceEngineService);
+
   @Input({ required: true }) staff!: StaffTimelineStaff;
 
   get initials(): string {
     return getStaffInitials(this.staff.fullName);
+  }
+
+  get resourceName(): string | null {
+    try {
+      const resourceId = this.resourceEngine.getResourceForStaff(this.staff.id);
+      if (!resourceId) return null;
+      const resource = this.resourceEngine.managerService.getById(resourceId);
+      return resource?.name || null;
+    } catch {
+      return null;
+    }
   }
 
   get statusLabel(): string {

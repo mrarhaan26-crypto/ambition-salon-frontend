@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import type { BookingListItem, BookingServiceLine, CreateBookingForm, ClientOption, StaffOption, BranchOption, ServiceOption, PaymentInfo, ClientDetail } from './bookings.models';
+import { environment } from '../../../environments/environment';
 
 export interface BookingQueryParams {
   search?: string;
@@ -16,7 +17,7 @@ export interface BookingQueryParams {
 @Injectable({ providedIn: 'root' })
 export class BookingsService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/bookings';
+  private baseUrl = environment.apiUrl + '/bookings';
 
   getAll(query?: BookingQueryParams): Observable<BookingListItem[]> {
     let params = new HttpParams();
@@ -72,21 +73,21 @@ export class BookingsService {
   }
 
   getClients(): Observable<ClientOption[]> {
-    return this.http.get<ClientOption[] | { items?: ClientOption[] }>('http://localhost:3000/api/clients', { params: { limit: 100 } as any }).pipe(
+    return this.http.get<ClientOption[] | { items?: ClientOption[] }>(`${environment.apiUrl}/clients`, { params: { limit: 100 } as any }).pipe(
       map((res) => Array.isArray(res) ? res : (res.items || [])),
     );
   }
 
   getStaff(): Observable<StaffOption[]> {
-    return this.http.get<StaffOption[]>('http://localhost:3000/api/staff');
+    return this.http.get<StaffOption[]>(`${environment.apiUrl}/staff`);
   }
 
   getBranches(): Observable<BranchOption[]> {
-    return this.http.get<BranchOption[]>('http://localhost:3000/api/branches');
+    return this.http.get<BranchOption[]>(`${environment.apiUrl}/branches`);
   }
 
   getServices(): Observable<ServiceOption[]> {
-    return this.http.get<ServiceOption[]>('http://localhost:3000/api/services');
+    return this.http.get<ServiceOption[]>(`${environment.apiUrl}/services`);
   }
 
   getBookingPayments(bookingId: string): Observable<PaymentInfo[]> {
@@ -94,10 +95,10 @@ export class BookingsService {
   }
 
   getClientDetail(clientId: string): Observable<ClientDetail> {
-    return this.http.get<ClientDetail>(`http://localhost:3000/api/clients/${clientId}`);
+    return this.http.get<ClientDetail>(`${environment.apiUrl}/clients/${clientId}`);
   }
 
   addPayment(bookingId: string, body: { amount: number; method: string }): Observable<any> {
-    return this.http.post('http://localhost:3000/api/payments/mark-paid', { bookingId, ...body });
+    return this.http.post(`${environment.apiUrl}/payments/mark-paid`, { bookingId, ...body });
   }
 }

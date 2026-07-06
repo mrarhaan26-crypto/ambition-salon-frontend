@@ -1,11 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { CommandCenterDashboard, CapacityForecast, StaffPerformance, RecommendationsResponse } from './ai-command-center.models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class AiCommandCenterService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/ai-command-center';
+  private baseUrl = environment.apiUrl + '/ai-command-center';
 
   getDashboard() {
     return this.http.get<CommandCenterDashboard>(`${this.baseUrl}/dashboard`);

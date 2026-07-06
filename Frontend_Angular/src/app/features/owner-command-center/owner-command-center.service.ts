@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class OwnerCommandCenterService {
   private http = inject(HttpClient);
-  private base = 'http://localhost:3000/api/owner-command-center';
+  private base = environment.apiUrl + '/owner-command-center';
 
   getDashboard(): Observable<any> { return this.http.get(this.base); }
   getHealth(): Observable<any> { return this.http.get(`${this.base}/health`); }

@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ReportsService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/reports';
+  private baseUrl = environment.apiUrl + '/reports';
 
   getDashboard(query?: any): Observable<any> {
     return this.http.get(this.baseUrl, { params: query });

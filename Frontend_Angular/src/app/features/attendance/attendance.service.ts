@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class AttendanceService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/attendance';
+  private baseUrl = environment.apiUrl + '/attendance';
 
   getAll(query?: any): Observable<any[]> {
     return this.http.get<any[]>(this.baseUrl, { params: query });
@@ -19,8 +20,8 @@ export class AttendanceService {
     return this.http.post(`${this.baseUrl}/clock-in`, body);
   }
 
-  clockOut(id: string): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/clock-out`, {});
+  clockOut(body: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/clock-out`, body);
   }
 
   update(id: string, body: any): Observable<any> {

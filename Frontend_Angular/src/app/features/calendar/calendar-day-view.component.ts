@@ -116,7 +116,7 @@ import { getDurationMinutes } from './calendar.utils';
     .dv-time-row { height: 60px; display: flex; align-items: flex-start; justify-content: center; padding-top: 2px; }
     .dv-time-label { font-size: 11px; font-weight: 500; color: var(--muted, #6b7280); }
     .dv-grid { flex: 1; position: relative; }
-    .dv-day-col { position: relative; height: 100%; }
+    .dv-day-col { position: relative; }
     .dv-day-col.today { background: #f0f7ff; }
     .dv-hour-slot { height: 60px; position: relative; cursor: pointer; }
     .dv-hour-slot:hover { background: rgba(0,0,0,0.02); }
@@ -241,7 +241,7 @@ export class CalendarDayViewComponent implements OnInit, OnDestroy {
       yToTime: (clientY: number, containerEl: HTMLElement) => {
         const rect = containerEl.getBoundingClientRect();
         const relativeY = clientY - rect.top + containerEl.scrollTop;
-        const minutes = Math.max(0, relativeY / 60 * 60);
+        const minutes = Math.max(0, (relativeY / HOUR_HEIGHT_PX) * 60);
         const hour = Math.floor(minutes / 60);
         const date = new Date(this.currentDate);
         date.setHours(hour, minutes % 60, 0, 0);

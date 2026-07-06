@@ -3,12 +3,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Client, ClientBookingSummary, ClientFormSubmission, PaginatedClientsResponse } from './client.model';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ClientsService {
   private http = inject(HttpClient);
-  private apiUrl = 'http://localhost:3000/api/clients';
-  private bookingApiUrl = 'http://localhost:3000/api/bookings';
+  private apiUrl = environment.apiUrl + '/clients';
+  private bookingApiUrl = environment.apiUrl + '/bookings';
 
   getClients(params?: { search?: string; page?: number; limit?: number; sortBy?: string; sortOrder?: string }): Observable<PaginatedClientsResponse> {
     let httpParams = new HttpParams();

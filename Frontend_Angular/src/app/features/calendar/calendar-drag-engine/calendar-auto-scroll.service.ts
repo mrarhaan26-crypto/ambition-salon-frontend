@@ -1,4 +1,4 @@
-import { Injectable, NgZone } from '@angular/core';
+import { Injectable } from '@angular/core';
 
 export interface AutoScrollConfig {
   edgeThickness: number;

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { AuthService } from '../auth/auth.service';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class PermissionService {
@@ -12,7 +13,7 @@ export class PermissionService {
 
   getPermissions(): Observable<any> {
     if (this.cache) return of(this.cache);
-    return this.http.get('http://localhost:3000/api/permissions/me').pipe(
+    return this.http.get(`${environment.apiUrl}/permissions/me`).pipe(
       tap((d: any) => this.cache = d)
     );
   }

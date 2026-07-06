@@ -4,7 +4,7 @@ import {
   ChangeDetectorRef, inject, AfterViewInit, OnDestroy, ViewChild, ElementRef,
   NgZone,
 } from '@angular/core';
-import { Subject, Subscription, fromEvent } from 'rxjs';
+import { Subscription, fromEvent } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { STAFF_TIMELINE_HOUR_HEIGHT_PX, STAFF_TIMELINE_HEADER_WIDTH_PX } from './calendar-staff-timeline.constants';
 import type {

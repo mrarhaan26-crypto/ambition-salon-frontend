@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, inject } from '@angular/core';
 import { STATUS_COLORS, STATUS_LABELS } from './calendar.constants';
 import type { AppointmentCardData } from './calendar-appointment.models';
+import { ConflictVisualService } from './calendar-conflict-engine/calendar-conflict-visual.service';
 import { getDurationMinutes } from './calendar.utils';
 
 @Component({
@@ -18,10 +19,13 @@ import { getDurationMinutes } from './calendar.utils';
       [class.apt-dragging]="dragging"
       [class.apt-resizing-top]="resizingEdge === 'top'"
       [class.apt-resizing-bottom]="resizingEdge === 'bottom'"
+      [class.apt-conflict]="conflictState?.hasConflict"
+      [class.apt-conflict-denied]="conflictState?.deniedAnimation"
       [style.top.px]="top"
       [style.height.px]="height"
       [style.left]="left"
       [style.width]="width"
+      [style.border-color]="conflictState?.borderColor || null"
       tabindex="0"
       role="button"
       [attr.aria-label]="getAriaLabel()"
@@ -69,6 +73,7 @@ import { getDurationMinutes } from './calendar.utils';
           <span class="apt-indicators">
             <span class="apt-indicator apt-vip" *ngIf="data.isVIP" aria-label="VIP client" title="VIP">&#9733;</span>
             <span class="apt-indicator apt-membership" *ngIf="data.hasMembership" aria-label="Membership" title="Membership">&#9829;</span>
+            <span class="apt-indicator apt-conflict-badge" *ngIf="conflictState?.hasConflict" [title]="conflictState.tooltip" aria-label="Schedule conflict">&#9888;</span>
             <span class="apt-indicator apt-note" *ngIf="data.notes" aria-label="Has notes" title="Has notes">&#128221;</span>
             <span class="apt-indicator apt-package" *ngIf="data.hasPackage" aria-label="Package booking" title="Package">&#128230;</span>
             <span class="apt-indicator apt-payment" *ngIf="data.amount > 0" aria-label="Amount: {{ data.amount | currency }}">
@@ -269,6 +274,15 @@ import { getDurationMinutes } from './calendar.utils';
 
     .apt-card.vip { border-color: #FFD700; box-shadow: 0 0 0 1px #FFD700; }
 
+    .apt-card.apt-conflict { box-shadow: 0 0 0 2px var(--conflict-color, #dc2626); }
+    .apt-card.apt-conflict-denied { animation: conflict-shake 0.4s ease-in-out; }
+    @keyframes conflict-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+    .apt-conflict-badge { color: #dc2626; font-size: 12px; cursor: help; }
+
     @media (max-width: 768px) {
       .apt-body { padding: 3px 6px; }
       .apt-service-name { font-size: 10px; }
@@ -279,6 +293,8 @@ import { getDurationMinutes } from './calendar.utils';
   `]
 })
 export class AppointmentCardComponent {
+  private conflictVisual = inject(ConflictVisualService);
+
   @Input() data!: AppointmentCardData;
   @Input() top = 0;
   @Input() height = 0;
@@ -289,6 +305,10 @@ export class AppointmentCardComponent {
   @Output() cardClick = new EventEmitter<string>();
   @Output() dragStart = new EventEmitter<{ appointmentId: string; clientX: number; clientY: number }>();
   @Output() resizeStartEvent = new EventEmitter<{ appointmentId: string; edge: 'top' | 'bottom'; clientX: number; clientY: number }>();
+
+  get conflictState() {
+    return this.conflictVisual.getState(this.data.id);
+  }
 
   onClick(): void {
     if (!this.dragging) {

@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class BranchesService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/branches';
+  private baseUrl = environment.apiUrl + '/branches';
 
   getAll(query?: any): Observable<any> {
     return this.http.get(this.baseUrl, { params: query });

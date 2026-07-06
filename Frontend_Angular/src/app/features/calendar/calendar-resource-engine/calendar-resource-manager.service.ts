@@ -108,7 +108,9 @@ export class ResourceManagerService {
   }
 
   setStatus(id: string, status: ResourceStatus): ResourceEntity | null {
-    return this.update(id, { metadata: { status } } as ResourceUpdateRequest);
+    const existing = this.getById(id);
+    if (!existing) return null;
+    return this.update(id, { metadata: { ...existing.metadata, status } } as ResourceUpdateRequest);
   }
 
   enable(id: string): ResourceEntity | null {

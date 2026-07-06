@@ -2,11 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DashboardOverview, RevenueAnalytics, OperationsAnalytics, StaffAnalytics, ClientActivity } from './dashboard-analytics.models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardAnalyticsService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/dashboard-analytics';
+  private baseUrl = environment.apiUrl + '/dashboard-analytics';
 
   getOverview(): Observable<DashboardOverview> {
     return this.http.get<DashboardOverview>(`${this.baseUrl}/overview`);

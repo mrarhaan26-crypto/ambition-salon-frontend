@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class CommissionsService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:3000/api/commissions';
+  private baseUrl = environment.apiUrl + '/commissions';
 
   getAll(query?: any): Observable<any> {
     return this.http.get(this.baseUrl, { params: query });
@@ -28,7 +29,7 @@ export class CommissionsService {
   }
 
   updateRule(id: string, body: any): Observable<any> {
-    return this.http.put(`${this.baseUrl}/rules/${id}`, body);
+    return this.http.patch(`${this.baseUrl}/rules/${id}`, body);
   }
 
   deleteRule(id: string): Observable<any> {

@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ReputationService {
   private http = inject(HttpClient);
-  private base = 'http://localhost:3000/api/reputation';
+  private base = environment.apiUrl + '/reputation';
 
   getDashboard(): Observable<any> { return this.http.get(this.base); }
   getReviews(query?: any): Observable<any[]> { return this.http.get<any[]>(`${this.base}/reviews`, { params: query }); }

@@ -10,6 +10,8 @@ import { SalonService } from '../services/services.models';
 import { STATUS_LABELS, APPOINTMENT_STATUSES, STATUS_COLORS } from './calendar.constants';
 import type { AppointmentStatus } from './calendar.constants';
 import type { CalendarBooking } from './calendar-appointment.models';
+import { ResourceEngineService } from './calendar-resource-engine/calendar-resource-engine.service';
+import type { ResourceEntity } from './calendar-resource-engine/calendar-resource.models';
 
 export interface DialogAppointmentData {
   id?: string;
@@ -20,6 +22,7 @@ export interface DialogAppointmentData {
   branchId: string;
   notes: string;
   status: string;
+  resourceId?: string;
   services: { serviceId: string; name: string; durationMin: number; price: number }[];
 }
 
@@ -71,6 +74,14 @@ export interface DialogAppointmentData {
             >
               <option value="">Select service</option>
               <option *ngFor="let s of serviceList" [value]="s.id">{{ s.name }} ({{ s.durationMin }}m, {{ s.price | currency }})</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="apt-resource">Resource</label>
+            <select id="apt-resource" [(ngModel)]="form.resourceId" aria-label="Resource">
+              <option value="">No resource</option>
+              <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }} ({{ r.type }})</option>
             </select>
           </div>
 
@@ -197,6 +208,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit {
   private staffService = inject(StaffService);
   private clientsService = inject(ClientsService);
   private servicesService = inject(ServicesService);
+  private resourceEngine = inject(ResourceEngineService);
 
   STATUS_LABELS = STATUS_LABELS;
   statusOptions = [...APPOINTMENT_STATUSES];
@@ -204,6 +216,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit {
   staffList: Staff[] = [];
   serviceList: SalonService[] = [];
   clientResults: Client[] = [];
+  resourceList: ResourceEntity[] = [];
 
   form: DialogAppointmentData = this.emptyForm();
   selectedServiceId = '';
@@ -240,6 +253,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit {
   ngOnInit(): void {
     this.loadStaff();
     this.loadServices();
+    this.loadResources();
     this.initForm();
   }
 
@@ -287,27 +301,36 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit {
   private emptyForm(): DialogAppointmentData {
     return {
       clientId: '', staffId: '', title: '', startTime: '',
-      branchId: '', notes: '', status: 'CONFIRMED', services: [],
+      branchId: '', notes: '', resourceId: '', status: 'CONFIRMED', services: [],
     };
   }
 
   loadStaff(): void {
-    this.staffService.getAll().subscribe(list => {
-      this.staffList = list;
+    this.staffService.getAll().subscribe({
+      next: list => { this.staffList = list; },
+      error: () => { this.staffList = []; },
     });
   }
 
   loadServices(): void {
-    this.servicesService.getAll().subscribe(list => {
-      this.serviceList = list;
+    this.servicesService.getAll().subscribe({
+      next: list => { this.serviceList = list; },
+      error: () => { this.serviceList = []; },
     });
+  }
+
+  loadResources(): void {
+    this.resourceList = this.resourceEngine.managerService.getAll();
   }
 
   searchClients(): void {
     if (this.form.clientId.length < 2) return;
-    this.clientsService.getClients({ search: this.form.clientId, limit: 10 }).subscribe(res => {
-      const items = Array.isArray(res) ? res : res.items;
-      this.clientResults = items || [];
+    this.clientsService.getClients({ search: this.form.clientId, limit: 10 }).subscribe({
+      next: res => {
+        const items = Array.isArray(res) ? res : res.items;
+        this.clientResults = items || [];
+      },
+      error: () => { this.clientResults = []; },
     });
   }
 

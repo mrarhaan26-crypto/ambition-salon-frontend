@@ -1,12 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class SurveysService {
   private http = inject(HttpClient);
-  private base = 'http://localhost:3000/api/surveys';
-  private fb = 'http://localhost:3000/api/feedback';
+  private base = environment.apiUrl + '/surveys';
+  private fb = environment.apiUrl + '/feedback';
 
   getAll(query?: any): Observable<any[]> { return this.http.get<any[]>(this.base, { params: query }); }
   getById(id: string): Observable<any> { return this.http.get(`${this.base}/${id}`); }

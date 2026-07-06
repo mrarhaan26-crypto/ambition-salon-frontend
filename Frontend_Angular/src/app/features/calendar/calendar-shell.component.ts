@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, ChangeDetectionStrategy, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, switchMap, of, catchError, finalize, Subscription, Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { tap, map } from 'rxjs/operators';
 import { CalendarView } from './calendar.constants';
 import { CalendarService } from './calendar.service';
 import type { CalendarBooking } from './calendar.models';
@@ -13,7 +13,12 @@ import { AppointmentDialogComponent } from './appointment-dialog.component';
 import { BookingsService } from '../bookings/bookings.service';
 import { StaffTimelineComponent } from './calendar-staff-timeline/calendar-staff-timeline.component';
 import { StaffTimelineService } from './calendar-staff-timeline/calendar-staff-timeline.service';
+import { DragEventSystem } from './calendar-drag-engine/calendar-drag-events-system';
+import { ConflictVisualService } from './calendar-conflict-engine/calendar-conflict-visual.service';
+import { QueueEngineService } from './calendar-queue-engine/calendar-queue-engine.service';
+import { getStaffInitials } from './calendar-staff-timeline/calendar-staff-timeline-engine';
 import type { StaffTimelineViewData } from './calendar-staff-timeline/calendar-staff-timeline.models';
+import type { SidebarStaff } from './calendar-sidebar.component';
 
 @Component({
   selector: 'app-calendar-shell',
@@ -40,8 +45,14 @@ import type { StaffTimelineViewData } from './calendar-staff-timeline/calendar-s
         <app-calendar-sidebar
           [collapsed]="sidebarCollapsed"
           [currentDate]="currentDate"
+          [appointments]="appointments"
+          [sidebarStaff]="sidebarStaff"
           (toggle)="toggleSidebar()"
           (dateSelected)="onDateSelected($event)"
+          (newAppointment)="onSlotClick({ date: currentDate, hour: getCurrentHour() })"
+          (newWalkIn)="onSlotClick({ date: currentDate, hour: getCurrentHour() })"
+          (openAiScheduler)="onOpenAiScheduler()"
+          (staffFilterChange)="onStaffFilterChange($event)"
         >
         </app-calendar-sidebar>
 
@@ -132,6 +143,10 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   private calendarService = inject(CalendarService);
   private bookingsService = inject(BookingsService);
   private staffTimelineService = inject(StaffTimelineService);
+  private dragEvents = inject(DragEventSystem);
+  private conflictVisual = inject(ConflictVisualService);
+  private queueEngine = inject(QueueEngineService);
+  private cdr = inject(ChangeDetectorRef);
 
   view: CalendarView = 'month';
   currentDate = new Date();
@@ -140,6 +155,8 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   appointments: CalendarBooking[] = [];
   staffColorMap: Record<string, string> = {};
   searchQuery = '';
+  conflictStates = this.conflictVisual.getAllStates();
+  sidebarStaff: SidebarStaff[] = [];
 
   timelineLoading = false;
   timelineData: StaffTimelineViewData = {
@@ -158,6 +175,9 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
 
   private refresh$ = new Subject<void>();
   private subs: Subscription[] = [];
+  private cleanupFns: (() => void)[] = [];
+  private allAppointments: CalendarBooking[] = [];
+  private activeStaffFilter: string[] = [];
 
   ngOnInit(): void {
     this.subs.push(
@@ -168,22 +188,52 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
           }
           this.loading = true;
           return this.loadForCurrentView().pipe(
-            catchError(() => of([] as CalendarBooking[])),
+            catchError((err) => {
+              console.error('[CalendarShell] load error:', err);
+              return of([] as CalendarBooking[]);
+            }),
             finalize(() => { this.loading = false; }),
           );
         }),
       ).subscribe(bookings => {
         if (this.view !== 'timeline') {
-          this.appointments = bookings as CalendarBooking[];
+          this.allAppointments = bookings as CalendarBooking[];
+          this.applyFilters();
         }
+        this.cdr.markForCheck();
       })
     );
+
+    const dragCleanup = this.dragEvents.on('appointment:updated', (payload) => {
+      const session = payload.session;
+      const newStart = session.snappedStart || session.target.startTime;
+      const newEnd = session.snappedEnd || session.target.endTime;
+      const newStaffId = session.current.staffId || session.target.staffId;
+      
+      this.bookingsService.update(session.target.appointmentId, {
+        startTime: newStart,
+        endTime: newEnd,
+        staffId: newStaffId,
+      } as any).subscribe({
+        next: () => this.loadAppointments(),
+        error: (e) => console.error('[CalendarShell] drag update failed:', e),
+      });
+    });
+    this.cleanupFns.push(dragCleanup);
+
+    const conflictCleanup = this.conflictVisual.onChange(() => {
+      this.conflictStates = this.conflictVisual.getAllStates();
+      this.cdr.markForCheck();
+    });
+    this.cleanupFns.push(conflictCleanup);
+
     this.loadStaffColors();
-    this.loadAppointments();
   }
 
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
+    this.cleanupFns.forEach(fn => fn());
+    this.refresh$.complete();
   }
 
   private loadForCurrentView(): Observable<CalendarBooking[]> {
@@ -202,13 +252,18 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.timelineLoading = true;
     const date = this.currentDate.toISOString().slice(0, 10);
     this.timelineDate = date;
-
-    this.staffTimelineService.loadTimelineData(date).subscribe(data => {
-      this.timelineData = data;
-      this.timelineLoading = false;
-    });
-
-    return of([] as CalendarBooking[]);
+    return this.staffTimelineService.loadTimelineDataWithBookings(date).pipe(
+      tap(data => {
+        this.timelineData = data;
+        this.timelineLoading = false;
+      }),
+      catchError(err => {
+        console.error('[CalendarShell] Timeline load error:', err);
+        this.timelineLoading = false;
+        return of([] as CalendarBooking[]);
+      }),
+      map(() => [] as CalendarBooking[]),
+    );
   }
 
   private getWeekStart(date: Date): Date {
@@ -221,13 +276,30 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   }
 
   private loadStaffColors(): void {
-    this.bookingsService.getStaff().subscribe(staff => {
-      const colors = ['#4A90D9', '#50C878', '#E57373', '#FFB74D', '#9575CD', '#26A69A', '#F06292', '#A1887F', '#4DB6AC', '#7986CB'];
-      const map: Record<string, string> = {};
-      staff.forEach((s, i) => {
-        map[s.id] = colors[i % colors.length];
-      });
-      this.staffColorMap = map;
+    this.bookingsService.getStaff().subscribe({
+      next: (staff) => {
+        const colors = ['#4A90D9', '#50C878', '#E57373', '#FFB74D', '#9575CD', '#26A69A', '#F06292', '#A1887F', '#4DB6AC', '#7986CB'];
+        const map: Record<string, string> = {};
+        const sidebar: SidebarStaff[] = [];
+        staff.forEach((s, i) => {
+          const color = colors[i % colors.length];
+          map[s.id] = color;
+          sidebar.push({
+            id: s.id,
+            name: s.fullName,
+            color,
+            initials: getStaffInitials(s.fullName),
+            active: true,
+          });
+        });
+        this.staffColorMap = map;
+        this.sidebarStaff = sidebar;
+        this.loadAppointments();
+      },
+      error: (err) => {
+        console.error('[CalendarShell] Failed to load staff colors:', err);
+        this.loadAppointments();
+      },
     });
   }
 
@@ -272,11 +344,54 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
 
   onSearchChange(query: string): void {
     this.searchQuery = query;
-    this.loadAppointments();
+    if (this.allAppointments.length > 0) {
+      this.applyFilters();
+    } else {
+      this.loadAppointments();
+    }
+  }
+
+  private filterAppointments(bookings: CalendarBooking[], query: string): CalendarBooking[] {
+    const q = query.toLowerCase();
+    return bookings.filter(b => {
+      if (b.id?.toLowerCase().includes(q)) return true;
+      if (b.client?.fullName?.toLowerCase().includes(q)) return true;
+      if (b.client?.phone?.toLowerCase().includes(q)) return true;
+      if (b.staff?.fullName?.toLowerCase().includes(q)) return true;
+      if (b.title?.toLowerCase().includes(q)) return true;
+      if (b.services?.some(s => s.name?.toLowerCase().includes(q))) return true;
+      if (b.notes?.toLowerCase().includes(q)) return true;
+      return false;
+    });
   }
 
   onSettings(): void {
     // placeholder
+  }
+
+  onStaffFilterChange(activeStaffIds: string[]): void {
+    this.activeStaffFilter = activeStaffIds;
+    this.applyFilters();
+  }
+
+  private applyFilters(): void {
+    let filtered = this.allAppointments;
+    if (this.activeStaffFilter.length > 0) {
+      filtered = filtered.filter(b => this.activeStaffFilter.includes(b.staffId || b.staff?.id || ''));
+    }
+    if (this.searchQuery) {
+      filtered = this.filterAppointments(filtered, this.searchQuery);
+    }
+    this.appointments = filtered;
+    this.cdr.markForCheck();
+  }
+
+  onOpenAiScheduler(): void {
+    // placeholder
+  }
+
+  getCurrentHour(): number {
+    return new Date().getHours();
   }
 
   onSlotClick(event: { date: Date; hour: number }): void {
@@ -343,6 +458,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
         notes: data.notes || '',
         services: data.services,
         status: data.status,
+        resourceId: data.resourceId || undefined,
       };
       this.bookingsService.create(payload as any).subscribe({
         next: () => {
