@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.angular/
+coverage/
+.cache/
+.idea/
+.vscode/
+*.log
+.env
+.env.*
+prisma/dev.db
+uploads/

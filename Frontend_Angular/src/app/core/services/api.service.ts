@@ -1,0 +1,2 @@
+import { Injectable } from '@angular/core';import { HttpClient } from '@angular/common/http';import { environment } from '../../../environments/environment';
+@Injectable({providedIn:'root'})export class ApiService{private apiUrl=environment.apiUrl;constructor(private http:HttpClient){} register(p:any){return this.http.post(`${this.apiUrl}/auth/register`,p)} login(p:any){return this.http.post(`${this.apiUrl}/auth/login`,p)} createLead(p:any){return this.http.post(`${this.apiUrl}/leads`,p)} getLeads(){return this.http.get(`${this.apiUrl}/leads`)}}
