@@ -96,6 +96,10 @@ import type { SidebarStaff } from './calendar-sidebar.component';
       (close)="closeDialog()"
     >
     </app-appointment-dialog>
+
+    <div class="toast" *ngIf="toastVisible" role="alert" aria-live="polite">
+      <span>{{ toastMessage }}</span>
+    </div>
   `,
   styles: [`
     .calendar-page {
@@ -127,6 +131,19 @@ import type { SidebarStaff } from './calendar-sidebar.component';
     }
     app-calendar-sidebar {
       flex-shrink: 0;
+    }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #059669; color: #fff;
+      padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      z-index: 2000;
+      animation: toastIn 0.25s ease;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     @media (max-width: 1024px) {
       .calendar-layout.sidebar-collapsed app-calendar-sidebar {
@@ -173,6 +190,10 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   dialogDefaultTime = '';
   dialogDefaultStaffId = '';
   dialogDefaultBranchId = '';
+
+  toastMessage = '';
+  toastVisible = false;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private refresh$ = new Subject<void>();
   private subs: Subscription[] = [];
@@ -236,6 +257,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.subs.forEach(s => s.unsubscribe());
     this.cleanupFns.forEach(fn => fn());
     this.refresh$.complete();
+    if (this.toastTimer !== null) clearTimeout(this.toastTimer);
   }
 
   private loadForCurrentView(): Observable<CalendarBooking[]> {
@@ -448,6 +470,18 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     });
   }
 
+  private showToast(message: string): void {
+    this.toastMessage = message;
+    this.toastVisible = true;
+    this.cdr.markForCheck();
+    if (this.toastTimer !== null) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      this.toastVisible = false;
+      this.cdr.markForCheck();
+      this.toastTimer = null;
+    }, 3000);
+  }
+
   onDialogSave(event: { data: DialogAppointmentData; id?: string }): void {
     if (event.id) {
       const { data } = event;
@@ -455,6 +489,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
         next: () => {
           this.closeDialog();
           this.loadAppointments();
+          this.showToast('Appointment updated');
         },
       });
     } else {
@@ -482,6 +517,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
             booking.id === tempId ? created as any : booking
           );
           this.applyFilters();
+          this.showToast('Appointment created');
         },
         error: (err) => {
           console.error('[CalendarShell] create failed:', err);

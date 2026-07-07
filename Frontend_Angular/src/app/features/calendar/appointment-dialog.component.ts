@@ -32,6 +32,10 @@ export interface DialogAppointmentData {
   clientName?: string;
   staffName?: string;
   branchName?: string;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
+  taxRate?: number;
+  finalAmount?: number;
 }
 
 @Component({
@@ -162,11 +166,48 @@ export interface DialogAppointmentData {
           <div class="form-row">
             <div class="form-group">
               <label>Duration</label>
-              <div class="form-static">{{ getDuration() }} minutes</div>
+              <div class="form-static">{{ getDuration() }} min</div>
             </div>
             <div class="form-group">
-              <label>Total</label>
-              <div class="form-static form-static-price">{{ getTotal() | currency }}</div>
+              <label>End Time</label>
+              <div class="form-static">{{ getEndTime() }}</div>
+            </div>
+          </div>
+
+          <div class="bill-section">
+            <div class="bill-row" [class.bill-row-faded]="getDiscountAmount() <= 0 && taxRate <= 0">
+              <span class="bill-label">Subtotal</span>
+              <span class="bill-value">{{ getSubtotal() | currency }}</span>
+            </div>
+            <div class="bill-row" *ngIf="getDiscountAmount() > 0">
+              <span class="bill-label">Discount</span>
+              <span class="bill-value bill-discount">&minus;{{ getDiscountAmount() | currency }}</span>
+            </div>
+            <div class="bill-row" *ngIf="getTaxAmount() > 0">
+              <span class="bill-label">Tax ({{ taxRate }}%)</span>
+              <span class="bill-value bill-tax">+{{ getTaxAmount() | currency }}</span>
+            </div>
+            <div class="bill-row bill-total-row">
+              <span class="bill-label bill-total-label">Total</span>
+              <span class="bill-value bill-total-value">{{ getFinalAmount() | currency }}</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Discount</label>
+            <div class="discount-row">
+              <select [(ngModel)]="discountType" class="form-select dt-select">
+                <option value="fixed">Fixed ($)</option>
+                <option value="percentage">Percent (%)</option>
+              </select>
+              <input type="number" [(ngModel)]="discountValue" min="0" [max]="discountType === 'percentage' ? 100 : getSubtotal()" class="form-input dv-input" placeholder="0">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tax Rate (%)</label>
+              <input type="number" [(ngModel)]="taxRate" min="0" max="100" step="0.1" class="form-input" placeholder="0">
             </div>
           </div>
 
@@ -351,6 +392,22 @@ export interface DialogAppointmentData {
       background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; color: #991b1b;
     }
     .conflict-icon { font-size: 16px; flex-shrink: 0; }
+    .bill-section {
+      background: var(--soft, #f7f7f7); border: 1px solid var(--border, #e5e7eb);
+      border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .bill-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .bill-row-faded { opacity: 0.5; }
+    .bill-label { color: var(--muted, #6b7280); }
+    .bill-value { font-weight: 600; }
+    .bill-discount { color: #dc2626; }
+    .bill-tax { color: #6366f1; }
+    .bill-total-row { border-top: 1px solid var(--border, #e5e7eb); padding-top: 6px; margin-top: 2px; }
+    .bill-total-label { font-size: 14px; font-weight: 700; color: var(--text, #111); }
+    .bill-total-value { font-size: 18px; font-weight: 800; color: #059669; }
+    .discount-row { display: flex; gap: 8px; }
+    .dt-select { width: 130px; flex-shrink: 0; }
+    .dv-input { flex: 1; }
     @media (max-width: 640px) {
       .dialog-overlay { padding: 0; align-items: flex-end; }
       .dialog-panel { max-width: 100%; border-radius: 16px 16px 0 0; max-height: 85vh; }
@@ -410,6 +467,9 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
 
   conflictWarning = '';
   conflictExists = false;
+  discountType: 'percentage' | 'fixed' = 'fixed';
+  discountValue = 0;
+  taxRate = 0;
   availabilityStatus: 'unknown' | 'available' | 'unavailable' | 'outside-hours' | 'not-scheduled' = 'unknown';
   saveBusy = false;
   saveError = '';
@@ -841,6 +901,43 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
     return 0;
   }
 
+  getEndTime(): string {
+    if (!this.formDate || !this.formTime) return '\u2014';
+    const start = new Date(this.formDate + 'T' + this.formTime + ':00');
+    const duration = this.getDuration();
+    if (duration <= 0) return '\u2014';
+    const end = new Date(start.getTime() + duration * 60000);
+    const timeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = end.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (end.toDateString() !== start.toDateString()) {
+      return `${dateStr} ${timeStr}`;
+    }
+    return timeStr;
+  }
+
+  getSubtotal(): number {
+    return this.getTotal();
+  }
+
+  getDiscountAmount(): number {
+    if (!this.discountValue || this.discountValue <= 0) return 0;
+    if (this.discountType === 'percentage') {
+      const pct = Math.min(this.discountValue, 100);
+      return Math.round(this.getSubtotal() * (pct / 100) * 100) / 100;
+    }
+    return Math.min(this.discountValue, this.getSubtotal());
+  }
+
+  getTaxAmount(): number {
+    if (!this.taxRate || this.taxRate <= 0) return 0;
+    const afterDiscount = this.getSubtotal() - this.getDiscountAmount();
+    return Math.round(afterDiscount * (this.taxRate / 100) * 100) / 100;
+  }
+
+  getFinalAmount(): number {
+    return this.getSubtotal() - this.getDiscountAmount() + this.getTaxAmount();
+  }
+
   getTotal(): number {
     if (this.form.services.length > 0) {
       return this.form.services.reduce((sum, s) => sum + (s.price || 0), 0);
@@ -875,7 +972,11 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
         ...this.form,
         endTime,
         durationMin: duration,
-        estimatedTotal: this.getTotal(),
+        estimatedTotal: this.getFinalAmount(),
+        discountType: this.discountType,
+        discountValue: this.discountValue,
+        taxRate: this.taxRate,
+        finalAmount: this.getFinalAmount(),
         clientName: this.selectedClient?.fullName || '',
         staffName: staff?.fullName || '',
         branchName,
