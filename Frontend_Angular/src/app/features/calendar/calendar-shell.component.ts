@@ -12,6 +12,7 @@ import { CalendarGridComponent } from './calendar-grid.component';
 import { AppointmentDialogComponent } from './appointment-dialog.component';
 import { BookingsService } from '../bookings/bookings.service';
 import { StaffTimelineComponent } from './calendar-staff-timeline/calendar-staff-timeline.component';
+import type { ContextMenuEvent, DragSlotSelection } from './calendar-staff-timeline/calendar-staff-timeline.component';
 import { StaffTimelineService } from './calendar-staff-timeline/calendar-staff-timeline.service';
 import { DragEventSystem } from './calendar-drag-engine/calendar-drag-events-system';
 import { ConflictVisualService } from './calendar-conflict-engine/calendar-conflict-visual.service';
@@ -19,6 +20,14 @@ import { QueueEngineService } from './calendar-queue-engine/calendar-queue-engin
 import { getStaffInitials } from './calendar-staff-timeline/calendar-staff-timeline-engine';
 import type { StaffTimelineViewData } from './calendar-staff-timeline/calendar-staff-timeline.models';
 import type { SidebarStaff } from './calendar-sidebar.component';
+
+const STORAGE_KEY = 'ambition_calendar_view';
+
+interface SavedView {
+  view: CalendarView;
+  branchId: string;
+  staffId: string;
+}
 
 @Component({
   selector: 'app-calendar-shell',
@@ -78,6 +87,9 @@ import type { SidebarStaff } from './calendar-sidebar.component';
             [data]="timelineData"
             (appointmentClick)="onAppointmentClick($event)"
             (slotClick)="onTimelineSlotClick($event)"
+            (slotRangeClick)="onTimelineSlotRangeClick($event)"
+            (contextAction)="onContextMenuAction($event)"
+            (quickDuplicate)="onQuickDuplicate($event)"
           ></app-staff-timeline>
         </ng-container>
       </div>
@@ -91,6 +103,7 @@ import type { SidebarStaff } from './calendar-sidebar.component';
       [defaultStaffId]="dialogDefaultStaffId"
       [defaultBranchId]="dialogDefaultBranchId"
       [appointments]="allAppointments"
+      [isDuplicate]="isDuplicateMode"
       (save)="onDialogSave($event)"
       (delete)="onDialogDelete($event)"
       (close)="closeDialog()"
@@ -190,6 +203,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   dialogDefaultTime = '';
   dialogDefaultStaffId = '';
   dialogDefaultBranchId = '';
+  isDuplicateMode = false;
 
   toastMessage = '';
   toastVisible = false;
@@ -203,6 +217,8 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   private branches: { id: string; name?: string; city?: string }[] = [];
 
   ngOnInit(): void {
+    this.restoreSavedView();
+
     this.subs.push(
       this.refresh$.pipe(
         switchMap(() => {
@@ -258,6 +274,27 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.cleanupFns.forEach(fn => fn());
     this.refresh$.complete();
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
+  }
+
+  private saveView(): void {
+    try {
+      const saved: SavedView = {
+        view: this.view,
+        branchId: this.dialogDefaultBranchId,
+        staffId: this.dialogDefaultStaffId,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch { }
+  }
+
+  private restoreSavedView(): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const saved: SavedView = JSON.parse(raw);
+        if (saved.view) this.view = saved.view;
+      }
+    } catch { }
   }
 
   private loadForCurrentView(): Observable<CalendarBooking[]> {
@@ -361,6 +398,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
 
   setView(v: CalendarView): void {
     this.view = v;
+    this.saveView();
     this.loadAppointments();
   }
 
@@ -371,6 +409,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
   onDateSelected(date: Date): void {
     this.currentDate = date;
     this.view = 'day';
+    this.saveView();
     this.loadAppointments();
   }
 
@@ -445,12 +484,27 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.dialogDefaultStaffId = event.staffId;
     this.dialogDefaultBranchId = this.dialogDefaultBranchId || this.branches[0]?.id || '';
     this.selectedBooking = null;
+    this.isDuplicateMode = false;
+    this.dialogVisible = true;
+  }
+
+  onTimelineSlotRangeClick(event: DragSlotSelection): void {
+    const dateStr = this.currentDate.toISOString().slice(0, 10);
+    const startHour = event.startHour;
+    const endHour = event.endHour;
+    this.dialogDefaultDate = dateStr;
+    this.dialogDefaultTime = `${startHour.toString().padStart(2, '0')}:00`;
+    this.dialogDefaultStaffId = event.staffId;
+    this.dialogDefaultBranchId = this.dialogDefaultBranchId || this.branches[0]?.id || '';
+    this.selectedBooking = null;
+    this.isDuplicateMode = false;
     this.dialogVisible = true;
   }
 
   onDaySelect(date: Date): void {
     this.currentDate = date;
     this.view = 'day';
+    this.saveView();
     this.loadAppointments();
   }
 
@@ -462,12 +516,69 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
         this.dialogDefaultTime = '';
         this.dialogDefaultStaffId = '';
         this.dialogDefaultBranchId = '';
+        this.isDuplicateMode = false;
         this.dialogVisible = true;
       },
       error: () => {
         // booking not found
       },
     });
+  }
+
+  onQuickDuplicate(appointmentId: string): void {
+    this.bookingsService.getById(appointmentId).subscribe({
+      next: (booking) => {
+        this.selectedBooking = booking as any;
+        this.isDuplicateMode = true;
+        this.dialogVisible = true;
+      },
+      error: () => {
+        this.showToast('Failed to load appointment');
+      },
+    });
+  }
+
+  onContextMenuAction(event: { action: string; appointmentId: string }): void {
+    switch (event.action) {
+      case 'open':
+        this.onAppointmentClick(event.appointmentId);
+        break;
+      case 'checkout':
+        this.bookingsService.getById(event.appointmentId).subscribe({
+          next: (booking) => {
+            this.selectedBooking = booking as any;
+            this.dialogVisible = true;
+          },
+        });
+        break;
+      case 'duplicate':
+        this.onQuickDuplicate(event.appointmentId);
+        break;
+      case 'reschedule':
+        this.bookingsService.getById(event.appointmentId).subscribe({
+          next: (booking) => {
+            this.selectedBooking = booking as any;
+            this.dialogVisible = true;
+          },
+        });
+        break;
+      case 'cancel':
+        this.bookingsService.cancel(event.appointmentId, { reason: 'Cancelled from calendar' }).subscribe({
+          next: () => {
+            this.loadAppointments();
+            this.showToast('Appointment cancelled');
+          },
+        });
+        break;
+      case 'delete':
+        this.bookingsService.cancel(event.appointmentId, { reason: 'Deleted from calendar' }).subscribe({
+          next: () => {
+            this.loadAppointments();
+            this.showToast('Appointment deleted');
+          },
+        });
+        break;
+    }
   }
 
   private showToast(message: string): void {
@@ -542,6 +653,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
     this.selectedBooking = null;
     this.dialogDefaultDate = '';
     this.dialogDefaultTime = '';
+    this.isDuplicateMode = false;
   }
 
   private toOptimisticBooking(id: string, data: DialogAppointmentData): CalendarBooking {

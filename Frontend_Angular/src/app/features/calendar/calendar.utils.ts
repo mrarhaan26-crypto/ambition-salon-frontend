@@ -274,8 +274,9 @@ export function getStatusDotColor(status: string): string {
 
 export function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    DRAFT: 'Draft', PENDING: 'Pending', CONFIRMED: 'Confirmed',
-    CHECKED_IN: 'Checked In', WAITING: 'Waiting', IN_SERVICE: 'In Service',
+    DRAFT: 'Draft', PENDING: 'Pending', NEEDS_CONFIRMATION: 'Needs Confirmation',
+    CONFIRMED: 'Confirmed', ARRIVED: 'Arrived', CHECKED_IN: 'Checked In',
+    WAITING: 'Waiting', IN_SERVICE: 'In Service',
     COMPLETED: 'Completed', CANCELLED: 'Cancelled', NO_SHOW: 'No Show',
     PAID: 'Paid', ARCHIVED: 'Archived',
   };

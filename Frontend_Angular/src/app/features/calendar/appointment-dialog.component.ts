@@ -47,7 +47,7 @@ export interface DialogAppointmentData {
     <div class="dialog-overlay" (click)="close.emit()" role="dialog" aria-modal="true" [attr.aria-label]="isEditing ? 'Edit appointment' : 'New appointment'">
       <div class="dialog-panel" (click)="$event.stopPropagation()">
         <div class="dialog-head">
-          <h2 id="dialog-title">{{ isEditing ? 'Edit Appointment' : 'New Appointment' }}</h2>
+          <h2 id="dialog-title">{{ isDuplicate ? 'Duplicate Appointment' : (isEditing ? 'Edit Appointment' : 'New Appointment') }}</h2>
           <button class="dialog-close" (click)="close.emit()" aria-label="Close dialog">&times;</button>
         </div>
 
@@ -55,20 +55,21 @@ export interface DialogAppointmentData {
           <div class="form-group">
             <label for="apt-client">Client</label>
             <div class="client-search-wrap">
-              <input
-                #firstField
-                id="apt-client"
-                type="text"
-                [(ngModel)]="clientSearchText"
-                (input)="onClientSearchInput()"
-                (focus)="onClientSearchFocus()"
-                (blur)="onClientSearchBlur()"
-                (keydown)="onClientSearchKeydown($event)"
-                placeholder="Search client by name or phone..."
-                autocomplete="off"
-                aria-label="Search client"
-                class="client-search-input"
-              >
+                <input
+                  #firstField
+                  id="apt-client"
+                  type="text"
+                  [(ngModel)]="clientSearchText"
+                  (input)="onClientSearchInput()"
+                  (focus)="onClientSearchFocus()"
+                  (blur)="onClientSearchBlur()"
+                  (keydown)="onClientSearchKeydown($event)"
+                  placeholder="Search client by name or phone..."
+                  autocomplete="off"
+                  aria-label="Search client"
+                  class="client-search-input"
+                  [readonly]="isFieldReadonly('client')"
+                >
               <div class="client-dropdown" *ngIf="showClientDropdown && (clientSearching || filteredClients.length > 0 || clientSearchText.length >= 2)">
                 <div class="cd-loading" *ngIf="clientSearching">
                   <div class="mini-spinner"></div><span>Searching...</span>
@@ -121,7 +122,7 @@ export interface DialogAppointmentData {
 
           <div class="form-group">
             <label for="apt-service">Service</label>
-            <select id="apt-service" [(ngModel)]="selectedServiceId" (change)="onServiceChange()" aria-label="Service" class="form-select">
+            <select id="apt-service" [(ngModel)]="selectedServiceId" (change)="onServiceChange()" aria-label="Service" class="form-select" [disabled]="isFieldReadonly('service')">
               <option value="">Select service...</option>
               <option *ngFor="let s of serviceList" [value]="s.id">{{ s.name }} &mdash; {{ s.durationMin }}m / {{ s.price | currency }}</option>
             </select>
@@ -129,7 +130,7 @@ export interface DialogAppointmentData {
 
           <div class="form-group">
             <label for="apt-staff">Staff</label>
-            <select id="apt-staff" [(ngModel)]="form.staffId" (change)="onStaffChange()" aria-label="Staff" class="form-select">
+            <select id="apt-staff" [(ngModel)]="form.staffId" (change)="onStaffChange()" aria-label="Staff" class="form-select" [disabled]="isFieldReadonly('staff')">
               <option value="">Select staff...</option>
               <option *ngFor="let s of staffList" [value]="s.id" [class.staff-unavailable]="!isStaffAvailable(s.id)">
                 {{ s.fullName }} <ng-container *ngIf="!isStaffAvailable(s.id)">(unavailable)</ng-container>
@@ -157,7 +158,7 @@ export interface DialogAppointmentData {
 
           <div class="form-group">
             <label for="apt-resource">Resource</label>
-            <select id="apt-resource" [(ngModel)]="form.resourceId" aria-label="Resource" class="form-select">
+            <select id="apt-resource" [(ngModel)]="form.resourceId" aria-label="Resource" class="form-select" [disabled]="isFieldReadonly('resource')">
               <option value="">No resource</option>
               <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }} ({{ r.type }})</option>
             </select>
@@ -196,18 +197,18 @@ export interface DialogAppointmentData {
           <div class="form-group">
             <label>Discount</label>
             <div class="discount-row">
-              <select [(ngModel)]="discountType" class="form-select dt-select">
+              <select [(ngModel)]="discountType" class="form-select dt-select" [disabled]="isDuplicate">
                 <option value="fixed">Fixed ($)</option>
                 <option value="percentage">Percent (%)</option>
               </select>
-              <input type="number" [(ngModel)]="discountValue" min="0" [max]="discountType === 'percentage' ? 100 : getSubtotal()" class="form-input dv-input" placeholder="0">
+              <input type="number" [(ngModel)]="discountValue" min="0" [max]="discountType === 'percentage' ? 100 : getSubtotal()" class="form-input dv-input" placeholder="0" [readonly]="isDuplicate">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label>Tax Rate (%)</label>
-              <input type="number" [(ngModel)]="taxRate" min="0" max="100" step="0.1" class="form-input" placeholder="0">
+              <input type="number" [(ngModel)]="taxRate" min="0" max="100" step="0.1" class="form-input" placeholder="0" [readonly]="isDuplicate">
             </div>
           </div>
 
@@ -218,7 +219,7 @@ export interface DialogAppointmentData {
 
           <div class="form-group">
             <label for="apt-status">Status</label>
-            <select id="apt-status" [(ngModel)]="form.status" aria-label="Status" class="form-select">
+            <select id="apt-status" [(ngModel)]="form.status" aria-label="Status" class="form-select" [disabled]="isDuplicate">
               <option *ngFor="let s of statusOptions" [value]="s">{{ STATUS_LABELS[s] || s }}</option>
             </select>
           </div>
@@ -235,7 +236,7 @@ export interface DialogAppointmentData {
 
           <div class="form-group">
             <label for="apt-notes">Notes</label>
-            <textarea id="apt-notes" [(ngModel)]="form.notes" rows="3" placeholder="Optional notes..." aria-label="Notes" class="form-textarea"></textarea>
+            <textarea id="apt-notes" [(ngModel)]="form.notes" rows="3" placeholder="Optional notes..." aria-label="Notes" class="form-textarea" [readonly]="isDuplicate"></textarea>
           </div>
         </div>
 
@@ -426,6 +427,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   @Input() defaultTime = '';
   @Input() defaultStaffId = '';
   @Input() defaultBranchId = '';
+  @Input() isDuplicate = false;
   @Output() save = new EventEmitter<{ data: DialogAppointmentData; id?: string }>();
   @Output() delete = new EventEmitter<string>();
   @Output() close = new EventEmitter<void>();
@@ -559,7 +561,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
     if (this.booking) {
       const start = new Date(this.booking.startTime);
       this.form = {
-        id: this.booking.id,
+        id: this.isDuplicate ? '' : this.booking.id,
         clientId: this.booking.clientId || '',
         staffId: this.booking.staffId || '',
         title: this.booking.title || '',
@@ -590,6 +592,11 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
       this.formTime = this.defaultTime || now.toTimeString().slice(0, 5);
     }
     this.checkConflicts();
+  }
+
+  isFieldReadonly(field: string): boolean {
+    if (!this.isDuplicate) return false;
+    return field !== 'date' && field !== 'time';
   }
 
   private emptyForm(): DialogAppointmentData {
