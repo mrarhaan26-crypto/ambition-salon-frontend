@@ -1,12 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, OnChanges, SimpleChanges, inject, HostListener, ElementRef, ViewChild, AfterViewInit, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Subject, of, Subscription } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
+import { Subject, of, Subscription, forkJoin, Observable } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap, catchError, map } from 'rxjs/operators';
 import { StaffService } from '../staff/staff.service';
 import { ClientsService } from '../clients/clients.service';
 import { ServicesService } from '../services/services.service';
-import { BookingsService } from '../bookings/bookings.service';
 import { Staff } from '../staff/staff.models';
 import { Client } from '../clients/client.model';
 import { SalonService } from '../services/services.models';
@@ -132,7 +131,13 @@ export interface DialogAppointmentData {
                 {{ s.fullName }} <ng-container *ngIf="!isStaffAvailable(s.id)">(unavailable)</ng-container>
               </option>
             </select>
-            <span class="field-hint" *ngIf="form.staffId && !isStaffAvailableAtTime()" class="hint-warn">Staff may be busy at this time</span>
+            <span class="field-hint av-status" *ngIf="form.staffId && formDate && formTime && availabilityStatus !== 'unknown'">
+              <span *ngIf="availabilityStatus === 'available' && !conflictExists" class="hint-ok">✓ Available</span>
+              <span *ngIf="conflictExists" class="hint-warn">⚠ Conflict</span>
+              <span *ngIf="availabilityStatus === 'outside-hours'" class="hint-warn">⚠ Outside working hours</span>
+              <span *ngIf="availabilityStatus === 'not-scheduled'" class="hint-error">🚫 Staff not scheduled</span>
+            </span>
+            <span class="field-hint hint-info" *ngIf="validationBusy">Checking availability...</span>
           </div>
 
           <div class="form-row">
@@ -196,7 +201,7 @@ export interface DialogAppointmentData {
         <div class="dialog-actions">
           <button class="btn btn-secondary" (click)="close.emit()">Cancel</button>
           <button *ngIf="isEditing" class="btn btn-danger" (click)="onDelete()">Delete</button>
-          <button class="btn btn-primary" (click)="onSave()" [disabled]="!isValid() || saveBusy">
+          <button class="btn btn-primary" (click)="onSave()" [disabled]="!isValid() || saveBusy || validationBusy">
             {{ saveBusy ? 'Saving...' : (isEditing ? 'Update' : 'Create') }}
           </button>
         </div>
@@ -256,7 +261,11 @@ export interface DialogAppointmentData {
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .form-group-full { grid-column: 1 / -1; }
     .field-hint { font-size: 11px; padding: 2px 0 0; }
-    .hint-warn { color: #d97706; }
+    .av-status { display: flex; align-items: center; gap: 4px; }
+    .hint-ok { color: #059669; font-weight: 600; }
+    .hint-warn { color: #d97706; font-weight: 600; }
+    .hint-error { color: #dc2626; font-weight: 600; }
+    .hint-info { color: #6b7280; font-style: italic; }
     .color-preview-row { display: flex; align-items: center; gap: 8px; height: 42px; }
     .color-swatch { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border, #e5e7eb); flex-shrink: 0; }
     .color-label { font-size: 13px; font-weight: 600; }
@@ -369,7 +378,6 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   private staffService = inject(StaffService);
   private clientsService = inject(ClientsService);
   private servicesService = inject(ServicesService);
-  private bookingsService = inject(BookingsService);
   private resourceEngine = inject(ResourceEngineService);
   private cdr = inject(ChangeDetectorRef);
 
@@ -401,11 +409,17 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   duplicateClients: Client[] = [];
 
   conflictWarning = '';
+  conflictExists = false;
+  availabilityStatus: 'unknown' | 'available' | 'unavailable' | 'outside-hours' | 'not-scheduled' = 'unknown';
   saveBusy = false;
   saveError = '';
+  validationBusy = false;
 
   private searchSubject = new Subject<string>();
   private subs: Subscription[] = [];
+  private searchBlurTimer: ReturnType<typeof setTimeout> | null = null;
+  private scheduleCache = new Map<string, any[]>();
+  private validationSubject = new Subject<void>();
 
   get isEditing(): boolean {
     return !!this.booking;
@@ -430,6 +444,23 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
         this.filteredClients = items || [];
         this.clientHighlightIndex = -1;
         this.cdr.markForCheck();
+      }),
+    );
+
+    this.subs.push(
+      this.validationSubject.pipe(
+        debounceTime(300),
+        switchMap(() => this.performValidation()),
+      ).subscribe(result => {
+        this.validationBusy = false;
+        if (result) {
+          this.applyValidation(result.schedule, result.bookings, result.staffId, result.dateStr, result.timeStr);
+        } else {
+          this.availabilityStatus = 'unknown';
+          this.conflictExists = false;
+          this.conflictWarning = '';
+          this.cdr.markForCheck();
+        }
       }),
     );
   }
@@ -459,6 +490,9 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
 
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
+    this.searchSubject.complete();
+    this.validationSubject.complete();
+    if (this.searchBlurTimer !== null) clearTimeout(this.searchBlurTimer);
   }
 
   private initForm(): void {
@@ -495,6 +529,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
       this.formDate = this.defaultDate || now.toISOString().slice(0, 10);
       this.formTime = this.defaultTime || now.toTimeString().slice(0, 5);
     }
+    this.checkConflicts();
   }
 
   private emptyForm(): DialogAppointmentData {
@@ -540,9 +575,10 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   }
 
   onClientSearchBlur(): void {
-    setTimeout(() => {
+    this.searchBlurTimer = setTimeout(() => {
       this.showClientDropdown = false;
       this.cdr.markForCheck();
+      this.searchBlurTimer = null;
     }, 200);
   }
 
@@ -656,19 +692,141 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   }
 
   isStaffAvailable(staffId: string): boolean {
-    if (!this.staffList.length) return true;
-    return true;
+    if (!this.formDate) return true;
+    const schedule = this.scheduleCache.get(staffId);
+    if (!schedule) return true;
+    const dayOfWeek = new Date(this.formDate + 'T12:00:00').getDay();
+    return schedule.some((s: any) => s.dayOfWeek === dayOfWeek && s.isActive !== false);
   }
 
   isStaffAvailableAtTime(): boolean {
-    if (!this.form.staffId || !this.formDate || !this.formTime) return true;
-    return true;
+    return this.availabilityStatus === 'available' || this.availabilityStatus === 'unknown';
   }
 
   checkConflicts(): void {
-    this.conflictWarning = '';
-    if (!this.form.staffId || !this.formDate || !this.formTime || !this.selectedServiceId) return;
+    this.validationSubject.next();
+  }
+
+  private performValidation(): Observable<{
+    schedule: any[];
+    bookings: any[];
+    staffId: string;
+    dateStr: string;
+    timeStr: string;
+  } | null> {
+    if (!this.form.staffId || !this.formDate || !this.formTime) {
+      return of(null);
+    }
+    this.validationBusy = true;
     this.cdr.markForCheck();
+
+    const staffId = this.form.staffId;
+    const dateStr = this.formDate;
+    const timeStr = this.formTime;
+
+    const schedule$ = this.getScheduleObs(staffId).pipe(
+      catchError(() => of([] as any[])),
+    );
+    const bookings$ = this.getDayBookingsObs(staffId, dateStr).pipe(
+      catchError(() => of([] as any[])),
+    );
+
+    return forkJoin({ schedule: schedule$, bookings: bookings$ }).pipe(
+      map(({ schedule, bookings }) => ({ schedule, bookings, staffId, dateStr, timeStr })),
+    );
+  }
+
+  private getScheduleObs(staffId: string): Observable<any[]> {
+    const cached = this.scheduleCache.get(staffId);
+    if (cached) return of(cached);
+    return this.staffService.getSchedule(staffId).pipe(
+      map((res: any) => {
+        const items = Array.isArray(res) ? res : [];
+        this.scheduleCache.set(staffId, items);
+        return items;
+      }),
+    );
+  }
+
+  private getDayBookingsObs(staffId: string, dateStr: string): Observable<any[]> {
+    const dayStart = new Date(dateStr + 'T00:00:00');
+    const dayEnd = new Date(dateStr + 'T23:59:59');
+    return this.staffService.getBookings(staffId, {
+      from: dayStart.toISOString(),
+      to: dayEnd.toISOString(),
+    }).pipe(
+      map((res: any) => Array.isArray(res) ? res : []),
+    );
+  }
+
+  private runValidation(): void {
+    this.checkConflicts();
+  }
+
+  private applyValidation(schedule: any[], bookings: any[], staffId: string, dateStr: string, timeStr: string): void {
+    this.validationBusy = false;
+
+    const date = new Date(dateStr + 'T' + timeStr + ':00');
+    const dayOfWeek = date.getDay();
+    const timeMinutes = date.getHours() * 60 + date.getMinutes();
+    const duration = this.getDuration();
+    const endTimeMinutes = timeMinutes + duration;
+
+    const scheduledSlot = schedule.find((s: any) => s.dayOfWeek === dayOfWeek && s.isActive !== false);
+
+    if (!scheduledSlot) {
+      this.availabilityStatus = 'not-scheduled';
+      this.conflictExists = false;
+      this.conflictWarning = '';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const slotStartMinutes = this.timeToMinutes(scheduledSlot.startTime);
+    const slotEndMinutes = this.timeToMinutes(scheduledSlot.endTime);
+
+    if (timeMinutes < slotStartMinutes || endTimeMinutes > slotEndMinutes) {
+      this.availabilityStatus = 'outside-hours';
+      this.conflictExists = false;
+      this.conflictWarning = '';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const activeStatuses = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
+    const bookingStart = date;
+    const bookingEnd = new Date(date.getTime() + duration * 60000);
+    const excludeId = this.isEditing ? this.form.id : undefined;
+
+    const conflict = (bookings || []).find((b: any) => {
+      if (excludeId && b.id === excludeId) return false;
+      if (!activeStatuses.includes(b.status)) return false;
+      const bStart = new Date(b.startTime);
+      const bEnd = new Date(b.endTime);
+      return bookingStart < bEnd && bookingEnd > bStart;
+    });
+
+    if (conflict) {
+      this.availabilityStatus = 'available';
+      this.conflictExists = true;
+      const fmtTime = (iso: string) => {
+        const d = new Date(iso);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      };
+      this.conflictWarning = `"${conflict.title || 'Appointment'}" (${fmtTime(conflict.startTime)} - ${fmtTime(conflict.endTime)}) overlaps with this slot`;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.availabilityStatus = 'available';
+    this.conflictExists = false;
+    this.conflictWarning = '';
+    this.cdr.markForCheck();
+  }
+
+  private timeToMinutes(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
   }
 
   getDuration(): number {
@@ -699,7 +857,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   }
 
   isValid(): boolean {
-    return !!(this.form.clientId && this.form.staffId && this.form.services.length > 0 && this.formDate && this.formTime && !this.saveBusy);
+    return !!(this.form.clientId && this.form.staffId && this.form.services.length > 0 && this.formDate && this.formTime && !this.saveBusy && !this.conflictExists);
   }
 
   onSave(): void {
