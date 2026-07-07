@@ -5,6 +5,11 @@ export const STAFF_TIMELINE_SNAP_MINUTES = 15;
 export const STAFF_TIMELINE_BUSINESS_START = 8;
 export const STAFF_TIMELINE_BUSINESS_END = 21;
 
+export const ZOOM_LEVELS = [32, 40, 56, 72, 96, 120, 144] as const;
+export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
+export const DEFAULT_ZOOM_LEVEL: ZoomLevel = 56;
+export const ZOOM_STORAGE_KEY = 'ambition_timeline_zoom';
+
 export const STAFF_STATUS = [
   'AVAILABLE',
   'BUSY',

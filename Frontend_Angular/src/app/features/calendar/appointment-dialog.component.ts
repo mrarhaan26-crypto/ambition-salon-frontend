@@ -14,6 +14,8 @@ import type { AppointmentStatus } from './calendar.constants';
 import type { CalendarBooking } from './calendar-appointment.models';
 import { ResourceEngineService } from './calendar-resource-engine/calendar-resource-engine.service';
 import type { ResourceEntity } from './calendar-resource-engine/calendar-resource.models';
+import { SmartTimeSuggestionsService } from './smart-time-suggestions.service';
+import type { SmartSuggestions, TimeSuggestion } from './calendar.models';
 
 export interface DialogAppointmentData {
   id?: string;
@@ -217,6 +219,41 @@ export interface DialogAppointmentData {
             <span>{{ conflictWarning }}</span>
           </div>
 
+          <div class="suggestions-section" *ngIf="smartSuggestions && !conflictExists">
+            <div class="suggestions-header">
+              <span class="suggestions-icon">&#x2728;</span>
+              <span class="suggestions-title">Smart Suggestions</span>
+              <span class="suggestions-subtitle">AI-powered time slots</span>
+            </div>
+            <div class="suggestions-grid">
+              <button class="suggestion-card" *ngIf="smartSuggestions.earliest" (click)="applySuggestion(smartSuggestions.earliest)" type="button">
+                <span class="sc-badge sc-earliest">Earliest</span>
+                <span class="sc-time">{{ smartSuggestions.earliest.startTime | date:'shortTime' }}</span>
+                <span class="sc-reason">{{ smartSuggestions.earliest.reason }}</span>
+              </button>
+              <button class="suggestion-card" *ngIf="smartSuggestions.recommended" (click)="applySuggestion(smartSuggestions.recommended)" type="button">
+                <span class="sc-badge sc-recommended">Best</span>
+                <span class="sc-time">{{ smartSuggestions.recommended.startTime | date:'shortTime' }}</span>
+                <span class="sc-reason">{{ smartSuggestions.recommended.reason }}</span>
+              </button>
+              <button class="suggestion-card" *ngIf="smartSuggestions.leastBusy" (click)="applySuggestion(smartSuggestions.leastBusy)" type="button">
+                <span class="sc-badge sc-quiet">Quiet</span>
+                <span class="sc-time">{{ smartSuggestions.leastBusy.startTime | date:'shortTime' }}</span>
+                <span class="sc-reason">{{ smartSuggestions.leastBusy.reason }}</span>
+              </button>
+              <button class="suggestion-card" *ngIf="smartSuggestions.gapFill" (click)="applySuggestion(smartSuggestions.gapFill)" type="button">
+                <span class="sc-badge sc-gap">Gap</span>
+                <span class="sc-time">{{ smartSuggestions.gapFill.startTime | date:'shortTime' }}</span>
+                <span class="sc-reason">{{ smartSuggestions.gapFill.reason }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="suggestions-loading" *ngIf="suggestionsLoading">
+            <div class="mini-spinner"></div>
+            <span>Finding best time slots...</span>
+          </div>
+
           <div class="form-group">
             <label for="apt-status">Status</label>
             <select id="apt-status" [(ngModel)]="form.status" aria-label="Status" class="form-select" [disabled]="isDuplicate">
@@ -416,6 +453,42 @@ export interface DialogAppointmentData {
       .nc-grid { grid-template-columns: 1fr; }
       .nc-full { grid-column: 1; }
     }
+    .suggestions-section {
+      background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 10px 12px;
+    }
+    .suggestions-header {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .suggestions-icon { font-size: 14px; }
+    .suggestions-title { font-size: 13px; font-weight: 700; color: #0369a1; }
+    .suggestions-subtitle { font-size: 11px; color: #7c9fbf; }
+    .suggestions-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .suggestion-card {
+      display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+      border: 1px solid #e0f2fe; border-radius: 8px; background: #fff;
+      cursor: pointer; text-align: left; transition: all 0.12s; font-family: inherit;
+    }
+    .suggestion-card:hover { border-color: #38bdf8; box-shadow: 0 1px 4px rgba(6, 182, 212, 0.15); }
+    .sc-badge {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 4px; align-self: flex-start;
+    }
+    .sc-earliest { background: #dbeafe; color: #1d4ed8; }
+    .sc-recommended { background: #dcfce7; color: #15803d; }
+    .sc-quiet { background: #fef3c7; color: #b45309; }
+    .sc-gap { background: #f3e8ff; color: #7c3aed; }
+    .sc-time { font-size: 14px; font-weight: 700; color: #0f172a; }
+    .sc-reason { font-size: 11px; color: #64748b; line-height: 1.3; }
+    .suggestions-loading {
+      display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+      font-size: 12px; color: #64748b;
+    }
+    @media (max-width: 640px) {
+      .suggestions-grid { grid-template-columns: 1fr; }
+    }
     @media (prefers-reduced-motion: reduce) {
       .dialog-overlay, .dialog-panel { animation: none; }
     }
@@ -438,6 +511,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   private clientsService = inject(ClientsService);
   private servicesService = inject(ServicesService);
   private resourceEngine = inject(ResourceEngineService);
+  private smartSuggestionsService = inject(SmartTimeSuggestionsService);
   private cdr = inject(ChangeDetectorRef);
 
   STATUS_LABELS = STATUS_LABELS;
@@ -476,6 +550,9 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
   saveBusy = false;
   saveError = '';
   validationBusy = false;
+
+  smartSuggestions: SmartSuggestions | null = null;
+  suggestionsLoading = false;
 
   private searchSubject = new Subject<string>();
   private subs: Subscription[] = [];
@@ -592,6 +669,7 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
       this.formTime = this.defaultTime || now.toTimeString().slice(0, 5);
     }
     this.checkConflicts();
+    this.onFetchSuggestions();
   }
 
   isFieldReadonly(field: string): boolean {
@@ -732,11 +810,18 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
 
   onStaffChange(): void {
     this.checkConflicts();
+    this.onFetchSuggestions();
     this.cdr.markForCheck();
   }
 
   onServiceChange(): void {
-    if (!this.selectedServiceId) return;
+    if (!this.selectedServiceId) {
+      this.form.services = [];
+      this.checkConflicts();
+      this.onFetchSuggestions();
+      this.cdr.markForCheck();
+      return;
+    }
     const svc = this.serviceList.find(s => s.id === this.selectedServiceId);
     if (svc) {
       this.form.services = [{
@@ -750,11 +835,13 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
       }
     }
     this.checkConflicts();
+    this.onFetchSuggestions();
     this.cdr.markForCheck();
   }
 
   onDateTimeChange(): void {
     this.checkConflicts();
+    this.onFetchSuggestions();
     this.cdr.markForCheck();
   }
 
@@ -772,6 +859,42 @@ export class AppointmentDialogComponent implements OnChanges, AfterViewInit, OnI
 
   checkConflicts(): void {
     this.validationSubject.next();
+  }
+
+  onFetchSuggestions(): void {
+    if (!this.form.staffId || !this.formDate || this.getDuration() <= 0) {
+      this.smartSuggestions = null;
+      this.cdr.markForCheck();
+      return;
+    }
+    this.suggestionsLoading = true;
+    this.smartSuggestions = null;
+    this.cdr.markForCheck();
+    this.smartSuggestionsService.getSuggestions(
+      this.form.staffId,
+      this.formDate,
+      this.getDuration(),
+      this.form.id,
+    ).subscribe({
+      next: (suggestions) => {
+        this.smartSuggestions = suggestions;
+        this.suggestionsLoading = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.smartSuggestions = null;
+        this.suggestionsLoading = false;
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  applySuggestion(suggestion: TimeSuggestion): void {
+    const d = new Date(suggestion.startTime);
+    this.formDate = d.toISOString().slice(0, 10);
+    this.formTime = d.toTimeString().slice(0, 5);
+    this.onDateTimeChange();
+    this.cdr.markForCheck();
   }
 
   private performValidation(): Observable<{

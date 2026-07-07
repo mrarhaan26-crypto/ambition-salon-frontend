@@ -337,3 +337,19 @@ export interface NoShowRiskInfo {
   riskLevel: 'low' | 'medium' | 'high';
   reason: string;
 }
+
+export interface TimeSuggestion {
+  startTime: string;
+  endTime: string;
+  label: string;
+  score: number;
+  reason: string;
+  type: 'earliest' | 'leastBusy' | 'recommended' | 'gapFill';
+}
+
+export interface SmartSuggestions {
+  earliest: TimeSuggestion | null;
+  leastBusy: TimeSuggestion | null;
+  recommended: TimeSuggestion | null;
+  gapFill: TimeSuggestion | null;
+}

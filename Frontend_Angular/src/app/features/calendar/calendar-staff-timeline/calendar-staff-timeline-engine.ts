@@ -14,17 +14,17 @@ export function getMinutesFromMidnight(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-export function getAppointmentTop(startTime: string): number {
+export function getAppointmentTop(startTime: string, hourHeight = STAFF_TIMELINE_HOUR_HEIGHT_PX): number {
   const date = new Date(startTime);
   const minutesPastBusinessStart = getMinutesFromMidnight(date) - STAFF_TIMELINE_BUSINESS_START * 60;
-  return Math.max(0, (minutesPastBusinessStart / 60) * STAFF_TIMELINE_HOUR_HEIGHT_PX);
+  return Math.max(0, (minutesPastBusinessStart / 60) * hourHeight);
 }
 
-export function getAppointmentHeight(startTime: string, endTime: string): number {
+export function getAppointmentHeight(startTime: string, endTime: string, hourHeight = STAFF_TIMELINE_HOUR_HEIGHT_PX): number {
   const start = new Date(startTime);
   const end = new Date(endTime);
   const durationMinutes = Math.max(0, (end.getTime() - start.getTime()) / 60000);
-  return Math.max(20, (durationMinutes / 60) * STAFF_TIMELINE_HOUR_HEIGHT_PX);
+  return Math.max(20, (durationMinutes / 60) * hourHeight);
 }
 
 export function getCurrentTimePercent(): number {
@@ -39,10 +39,10 @@ export function isWithinBusinessHours(date: Date): boolean {
   return hours >= STAFF_TIMELINE_BUSINESS_START && hours < STAFF_TIMELINE_BUSINESS_END;
 }
 
-export function getCurrentTimeLineTop(): number {
+export function getCurrentTimeLineTop(hourHeight = STAFF_TIMELINE_HOUR_HEIGHT_PX): number {
   const now = new Date();
   const minutesPastBusinessStart = getMinutesFromMidnight(now) - STAFF_TIMELINE_BUSINESS_START * 60;
-  return Math.max(0, (minutesPastBusinessStart / 60) * STAFF_TIMELINE_HOUR_HEIGHT_PX);
+  return Math.max(0, (minutesPastBusinessStart / 60) * hourHeight);
 }
 
 export function isToday(date: Date): boolean {
@@ -56,6 +56,7 @@ export function computeTimelineAppointment(
   booking: CalendarBooking,
   staffId: string,
   color: string,
+  hourHeight = STAFF_TIMELINE_HOUR_HEIGHT_PX,
 ): StaffTimelineAppointment {
   const start = new Date(booking.startTime);
   const end = new Date(booking.endTime);
@@ -72,8 +73,8 @@ export function computeTimelineAppointment(
     durationMin,
     amount: booking.totalAmount ?? 0,
     staffId,
-    top: getAppointmentTop(booking.startTime),
-    height: getAppointmentHeight(booking.startTime, booking.endTime),
+    top: getAppointmentTop(booking.startTime, hourHeight),
+    height: getAppointmentHeight(booking.startTime, booking.endTime, hourHeight),
     left: 4,
     width: 0,
     color,

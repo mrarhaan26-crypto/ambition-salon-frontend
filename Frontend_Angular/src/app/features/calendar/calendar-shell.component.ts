@@ -102,7 +102,6 @@ interface SavedView {
       [defaultTime]="dialogDefaultTime"
       [defaultStaffId]="dialogDefaultStaffId"
       [defaultBranchId]="dialogDefaultBranchId"
-      [appointments]="allAppointments"
       [isDuplicate]="isDuplicateMode"
       (save)="onDialogSave($event)"
       (delete)="onDialogDelete($event)"

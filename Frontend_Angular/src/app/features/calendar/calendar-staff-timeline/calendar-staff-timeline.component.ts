@@ -6,12 +6,13 @@ import {
 } from '@angular/core';
 import { Subscription, fromEvent, interval } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { STAFF_TIMELINE_HOUR_HEIGHT_PX, STAFF_TIMELINE_HEADER_WIDTH_PX, WORKING_HOURS_COLORS, WORKING_HOURS_LABELS } from './calendar-staff-timeline.constants';
+import { STAFF_TIMELINE_HOUR_HEIGHT_PX, STAFF_TIMELINE_HEADER_WIDTH_PX, WORKING_HOURS_COLORS, WORKING_HOURS_LABELS, ZOOM_LEVELS, DEFAULT_ZOOM_LEVEL, ZOOM_STORAGE_KEY } from './calendar-staff-timeline.constants';
+import type { ZoomLevel } from './calendar-staff-timeline.constants';
 import type {
   StaffTimelineStaff, StaffTimelineAppointment, StaffTimelineViewData,
   StaffGroup, StaffTimelineFilterState, WorkingHourSlot,
 } from './calendar-staff-timeline.models';
-import { getTimelineHours, formatTimelineHour, formatTimelineTime, getCurrentTimeLineTop, isToday } from './calendar-staff-timeline-engine';
+import { getTimelineHours, formatTimelineHour, formatTimelineTime, getCurrentTimeLineTop, isToday, getMinutesFromMidnight } from './calendar-staff-timeline-engine';
 import { getWorkingHourTypeForTime } from './calendar-staff-timeline-engine';
 import { StaffHeaderCardComponent } from './calendar-staff-header-card.component';
 import { StaffTimelineFiltersComponent } from './calendar-staff-filters.component';
@@ -70,6 +71,21 @@ export interface DragSlotSelection {
       </div>
 
       <ng-container *ngIf="!loading && viewData.staffList.length > 0">
+        <div class="st-zoom-bar">
+          <div class="st-zoom-controls">
+            <span class="st-zoom-label">Zoom</span>
+            <span class="st-zoom-minus" (click)="zoomOut()" [class.st-zoom-disabled]="zoomLevelIndex === 0">&minus;</span>
+            <div class="st-zoom-slider">
+              <input type="range" [min]="0" [max]="ZOOM_LEVELS.length - 1" [value]="zoomLevelIndex" (input)="setZoomByIndex($event)" aria-label="Timeline zoom level">
+            </div>
+            <span class="st-zoom-plus" (click)="zoomIn()" [class.st-zoom-disabled]="zoomLevelIndex === ZOOM_LEVELS.length - 1">+</span>
+            <span class="st-zoom-value">{{ zoomLevel }}px</span>
+          </div>
+          <div class="st-today-badge" *ngIf="isToday" (click)="scrollToCurrentTime()">
+            <span class="st-today-dot"></span> Today
+          </div>
+        </div>
+
         <app-staff-timeline-filters
           [staffList]="viewData.staffList"
           (filterChange)="onFilterChange($event)"
@@ -91,7 +107,7 @@ export interface DragSlotSelection {
               <div
                 class="st-hour-header"
                 *ngFor="let hour of viewData.hours"
-                [style.min-width.px]="60"
+                [style.min-width.px]="hourBlockWidth"
               >
                 <span class="st-hour-label">{{ formatTimelineHour(hour) }}</span>
               </div>
@@ -119,6 +135,15 @@ export interface DragSlotSelection {
               (pointerup)="onTimelinePointerUp($event)"
               (pointerleave)="onTimelinePointerUp($event)"
             >
+              <div class="st-current-time-line-global" *ngIf="isToday"
+                [style.top.px]="currentTimeTop"
+                role="presentation" aria-hidden="true"
+              >
+                <div class="st-ctl-dot"></div>
+                <div class="st-ctl-line"></div>
+                <span class="st-ctl-label">Now</span>
+              </div>
+
               <div
                 class="st-timeline-row"
                 *ngFor="let staff of visibleStaff; let i = index; trackBy: trackByStaffId"
@@ -129,12 +154,13 @@ export interface DragSlotSelection {
                 <div
                   class="st-hour-block"
                   *ngFor="let hour of viewData.hours; let h = index; trackBy: trackByHour"
-                  [style.min-width.px]="60"
+                  [style.min-width.px]="hourBlockWidth"
                   [class.st-hour-business]="isBusinessHour(hour)"
                   [class.st-hour-outside]="!isBusinessHour(hour)"
                   [class.st-hour-break]="isBreakHour(staff, hour)"
                   [class.st-hour-drag-selected]="isDragSelected(staff.id, hour)"
                   [class.st-hour-drag-hover]="isDragHover(staff.id, hour)"
+                  [style.background]="getHeatmapColor(staff, hour)"
                   [title]="getBreakTooltip(staff, hour)"
                   (click)="onSlotClick(staff.id, hour, $event)"
                   (pointerdown)="onSlotPointerDown(staff.id, hour, $event, staff)"
@@ -143,18 +169,21 @@ export interface DragSlotSelection {
                   [attr.aria-label]="'Time slot ' + formatTimelineHour(hour) + ' for ' + staff.fullName"
                 >
                   <div class="st-break-stripe" *ngIf="isBreakHour(staff, hour)"></div>
+                  <div class="st-snap-dot" *ngFor="let m of snapMinutesList" [style.top.%]="(m / 60) * 100"></div>
                 </div>
 
                 <div
-                  class="st-appointment"
+                  class="st-appointment st-appt-enter"
                   *ngFor="let appt of getStaffAppointments(staff.id); trackBy: trackByApptId"
-                  [style.top.px]="appt.top"
-                  [style.height.px]="appt.height"
+                  [style.top.px]="recomputeTop(appt)"
+                  [style.height.px]="recomputeHeight(appt)"
                   [style.left.px]="appt.left"
-                  [style.background]="getApptBackground(appt)"
+                  [style.background]="getApptGradient(appt)"
                   [style.border-left-color]="getApptBorderColor(appt)"
+                  [style.box-shadow]="getApptShadow(appt)"
                   [class.st-appt-vip]="appt.isVIP"
                   [class.st-appt-overlap]="appt.hasOverlap"
+                  [class.st-appt-dragging]="isDraggingAppt(appt.id)"
                   role="button"
                   tabindex="0"
                   [attr.aria-label]="'Appointment: ' + appt.clientName + ' - ' + appt.serviceName"
@@ -175,16 +204,7 @@ export interface DragSlotSelection {
                   </div>
                   <div class="sta-duration-bar" [style.width.%]="getDurationBarPct(appt)"></div>
                   <span class="sta-vip-badge" *ngIf="appt.isVIP" aria-label="VIP client">&#9733;</span>
-                </div>
-
-                <div
-                  class="st-current-time-line"
-                  *ngIf="isToday"
-                  [style.top.px]="currentTimeTop"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <span class="st-current-time-label">Now</span>
+                  <div class="sta-shimmer"></div>
                 </div>
               </div>
             </div>
@@ -235,7 +255,7 @@ export interface DragSlotSelection {
     .staff-timeline {
       display: flex; flex-direction: column; flex: 1; min-height: 0;
       background: white; border: 1px solid #e5e7eb; border-radius: 16px;
-      overflow: hidden; position: relative;
+      overflow: hidden; position: relative; contain: layout;
     }
     .st-loading, .st-empty {
       display: flex; flex-direction: column; align-items: center;
@@ -250,6 +270,42 @@ export interface DragSlotSelection {
     @keyframes st-spin { to { transform: rotate(360deg); } }
     .st-empty strong { font-size: 16px; color: #374151; }
     .st-empty p { font-size: 13px; color: #9ca3af; margin: 0; }
+
+    .st-zoom-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 16px; border-bottom: 1px solid #e5e7eb;
+      background: #fafbfc; flex-shrink: 0;
+    }
+    .st-zoom-controls { display: flex; align-items: center; gap: 8px; }
+    .st-zoom-label { font-size: 11px; font-weight: 600; color: #6b7280; min-width: 32px; }
+    .st-zoom-minus, .st-zoom-plus {
+      width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;
+      font-size: 16px; font-weight: 700; color: #374151; user-select: none;
+      transition: background .12s, border-color .12s; line-height: 1;
+    }
+    .st-zoom-minus:hover, .st-zoom-plus:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .st-zoom-disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+    .st-zoom-slider { display: flex; align-items: center; }
+    .st-zoom-slider input[type=range] {
+      width: 80px; height: 4px; appearance: none; background: #d1d5db;
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    .st-zoom-slider input[type=range]::-webkit-slider-thumb {
+      appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #0b0b0b; cursor: pointer; border: 0;
+    }
+    .st-zoom-value { font-size: 11px; font-weight: 700; color: #6b7280; min-width: 32px; }
+    .st-today-badge {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; color: #ef4444; padding: 3px 10px;
+      border-radius: 20px; transition: background .15s;
+    }
+    .st-today-badge:hover { background: #fef2f2; }
+    .st-today-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
+      animation: st-pulse-dot 2s ease-in-out infinite;
+    }
 
     .st-wrapper { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
     .st-header-panel { display: flex; flex-shrink: 0; border-bottom: 2px solid #e5e7eb; background: #f9fafb; }
@@ -269,9 +325,9 @@ export interface DragSlotSelection {
     .st-hour-header:last-child { border-right: 0; }
     .st-hour-label { font-size: 11px; font-weight: 600; color: #6b7280; white-space: nowrap; }
 
-    .st-body { display: flex; flex: 1; min-height: 0; overflow: auto; }
+    .st-body { display: flex; flex: 1; min-height: 0; overflow: auto; scroll-behavior: smooth; }
     .st-staff-panel { flex-shrink: 0; overflow: hidden; }
-    .st-timeline-panel { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; user-select: none; }
+    .st-timeline-panel { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; user-select: none; contain: layout; }
 
     .st-staff-row { border-bottom: 1px solid #f1f5f9; }
     .st-staff-row-hidden { display: none; }
@@ -284,7 +340,7 @@ export interface DragSlotSelection {
 
     .st-hour-block {
       flex-shrink: 0; border-right: 1px solid #f1f5f9;
-      cursor: pointer; transition: background .1s; position: relative;
+      cursor: pointer; transition: background .15s ease; position: relative;
     }
     .st-hour-block:hover { background: #f0f4ff; }
     .st-hour-business { background: transparent; }
@@ -303,20 +359,88 @@ export interface DragSlotSelection {
     }
     .st-hour-drag-selected { background: rgba(99,102,241,0.12) !important; }
     .st-hour-drag-hover { background: rgba(99,102,241,0.08) !important; }
+    .st-hour-heat-low { background: rgba(22,163,74,0.06); }
+    .st-hour-heat-mid { background: rgba(234,179,8,0.1); }
+    .st-hour-heat-high { background: rgba(239,68,68,0.1); }
+
+    .st-snap-dot {
+      position: absolute; left: 0; right: 0; height: 1px;
+      background: rgba(0,0,0,0.03); pointer-events: none;
+    }
+
+    .st-current-time-line-global {
+      position: absolute; left: 0; right: 0; height: 2px;
+      z-index: 10; pointer-events: none; display: flex; align-items: center;
+    }
+    .st-ctl-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #ef4444;
+      margin-left: -4px; flex-shrink: 0;
+      animation: st-pulse-dot 2s ease-in-out infinite;
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.2);
+    }
+    .st-ctl-line {
+      flex: 1; height: 2px; background: linear-gradient(90deg, #ef4444, rgba(239,68,68,0.3));
+    }
+    .st-ctl-label {
+      background: #ef4444; color: white; font-size: 9px; font-weight: 700;
+      padding: 1px 6px; border-radius: 8px; line-height: 1.4;
+      margin-left: -4px;
+      animation: st-pulse-label 2s ease-in-out infinite;
+    }
+    @keyframes st-pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.2); }
+    }
+    @keyframes st-pulse-label {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.85; }
+    }
 
     .st-appointment {
-      position: absolute; border-radius: 6px; border-left: 3px solid;
-      padding: 4px 8px; font-size: 10px; cursor: pointer;
-      display: flex; flex-direction: column; gap: 1px; z-index: 1;
-      overflow: hidden; transition: transform .1s, box-shadow .1s;
+      position: absolute; border-radius: 8px; border-left: 3px solid;
+      padding: 5px 8px; font-size: 10px; cursor: pointer;
+      display: flex; flex-direction: column; gap: 2px; z-index: 1;
+      overflow: hidden;
+      transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease, opacity .2s ease, top .3s ease, height .3s ease;
+      will-change: transform; contain: layout;
+    }
+    .st-appt-enter {
+      animation: st-appt-slide-in .35s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    @keyframes st-appt-slide-in {
+      from { opacity: 0; transform: translateY(8px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .st-appointment:hover {
-      transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.08); z-index: 2;
+      transform: translateY(-2px) scale(1.02);
+      box-shadow:
+        0 4px 12px rgba(0,0,0,0.1),
+        0 2px 4px rgba(0,0,0,0.06);
+      z-index: 4;
     }
     .st-appointment:focus-visible {
       outline: 2px solid #6366f1; outline-offset: 2px; z-index: 3;
     }
-    .st-appt-vip { box-shadow: inset 0 0 0 1px #f59e0b; }
+    .st-appt-vip {
+      box-shadow:
+        inset 0 0 0 1px #f59e0b,
+        0 1px 3px rgba(245,158,11,0.2);
+    }
+    .st-appt-vip:hover {
+      box-shadow:
+        inset 0 0 0 1px #f59e0b,
+        0 4px 12px rgba(245,158,11,0.25),
+        0 2px 4px rgba(0,0,0,0.06);
+    }
+    .st-appt-overlap {
+      box-shadow: 0 0 0 2px #ef4444, 0 2px 8px rgba(239,68,68,0.15);
+    }
+    .st-appt-dragging {
+      transform: scale(1.04) rotate(0.5deg);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1);
+      transition: transform .15s cubic-bezier(.34,1.56,.64,1), box-shadow .15s ease;
+      z-index: 20; opacity: 0.92;
+    }
     .sta-header { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
     .sta-header strong { font-size: 10px; font-weight: 700; color: #0b0b0b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sta-amount { font-size: 9px; font-weight: 700; color: #059669; flex-shrink: 0; }
@@ -329,26 +453,28 @@ export interface DragSlotSelection {
     }
     .sta-vip-badge {
       position: absolute; top: 2px; right: 4px; font-size: 10px;
-      color: #f59e0b;
+      color: #f59e0b; text-shadow: 0 0 4px rgba(0,0,0,0.1);
     }
-
-    .st-current-time-line {
-      position: absolute; left: 0; right: 0; height: 2px;
-      background: #ef4444; z-index: 5; pointer-events: none;
+    .sta-shimmer {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+      background-size: 200% 200%;
+      animation: st-shimmer 3s ease-in-out infinite;
     }
-    .st-current-time-label {
-      position: absolute; right: 4px; top: -8px; background: #ef4444;
-      color: white; font-size: 9px; font-weight: 700;
-      padding: 1px 6px; border-radius: 8px; line-height: 1.4;
+    @keyframes st-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .st-tooltip {
       position: fixed; z-index: 9999; background: #1f2937; color: #fff;
-      border-radius: 8px; padding: 10px 14px; font-size: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      border-radius: 10px; padding: 10px 14px; font-size: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
       max-width: 240px; pointer-events: none;
       display: flex; flex-direction: column; gap: 3px;
+      animation: st-tooltip-in .15s ease;
     }
+    @keyframes st-tooltip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     .st-tooltip-header { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
     .st-tooltip-row { font-size: 11px; line-height: 1.4; }
     .st-tt-label { color: #9ca3af; margin-right: 4px; }
@@ -357,18 +483,20 @@ export interface DragSlotSelection {
 
     .st-context-menu {
       position: fixed; z-index: 10000; background: #fff;
-      border: 1px solid #e5e7eb; border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      border: 1px solid #e5e7eb; border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
       padding: 4px; min-width: 160px;
+      animation: st-context-in .12s ease;
     }
+    @keyframes st-context-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
     .st-context-backdrop {
       position: fixed; inset: 0; z-index: 9999;
     }
     .st-cm-item {
       display: flex; align-items: center; gap: 8px;
       width: 100%; padding: 8px 12px; border: 0; background: transparent;
-      font-size: 13px; cursor: pointer; border-radius: 6px;
-      text-align: left; white-space: nowrap;
+      font-size: 13px; cursor: pointer; border-radius: 8px;
+      text-align: left; white-space: nowrap; transition: background .1s;
     }
     .st-cm-item:hover { background: #f3f4f6; }
     .st-cm-item.st-cm-danger { color: #dc2626; }
@@ -380,7 +508,46 @@ export interface DragSlotSelection {
       position: absolute; z-index: 10; pointer-events: none;
       background: rgba(99,102,241,0.08);
       border: 1px dashed #6366f1;
-      border-radius: 4px;
+      border-radius: 6px;
+      animation: st-drag-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes st-drag-pulse {
+      0%, 100% { border-color: rgba(99,102,241,0.5); }
+      50% { border-color: rgba(99,102,241,0.9); }
+    }
+
+    @media (max-width: 1024px) {
+      .staff-timeline { border-radius: 12px; }
+      .st-zoom-bar { padding: 4px 12px; flex-wrap: wrap; gap: 4px; }
+      .st-zoom-slider input[type=range] { width: 60px; }
+    }
+    @media (max-width: 768px) {
+      .staff-timeline { border-radius: 10px; }
+      .st-header-corner { padding: 6px 8px; min-width: 80px; }
+      .st-header-title { font-size: 12px; }
+      .st-hour-label { font-size: 10px; }
+      .st-hour-header { padding: 6px 2px; }
+      .st-appointment { border-radius: 6px; padding: 3px 6px; font-size: 9px; }
+      .sta-header strong { font-size: 9px; }
+      .sta-meta span { font-size: 7px; }
+      .st-zoom-slider input[type=range] { width: 48px; }
+      .st-zoom-controls { gap: 4px; }
+      .st-zoom-label { display: none; }
+      .st-context-menu { min-width: 140px; }
+    }
+    @media (max-width: 480px) {
+      .staff-timeline { border-radius: 8px; border-left: 0; border-right: 0; }
+      .st-header-corner { display: none; }
+      .st-hour-header { min-width: 48px !important; padding: 4px 1px; }
+      .st-hour-label { font-size: 9px; }
+      .st-hour-block { min-width: 48px !important; }
+      .st-appointment { padding: 2px 4px; border-left-width: 2px; }
+      .sta-header strong { font-size: 8px; }
+      .sta-amount { display: none; }
+      .st-ctl-label { font-size: 8px; padding: 0 4px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .staff-timeline * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
   `],
 })
@@ -406,6 +573,7 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
   private subs: Subscription[] = [];
 
   STAFF_TIMELINE_HEADER_WIDTH_PX = STAFF_TIMELINE_HEADER_WIDTH_PX;
+  ZOOM_LEVELS = ZOOM_LEVELS;
 
   viewData: StaffTimelineViewData = {
     staffList: [], appointments: [], groups: [],
@@ -421,6 +589,13 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
 
   businessStart = 8;
   businessEnd = 20;
+
+  zoomLevel: number = DEFAULT_ZOOM_LEVEL;
+  zoomLevelIndex = ZOOM_LEVELS.indexOf(DEFAULT_ZOOM_LEVEL);
+  hourBlockWidth = 60;
+  snapMinutesList = [15, 30, 45];
+  private draggingAppointmentId: string | null = null;
+  private occupancyCache = new Map<string, Map<number, number>>();
 
   tooltip: TooltipData = {
     appointmentId: '', clientName: '', phone: '', serviceName: '',
@@ -449,12 +624,14 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
     this.viewData = value;
     this.visibleStaff = value.staffList;
     this.groups = value.groups;
-    this.currentTimeTop = getCurrentTimeLineTop();
+    this.currentTimeTop = getCurrentTimeLineTop(this.zoomLevel);
     this.isToday = isToday(new Date(value.todayDate));
+    this.occupancyCache.clear();
     this.cdr.markForCheck();
   }
 
   ngAfterViewInit(): void {
+    this.restoreZoom();
     this.setupScrollSync();
     this.startLiveTimer();
     this.autoScrollToCurrentTime();
@@ -501,7 +678,7 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
     this.ngZone.runOutsideAngular(() => {
       this.liveTimerSub = interval(60000).subscribe(() => {
         this.ngZone.run(() => {
-          this.currentTimeTop = getCurrentTimeLineTop();
+          this.currentTimeTop = getCurrentTimeLineTop(this.zoomLevel);
           this.isToday = isToday(new Date(this.viewData.todayDate));
           this.cdr.markForCheck();
         });
@@ -518,6 +695,127 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
         timelinePanel.scrollTop = scrollTarget;
       }
     }, 200);
+  }
+
+  scrollToCurrentTime(): void {
+    this.autoScrollToCurrentTime();
+  }
+
+  private restoreZoom(): void {
+    try {
+      const saved = localStorage.getItem(ZOOM_STORAGE_KEY);
+      if (saved) {
+        const z = parseInt(saved, 10);
+        const idx = ZOOM_LEVELS.indexOf(z as ZoomLevel);
+        if (idx >= 0) {
+          this.zoomLevelIndex = idx;
+          this.zoomLevel = z;
+          this.applyZoom();
+        }
+      }
+    } catch { }
+  }
+
+  private saveZoom(): void {
+    try { localStorage.setItem(ZOOM_STORAGE_KEY, this.zoomLevel.toString()); } catch { }
+  }
+
+  private applyZoom(): void {
+    this.zoomLevel = ZOOM_LEVELS[this.zoomLevelIndex];
+    this.timelineRowHeight = this.zoomLevel * (this.businessEnd - this.businessStart);
+    this.hourBlockWidth = Math.max(48, Math.min(80, 40 + this.zoomLevel * 0.3));
+    this.currentTimeTop = getCurrentTimeLineTop(this.zoomLevel);
+    this.saveZoom();
+    this.cdr.markForCheck();
+  }
+
+  zoomIn(): void {
+    if (this.zoomLevelIndex < ZOOM_LEVELS.length - 1) {
+      this.zoomLevelIndex++;
+      this.applyZoom();
+    }
+  }
+
+  zoomOut(): void {
+    if (this.zoomLevelIndex > 0) {
+      this.zoomLevelIndex--;
+      this.applyZoom();
+    }
+  }
+
+  setZoomByIndex(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.zoomLevelIndex = parseInt(target.value, 10);
+    this.applyZoom();
+  }
+
+  recomputeTop(appt: StaffTimelineAppointment): number {
+    const date = new Date(appt.startTime);
+    const minutesPastStart = getMinutesFromMidnight(date) - this.businessStart * 60;
+    return Math.max(0, (minutesPastStart / 60) * this.zoomLevel);
+  }
+
+  recomputeHeight(appt: StaffTimelineAppointment): number {
+    const durationMinutes = appt.durationMin || 0;
+    return Math.max(20, (durationMinutes / 60) * this.zoomLevel);
+  }
+
+  getApptGradient(appt: StaffTimelineAppointment): string {
+    const baseColor = appt.color;
+    return `linear-gradient(135deg, ${baseColor}18 0%, ${baseColor}0c 50%, ${baseColor}08 100%)`;
+  }
+
+  getApptShadow(appt: StaffTimelineAppointment): string {
+    if (appt.hasOverlap) {
+      return '0 0 0 2px #ef4444, 0 2px 8px rgba(239,68,68,0.15)';
+    }
+    const shadowColor = this.hexToRgba(appt.color, 0.12);
+    return `0 1px 3px ${shadowColor}, 0 1px 2px rgba(0,0,0,0.04)`;
+  }
+
+  private hexToRgba(hex: string, alpha: number): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  getHeatmapColor(staff: StaffTimelineStaff, hour: number): string {
+    if (this.isBreakHour(staff, hour)) return '';
+    if (!this.isBusinessHour(hour)) return '';
+
+    let occupancy = this.occupancyCache.get(staff.id)?.get(hour);
+    if (occupancy === undefined) {
+      const staffAppts = this.getStaffAppointments(staff.id);
+      const hourStart = (hour - this.businessStart) * 60;
+      const hourEnd = hourStart + 60;
+      let bookedMin = 0;
+      for (const appt of staffAppts) {
+        const apptDate = new Date(appt.startTime);
+        const apptMin = apptDate.getHours() * 60 + apptDate.getMinutes();
+        const apptEnd = apptMin + appt.durationMin;
+        const overlapStart = Math.max(hourStart, apptMin);
+        const overlapEnd = Math.min(hourEnd, apptEnd);
+        if (overlapEnd > overlapStart) {
+          bookedMin += overlapEnd - overlapStart;
+        }
+      }
+      occupancy = Math.min(100, Math.round((bookedMin / 60) * 100));
+
+      if (!this.occupancyCache.has(staff.id)) {
+        this.occupancyCache.set(staff.id, new Map());
+      }
+      this.occupancyCache.get(staff.id)!.set(hour, occupancy);
+    }
+
+    if (occupancy === 0) return '';
+    if (occupancy < 33) return `rgba(22,163,74,${0.04 + occupancy * 0.001})`;
+    if (occupancy < 66) return `rgba(234,179,8,${0.06 + occupancy * 0.001})`;
+    return `rgba(239,68,68,${0.08 + Math.min(occupancy, 100) * 0.001})`;
+  }
+
+  isDraggingAppt(apptId: string): boolean {
+    return this.draggingAppointmentId === apptId;
   }
 
   onFilterChange(filter: StaffTimelineFilterState): void {
@@ -674,16 +972,16 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
 
     const rowRect = timelineRow.getBoundingClientRect();
     const panelRect = timelinePanel.getBoundingClientRect();
-    const hourBlockWidth = 60;
+    const hbw = this.hourBlockWidth;
 
     this.dragSelection = {
       active: true,
       staffId,
       startHour: hour,
       endHour: hour,
-      left: (event.clientX - panelRect.left) - ((event.clientX - panelRect.left) % hourBlockWidth),
+      left: (event.clientX - panelRect.left) - ((event.clientX - panelRect.left) % hbw),
       top: rowRect.top - panelRect.top + timelinePanel.scrollTop,
-      width: hourBlockWidth,
+      width: hbw,
       height: rowRect.height,
       isDragging: true,
       startHourRaw: hour,
@@ -702,15 +1000,15 @@ export class StaffTimelineComponent implements AfterViewInit, OnDestroy {
     if (!timelinePanel) return;
 
     const panelRect = timelinePanel.getBoundingClientRect();
-    const hourBlockWidth = 60;
+    const hbw = this.hourBlockWidth;
     const relativeX = event.clientX - panelRect.left + timelinePanel.scrollLeft;
-    const hoveredHour = Math.floor(relativeX / hourBlockWidth) + this.businessStart;
+    const hoveredHour = Math.floor(relativeX / hbw) + this.businessStart;
 
     if (hoveredHour !== this.dragSelection.endHour) {
       const clampedHour = Math.max(this.businessStart, Math.min(hoveredHour, this.businessEnd - 1));
       this.dragSelection.endHour = clampedHour;
-      const startX = (Math.min(this.dragSelection.startHourRaw, clampedHour) - this.businessStart) * hourBlockWidth;
-      const endX = (Math.max(this.dragSelection.startHourRaw, clampedHour) - this.businessStart + 1) * hourBlockWidth;
+      const startX = (Math.min(this.dragSelection.startHourRaw, clampedHour) - this.businessStart) * hbw;
+      const endX = (Math.max(this.dragSelection.startHourRaw, clampedHour) - this.businessStart + 1) * hbw;
       this.dragSelection.left = startX;
       this.dragSelection.width = endX - startX;
       this.cdr.markForCheck();
