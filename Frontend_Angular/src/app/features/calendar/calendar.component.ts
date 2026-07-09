@@ -15,7 +15,7 @@ import { ServicesService } from '../services/services.service';
 import { SalonService } from '../services/services.models';
 import { CalendarWaitlist } from './calendar-waitlist/calendar-waitlist';
 import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-scheduler';
-import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth/auth.service';
 import {
   CalendarBooking,
   CalendarSummaryResponse,
@@ -53,46 +53,64 @@ import {
   selector: 'app-calendar',
   standalone: true,
   imports: [CommonModule, FormsModule, CalendarWaitlist, CalendarAiScheduler, Client360Component],
-  template: `
-    <section class="page">
-      <div class="head">
-        <div>
-          <h1>Calendar</h1>
-          <p>View and manage appointments across day, week, and month views.</p>
+  template: `\n    <section class=\"page\">
+      <!-- Premium Calendar Header -->
+      <div class="premium-header">
+        <div class="header-top">
+          <div class="header-branding">
+            <div class="brand-badge">Ambition Workspace</div>
+            <h1>Calendar</h1>
+            <p>Manage bookings, staff, resources, walk-ins and AI scheduling in one place</p>
+          </div>
+          <div class="header-user-context">
+            <div class="user-info" *ngIf="currentUser">
+              <span class="user-name">{{ currentUser.fullName || currentUser.email }}</span>
+              <span class="user-role" *ngIf="userRole">{{ userRole }}</span>
+            </div>
+            <select class="branch-selector" [(ngModel)]="selectedBranchId" (change)="onBranchChange()" aria-label="Branch">
+              <option value="">All Branches</option>
+              <option *ngFor="let b of branchList" [value]="b.id">{{ b.name || b.city || b.id }}</option>
+            </select>
+          </div>
         </div>
-        <div class="head-actions">
-          <button (click)="goToday()" class="today-btn">Today</button>
-          <button (click)="prev()" class="nav-btn">&larr;</button>
-          <span class="date-label">{{ dateLabel }}<span class="today-badge" *ngIf="isCurrentDateToday()">Today</span></span>
-          <button (click)="next()" class="nav-btn">&rarr;</button>
-          <button (click)="refresh()" class="refresh-btn" [disabled]="loading">{{ loading ? 'Loading...' : 'Refresh' }}</button>
-          <span class="updated-text" *ngIf="lastUpdated && !loading">Updated {{ lastUpdated }}</span>
-        </div>
-      </div>
 
-      <div class="tabs">
-        <button [class.active]="view === 'day'" (click)="setView('day')">Day</button>
-        <button [class.active]="view === 'week'" (click)="setView('week')">Week</button>
-        <button [class.active]="view === 'month'" (click)="setView('month')">Month</button>
-        <span class="tabs-divider"></span>
-        <button [class.active]="viewMode === 'staff'" (click)="viewMode='staff'" class="vm-btn">Staff</button>
-        <button [class.active]="viewMode === 'resources'" (click)="viewMode='resources'" class="vm-btn">Resources</button>
-        <span class="tabs-divider"></span>
-        <select [(ngModel)]="resourceFilter" (change)="loadResources()" class="res-filter" *ngIf="viewMode==='resources'">
-          <option value="">All Types</option>
-          <option value="ROOM">Rooms</option>
-          <option value="CHAIR">Chairs</option>
-          <option value="STATION">Stations</option>
-          <option value="EQUIPMENT">Equipment</option>
-        </select>
+        <div class="header-toolbar">
+          <div class="nav-section">
+            <button (click)="goToday()" class="btn today-btn" aria-label="Go to today">Today</button>
+            <button (click)="prev()" class="btn nav-btn" aria-label="Previous period">&#8592;</button>
+            <span class="date-display">{{ dateLabel }}<span class="today-badge" *ngIf="isCurrentDateToday()">Today</span></span>
+            <button (click)="next()" class="btn nav-btn" aria-label="Next period">&#8594;</button>
+          </div>
+
+          <div class="view-selector">
+            <button [class.active]="view === 'day' && viewMode === 'resources'" (click)="setView('day'); viewMode='resources'" class="btn view-btn">Day</button>
+            <button [class.active]="view === 'week'" (click)="setView('week')" class="btn view-btn">Week</button>
+            <button [class.active]="view === 'month'" (click)="setView('month')" class="btn view-btn">Month</button>
+            <button [class.active]="view === 'day' && viewMode === 'staff'" (click)="setView('day'); viewMode='staff'" class="btn view-btn timeline-btn">Timeline</button>
+            <span class="tabs-divider"></span>
+            <button [class.active]="viewMode === 'staff'" (click)="viewMode='staff'" class="btn mode-btn">Staff</button>
+            <button [class.active]="viewMode === 'resources'" (click)="viewMode='resources'" class="btn mode-btn">Resources</button>
+            <select [(ngModel)]="resourceFilter" (change)="loadResources()" class="res-filter" *ngIf="viewMode==='resources'" aria-label="Resource type">
+              <option value="">All Types</option>
+              <option value="ROOM">Rooms</option>
+              <option value="CHAIR">Chairs</option>
+              <option value="STATION">Stations</option>
+              <option value="EQUIPMENT">Equipment</option>
+            </select>
+          </div>
+
+          <div class="action-buttons">
+            <button (click)="refresh()" class="btn action-btn" [disabled]="loading" aria-label="Refresh calendar"><span class="btn-icon">&#8635;</span> Refresh</button>
+            <button (click)="openCreateBookingForDate(currentDate)" class="btn action-btn primary-btn" aria-label="New booking">+ New Booking</button>
+            <button (click)="openWalkin()" class="btn action-btn secondary-btn" aria-label="Add walk-in">Walk-in</button>
+            <button (click)="toggleWaitlist()" [class.active]="showWaitlist" class="btn action-btn secondary-btn" aria-label="Toggle waitlist">Waitlist</button>
+            <button (click)="toggleAiPanel()" [class.active]="showAiPanel" class="btn action-btn secondary-btn" aria-label="Toggle AI suggestions">AI Suggestions</button>
+          </div>
+        </div>
       </div>
 
       <div class="filter-bar">
-        <select [(ngModel)]="selectedBranchId" (change)="onBranchChange()" class="branch-filter">
-          <option value="">All Branches</option>
-          <option *ngFor="let b of branchList" [value]="b.id">{{ b.name || b.city || b.id }}</option>
-        </select>
-        <select [(ngModel)]="statusFilter" (change)="onStatusFilterChange()" class="status-filter">
+        <select [(ngModel)]="statusFilter" (change)="onStatusFilterChange()" class="status-filter" aria-label="Status filter">
           <option value="">All Status</option>
           <option value="CONFIRMED">Confirmed</option>
           <option value="PENDING">Pending</option>
@@ -119,13 +137,45 @@ import {
       </div>
 
       <ng-container *ngIf="!loading && !error">
-        <div class="summary-bar" *ngIf="summary">
-          <div class="sum-card"><span>Total</span><b>{{ summary.kpis?.totalBookings }}</b></div>
-          <div class="sum-card"><span>Confirmed</span><b>{{ summary.kpis?.confirmed }}</b></div>
-          <div class="sum-card"><span>Completed</span><b class="green">{{ summary.kpis?.completed }}</b></div>
-          <div class="sum-card"><span>Pending</span><b class="amber">{{ summary.kpis?.pending }}</b></div>
-          <div class="sum-card"><span>Revenue</span><b>{{ (summary.kpis?.revenue || 0) | currency }}</b></div>
+        <!-- Premium KPI Strip -->
+        <div class="premium-kpi-strip">
+          <div class="kpi-card total-card">
+            <div class="kpi-icon">📊</div>
+            <div class="kpi-content">
+              <span class="kpi-label">Total</span>
+              <span class="kpi-value">{{ summary.kpis?.totalBookings }}</span>
+            </div>
+          </div>
+          <div class="kpi-card confirmed-card">
+            <div class="kpi-icon">✅</div>
+            <div class="kpi-content">
+              <span class="kpi-label">Confirmed</span>
+              <span class="kpi-value">{{ summary.kpis?.confirmed }}</span>
+            </div>
+          </div>
+          <div class="kpi-card completed-card">
+            <div class="kpi-icon">🎯</div>
+            <div class="kpi-content">
+              <span class="kpi-label">Completed</span>
+              <span class="kpi-value green">{{ summary.kpis?.completed }}</span>
+            </div>
+          </div>
+          <div class="kpi-card pending-card">
+            <div class="kpi-icon">⏳</div>
+            <div class="kpi-content">
+              <span class="kpi-label">Pending</span>
+              <span class="kpi-value amber">{{ summary.kpis?.pending }}</span>
+            </div>
+          </div>
+          <div class="kpi-card revenue-card">
+            <div class="kpi-icon">💰</div>
+            <div class="kpi-content">
+              <span class="kpi-label">Revenue</span>
+              <span class="kpi-value">{{ (summary.kpis?.revenue || 0) | currency }}</span>
+            </div>
+          </div>
         </div>
+
         <div class="status-legend">
           <span class="legend-item" *ngFor="let item of statusLegendItems">
             <span [class]="'legend-dot dot-' + item.cls"></span>
@@ -140,8 +190,14 @@ import {
               <p>Add staff members in the Staff section to use the staff view.</p>
             </div>
             <div class="staff-filter-bar" *ngIf="staffList.length > 0">
-              <button class="staff-filter-pill" [class.active]="!selectedStaffFilter" (click)="selectedStaffFilter=''">All Staff</button>
-              <button class="staff-filter-pill" *ngFor="let s of staffList" [class.active]="selectedStaffFilter===s.id" (click)="selectedStaffFilter=s.id">{{ s.fullName }}</button>
+              <button class="staff-filter-pill" [class.active]="!selectedStaffFilter" (click)="selectedStaffFilter=''">
+                <span class="sf-avatar sf-avatar-all">All</span><span class="sf-name">All Staff</span>
+              </button>
+              <button class="staff-filter-pill" *ngFor="let s of staffList" [class.active]="selectedStaffFilter===s.id" (click)="selectedStaffFilter=s.id">
+                <span class="sf-avatar" [class]="staffAccentClass(s)">{{ staffInitials(s) }}</span>
+                <span class="sf-name">{{ s.fullName }}</span>
+                <span class="sf-count" *ngIf="getStaffDayBookingCount(s.id) > 0">{{ getStaffDayBookingCount(s.id) }}</span>
+              </button>
               <span class="sf-spacer"></span>
               <button class="walkin-btn" (click)="openWalkin()">+ Walk-in</button>
               <button class="waitlist-toggle-btn" [class.active]="showWaitlist" (click)="toggleWaitlist()">
@@ -295,7 +351,7 @@ import {
                   <div class="dv-staff-col" *ngFor="let resource of resourceList" [attr.data-resource-id]="resource.id">
                     <div class="dv-staff-header">
                       {{ resource.name }}
-                      <span class="res-type-badge">{{ resource.type }}</span>
+                      <span class="res-type-badge res-type-{{ resource.type }}">{{ resource.type }}</span>
                     </div>
                     <div class="dv-staff-body">
                       <div class="dv-hour-row" *ngFor="let hour of dayHours; let hi = index"
@@ -1281,7 +1337,6 @@ import {
     p{color:#6b7280;margin:6px 0 0}
     .head-actions{display:flex;gap:8px;align-items:center}
     .today-btn,.nav-btn,.refresh-btn{border:1px solid #e5e7eb;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:white}
-    .today-btn{background:#0b0b0b;color:white;border-color:#0b0b0b}
     .refresh-btn{font-size:12px;padding:10px 14px;min-height:40px}
     .refresh-btn:disabled{opacity:.5;cursor:default}
     .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
@@ -1291,39 +1346,50 @@ import {
     .tabs button.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
     .vm-btn{font-size:12px;padding:8px 16px!important}
-    .res-filter{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:white}
+    .res-filter{border:1px solid #e5e7eb;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:600;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);transition:border-color .15s,box-shadow .15s}
+    .res-filter:focus,.branch-filter:focus,.status-filter:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.18)}
     .filter-bar{display:flex;gap:8px;align-items:center;padding:0 0 8px}
-    .branch-filter,.status-filter{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:white;min-width:160px}
+    .branch-filter,.status-filter{border:1px solid #e5e7eb;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:600;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);min-width:160px;transition:border-color .15s,box-shadow .15s,background .15s}
     .status-filter{min-width:130px}
-    .res-type-badge{font-size:9px;background:#e5e7eb;color:#374151;border-radius:6px;padding:1px 6px;font-weight:600;margin-left:4px}
-    .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
-    .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
+    .branch-filter:hover,.status-filter:hover,.res-filter:hover{border-color:#a5b4fc}
+    .res-type-badge{font-size:9px;background:#e5e7eb;color:#374151;border-radius:6px;padding:2px 7px;font-weight:700;margin-left:6px;letter-spacing:.04em;text-transform:uppercase;transition:all .15s}
+    .res-type-ROOM{background:#dbeafe;color:#1d4ed8}
+    .res-type-CHAIR{background:#dcfce7;color:#15803d}
+    .res-type-STATION{background:#fef9c3;color:#a16207}
+    .res-type-EQUIPMENT{background:#fae8ff;color:#a21caf}
+    .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280;background:rgba(255,255,255,.6);border:1px solid #eef2ff;border-radius:18px;backdrop-filter:blur(4px);box-shadow:0 8px 24px rgba(17,24,39,.04);animation:fadeIn .25s ease}
+    .spinner{width:26px;height:26px;border:3px solid #e0e7ff;border-top-color:#4f46e5;border-right-color:#7c3aed;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
     @keyframes spin{to{transform:rotate(360deg)}}
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error strong{color:#991b1b}.error p{color:#7f1d1d}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
     .summary-bar{display:flex;gap:8px;flex-wrap:wrap;background:white;border:1px solid #e5e7eb;border-radius:14px;padding:8px 12px}
-    .status-legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:6px 0 2px;align-items:center}
-    .legend-item{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#4b5563}
-    .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .status-legend{display:flex;flex-wrap:wrap;gap:6px 18px;padding:8px 0 4px;align-items:center}
+    .legend-item{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#374151;font-weight:600;background:#f8fafc;border:1px solid #eef2ff;border-radius:999px;padding:3px 10px}
+    .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,.04)}
     .sum-card{flex:1;text-align:center;padding:2px 8px;border-right:1px solid #e5e7eb;min-width:80px}
     .sum-card:last-child{border-right:0}
     .sum-card span{display:block;font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:1px}
     .sum-card b{font-size:16px;color:#0b0b0b}
     .green{color:#16a34a}.amber{color:#d97706}
     .staff-filter-bar{display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb}
-    .staff-filter-pill{border:1px solid #e5e7eb;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#374151;transition:all .15s}
-    .staff-filter-pill.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
-    .staff-filter-pill:hover:not(.active){background:#f3f4f6}
+    .staff-filter-pill{border:1px solid #e5e7eb;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#374151;transition:all .15s;box-shadow:0 1px 2px rgba(17,24,39,.04)}
+    .staff-filter-pill.active{background:#4f46e5;color:white;border-color:#4f46e5;box-shadow:0 4px 12px rgba(79,70,229,.28)}
+    .staff-filter-pill:hover:not(.active){background:#eef2ff;border-color:#a5b4fc}
+    .staff-filter-pill:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .sf-spacer{flex:1}
-    .walkin-btn{border:0;border-radius:20px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;background:#059669;color:white;transition:background .15s}
-    .walkin-btn:hover{background:#047857}
-    .waitlist-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid #d1d5db;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#374151;transition:all .15s;margin-left:6px}
+    .walkin-btn{border:0;border-radius:20px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;background:linear-gradient(120deg,#059669,#10b981);color:white;transition:background .15s,box-shadow .15s,transform .15s;box-shadow:0 3px 10px rgba(5,150,105,.3)}
+    .walkin-btn:hover{background:linear-gradient(120deg,#047857,#059669);box-shadow:0 5px 14px rgba(5,150,105,.4);transform:translateY(-1px)}
+    .walkin-btn:focus-visible{outline:2px solid #059669;outline-offset:2px}
+    .waitlist-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid #d1d5db;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#374151;transition:all .15s;margin-left:6px;box-shadow:0 1px 3px rgba(17,24,39,.05)}
     .waitlist-toggle-btn:hover{background:#f3f4f6;border-color:#9ca3af}
-    .waitlist-toggle-btn.active{background:#eef2ff;border-color:#6366f1;color:#4338ca}
-    .ai-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid #d1d5db;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#374151;transition:all .15s;margin-left:6px}
+    .waitlist-toggle-btn:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
+    .waitlist-toggle-btn.active{background:#eef2ff;border-color:#6366f1;color:#4338ca;box-shadow:0 3px 10px rgba(99,102,241,.25)}
+    .ai-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid #d1d5db;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#374151;transition:all .15s;margin-left:6px;box-shadow:0 1px 3px rgba(17,24,39,.05)}
     .ai-toggle-btn:hover{background:#f3f4f6;border-color:#9ca3af}
-    .ai-toggle-btn.active{background:#f0f0ff;border-color:#6366f1;color:#4f46e5;box-shadow:0 0 0 1px rgba(99,102,241,.2)}
+    .ai-toggle-btn:focus-visible{outline:2px solid #7c3aed;outline-offset:2px}
+    .ai-toggle-btn.active{background:linear-gradient(120deg,#ede9fe,#f5f3ff);border-color:#7c3aed;color:#6d28d9;box-shadow:0 3px 10px rgba(124,58,237,.22)}
     .ai-icon{font-size:14px}
     .dv-sidebar-stack{display:flex;flex-direction:column;border-left:1px solid #e0e0e0;overflow-y:auto}
     .wl-icon{font-size:14px}
@@ -1338,26 +1404,29 @@ import {
     .view-transition{animation:calFadeIn .2s ease}
     @keyframes calFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){.view-transition{animation:none}}
-    .day-view{background:white;border:1px solid #e5e7eb;border-radius:20px;display:flex;flex-direction:column;min-height:520px;flex:1}
-    .dv-container{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
-    .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa;position:sticky;left:0;z-index:3}
+    .day-view{background:linear-gradient(180deg,#ffffff,#fbfcff);border:1px solid #eef2ff;border-radius:22px;display:flex;flex-direction:column;min-height:520px;flex:1;box-shadow:0 10px 30px rgba(17,24,39,.06)}
+    .dv-container{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;overscroll-behavior:contain}
+    .dv-time-col{flex-shrink:0;width:60px;border-right:1px solid #e5e7eb;background:#fafafa;position:sticky;left:0;z-index:3;box-shadow:2px 0 6px rgba(17,24,39,.04)}
     .dv-header-gap{height:52px;border-bottom:1px solid #e5e7eb}
     .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #f1f5f9;cursor:pointer}
     .dv-time-row:hover{background:#eef2ff}
     .dv-time-label{font-size:11px;color:#6b7280;font-weight:600}
     .dv-staff-scroll{display:flex;flex:1;min-width:0}
-    .dv-staff-col{min-width:240px;flex:0 0 240px;border-right:1px solid #e5e7eb}
+    .dv-staff-col{min-width:240px;flex:0 0 240px;border-right:1px solid #eef2ff;transition:background .15s ease}
+    .dv-staff-col:hover{background:#fbfcff}
     .dv-staff-col:last-child{border-right:0}
-    .dv-staff-header{min-height:52px;display:flex;align-items:center;font-weight:700;font-size:13px;border-bottom:1px solid #e5e7eb;background:#f9fafb;position:sticky;top:0;z-index:2;padding:6px 10px}
-    .staff-header-content{display:flex;align-items:center;gap:8px;width:100%}
-    .staff-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white;flex-shrink:0}
+    .dv-staff-header{min-height:56px;display:flex;align-items:center;font-weight:700;font-size:13px;border-bottom:1px solid #eef2ff;background:linear-gradient(180deg,#ffffff,#f8fafc);position:sticky;top:0;z-index:2;padding:8px 12px;box-shadow:0 1px 0 rgba(17,24,39,.04)}
+    .staff-header-content{display:flex;align-items:center;gap:10px;width:100%}
+    .staff-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white;flex-shrink:0;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.15)}
     .staff-avatar-c1{background:#6366f1}.staff-avatar-c2{background:#059669}.staff-avatar-c3{background:#d97706}.staff-avatar-c4{background:#dc2626}.staff-avatar-c5{background:#7c3aed}
     .staff-header-main{display:flex;flex-direction:column;min-width:0;flex:1}
     .staff-header-name{font-size:13px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .staff-header-meta{font-size:9px;color:#6b7280;font-weight:600}
+    .staff-header-meta{font-size:10px;color:#fff;font-weight:700;background:#6366f1;border-radius:999px;padding:1px 8px;margin-top:2px;align-self:flex-start;box-shadow:0 1px 3px rgba(99,102,241,.4)}
     .dv-staff-body{position:relative}
-    .dv-hour-row{height:56px;border-bottom:1px solid #f1f5f9;padding:2px 4px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden;cursor:pointer}
-    .dv-hour-row:hover{background:#f0f4ff}
+    .dv-hour-row{height:56px;border-bottom:1px solid #f1f5f9;padding:3px 6px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+    .dv-hour-row:hover{background:#eef2ff;box-shadow:inset 0 0 0 1px rgba(99,102,241,.25),0 0 12px rgba(99,102,241,.12)}
+    .dv-hour-row-alt{background:#fafafa}
+    .dv-hour-row-alt:hover{background:#e6edff;box-shadow:inset 0 0 0 1px rgba(99,102,241,.25),0 0 12px rgba(99,102,241,.12)}
     .dv-hour-row-alt{background:#fafafa}
     .dv-hour-busy{background:#f0f4ff!important}
     .dv-hour-busy:hover{background:#e0e8ff!important}
@@ -1390,7 +1459,7 @@ import {
     .booking-bar{position:absolute;bottom:2px;left:6px;right:6px;height:2px;border-radius:1px;background:rgba(0,0,0,.08);pointer-events:none}
     .dv-staff-body{position:relative}
     .dv-bookings-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
-    .dv-bookings-layer .booking-chip{pointer-events:auto;position:absolute;overflow:hidden;z-index:1;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:3px solid #d1d5db;display:flex;flex-direction:column;gap:1px;min-height:18px}
+    .dv-bookings-layer .booking-chip{pointer-events:auto;position:absolute;overflow:hidden;z-index:1;border-radius:8px;padding:5px 8px;font-size:10px;cursor:pointer;background:#f3f4f6;border-left:3px solid #d1d5db;display:flex;flex-direction:column;gap:2px;min-height:20px;box-shadow:0 1px 3px rgba(17,24,39,.08)}
     .dv-bookings-layer .booking-chip.status-confirmed{background:#dbeafe;border-left-color:#3b82f6}
     .dv-bookings-layer .booking-chip.status-completed{background:#f0fdf4;border-left-color:#16a34a}
     .dv-bookings-layer .booking-chip.status-pending{background:#fefce8;border-left-color:#eab308}
@@ -1775,8 +1844,9 @@ import {
     }
     .slot-toggle{display:inline-flex;gap:2px;background:#f3f4f6;border-radius:8px;padding:2px}
     .slot-btn{border:0;background:transparent;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;color:#6b7280;transition:all .12s}
-    .slot-btn.active{background:white;color:#0b0b0b;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-    .slot-btn:hover:not(.active){color:#374151}
+    .slot-btn.active{background:#4f46e5;color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+    .slot-btn:hover:not(.active){color:#4f46e5}
+    .slot-btn:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .slot-label{font-size:11px;font-weight:700;color:#6b7280;margin-right:2px}
     .dh-left{flex:1;min-width:0}
     .dh-left h2{margin:0;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2145,6 +2215,111 @@ import {
       .wl-loading{display:flex;justify-content:center;padding:8px}
       .wl-error{font-size:11px;color:#e53935;padding:4px 0}
     }
+
+    /* ===== Premium Calendar Header / Toolbar / KPI Polish ===== */
+    .premium-header{
+      background:linear-gradient(120deg,#4f46e5 0%,#7c3aed 45%,#db2777 100%);
+      border-radius:18px;padding:18px 20px;color:#fff;
+      box-shadow:0 10px 30px rgba(79,70,229,.25);margin-bottom:14px;
+    }
+    .header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+    .header-branding{display:flex;flex-direction:column;gap:2px}
+    .brand-badge{
+      display:inline-block;align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.4px;
+      text-transform:uppercase;background:rgba(255,255,255,.18);color:#fff;
+      padding:3px 10px;border-radius:999px;margin-bottom:6px;backdrop-filter:blur(4px);
+    }
+    .header-branding h1{margin:0;font-size:26px;font-weight:800;line-height:1.1}
+    .header-branding p{margin:4px 0 0;font-size:13px;color:rgba(255,255,255,.82)}
+    .header-user-context{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .user-info{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+    .user-name{font-size:13px;font-weight:700}
+    .user-role{
+      font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+      background:rgba(255,255,255,.22);color:#fff;padding:2px 8px;border-radius:999px;margin-top:3px;
+    }
+    .branch-selector{
+      border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;
+      border-radius:10px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;
+    }
+    .branch-selector option{color:#111}
+    .header-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+    .nav-section{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:12px}
+    .date-display{font-weight:700;font-size:14px;min-width:130px;text-align:center;color:#fff}
+    .today-badge{margin-left:6px;font-size:10px;background:#fff;color:#4f46e5;padding:1px 7px;border-radius:999px;font-weight:800}
+    .view-selector{display:flex;background:rgba(255,255,255,.14);border-radius:12px;padding:3px;gap:2px}
+    .view-btn,.mode-btn{
+      border:none;background:transparent;color:rgba(255,255,255,.85);font-weight:700;font-size:12px;
+      padding:7px 14px;border-radius:9px;cursor:pointer;transition:all .15s;
+    }
+    .view-btn:hover,.mode-btn:hover{background:rgba(255,255,255,.22);color:#fff}
+    .view-btn.active,.mode-btn.active{background:#fff;color:#4f46e5;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+    .timeline-btn{border-left:2px solid rgba(255,255,255,.3)}
+    .action-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .btn{font-family:inherit}
+    .today-btn,.nav-btn{border:none;cursor:pointer;font-weight:700;font-size:12px;border-radius:10px;transition:all .15s}
+    .today-btn{background:rgba(255,255,255,.18);color:#fff;padding:8px 14px}
+    .today-btn:hover{background:rgba(255,255,255,.3)}
+    .nav-btn{background:rgba(255,255,255,.18);color:#fff;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+    .nav-btn:hover{background:rgba(255,255,255,.32)}
+    .action-btn{padding:9px 14px;border-radius:10px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+    .primary-btn{background:#fff;color:#4f46e5;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+    .primary-btn:hover{background:#f1f5ff;transform:translateY(-1px)}
+    .secondary-btn{background:rgba(255,255,255,.2);color:#fff}
+    .secondary-btn:hover{background:rgba(255,255,255,.34)}
+    .action-btn.active{background:#fff;color:#4f46e5}
+    .today-btn:focus-visible,.nav-btn:focus-visible,.action-btn:focus-visible,.primary-btn:focus-visible,.secondary-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+    .today-btn,.nav-btn,.action-btn,.primary-btn,.secondary-btn{box-shadow:0 4px 12px rgba(0,0,0,.12)}
+    .today-btn:hover,.nav-btn:hover{box-shadow:0 6px 16px rgba(0,0,0,.22);transform:translateY(-1px)}
+
+    /* KPI strip */
+    .premium-kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+    .kpi-card{
+      display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;color:#111;
+      background:#fff;box-shadow:0 6px 18px rgba(17,24,39,.08);border:1px solid #eef2ff;transition:transform .15s,box-shadow .15s;
+    }
+    .kpi-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(17,24,39,.14)}
+    .kpi-icon{font-size:22px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;flex-shrink:0}
+    .kpi-content{display:flex;flex-direction:column;line-height:1.2}
+    .kpi-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px}
+    .kpi-value{font-size:20px;font-weight:800}
+    .total-card .kpi-icon{background:#eef2ff;color:#4f46e5}
+    .confirmed-card .kpi-icon{background:#dcfce7;color:#16a34a}
+    .completed-card .kpi-icon{background:#d1fae5;color:#059669}
+    .completed-card .kpi-value.green{color:#059669}
+    .pending-card .kpi-icon{background:#fef9c3;color:#ca8a04}
+    .pending-card .kpi-value.amber{color:#ca8a04}
+    .revenue-card .kpi-icon{background:#ffe4e6;color:#e11d48}
+
+    /* Staff filter pills (avatar + count + horizontal scroll) */
+    .staff-filter-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:8px 2px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+    .staff-filter-pill{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0}
+    .sf-avatar{
+      width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:800;color:#fff;background:#6366f1;flex-shrink:0;
+    }
+    .sf-avatar-all{background:#9ca3af}
+    .sf-name{font-weight:600}
+    .sf-count{background:#eef2ff;color:#4f46e5;font-size:11px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:2px}
+
+    /* Responsive */
+    @media(max-width:1100px){
+      .premium-kpi-strip{grid-template-columns:repeat(3,1fr)}
+    }
+    @media(max-width:860px){
+      .header-top{flex-direction:column;align-items:stretch}
+      .header-user-context{justify-content:space-between}
+      .header-toolbar{flex-direction:column;align-items:stretch}
+      .nav-section{justify-content:center}
+      .view-selector,.action-buttons{justify-content:center;flex-wrap:wrap}
+      .premium-kpi-strip{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:560px){
+      .premium-header{border-radius:14px;padding:14px}
+      .header-branding h1{font-size:22px}
+      .premium-kpi-strip{grid-template-columns:1fr 1fr}
+      .action-btn.primary-btn{flex-shrink:0}
+    }
   `]
 })
 export class CalendarComponent {
@@ -2154,6 +2329,26 @@ export class CalendarComponent {
   private clientsApi = inject(ClientsService);
   private servicesApi = inject(ServicesService);
   private http = inject(HttpClient);
+  private auth = inject(AuthService);
+
+  get currentUser(): any {
+    return this.auth.getUser();
+  }
+
+  get userInitials(): string {
+    const u = this.currentUser;
+    const name: string = u?.fullName || u?.email || '';
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  }
+
+  get userRole(): string {
+    const role: string = this.currentUser?.role || '';
+    if (!role) return '';
+    return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+  }
 
   view: ViewMode = 'day';
   viewMode: StaffResourceMode = 'staff';
@@ -2224,7 +2419,6 @@ export class CalendarComponent {
   newClientBusy = false;
   newClientError = '';
   private clientSearchSubject = new Subject<string>();
-  private searchSubs: import('rxjs').Subscription[] = [];
   serviceList: ServiceOption[] = [];
   filteredServiceList: ServiceOption[] = [];
   serviceSearchQuery = '';
@@ -2342,30 +2536,16 @@ export class CalendarComponent {
   ngOnInit() {
     this.load();
     this.startAutoRefresh();
-    this.searchSubs.push(
-      this.clientSearchSubject.pipe(
-        debounceTime(300),
-        distinctUntilChanged()
-      ).subscribe(query => this.searchClients(query))
-    );
-    this.searchSubs.push(
-      this.serviceSearchSubject.pipe(
-        debounceTime(250),
-        distinctUntilChanged()
-      ).subscribe(query => this.searchServices(query))
-    );
+    this.clientSearchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(query => this.searchClients(query));
+    this.serviceSearchSubject.pipe(
+      debounceTime(250),
+      distinctUntilChanged()
+    ).subscribe(query => this.searchServices(query));
   }
-  ngOnDestroy() {
-    this.stopAutoRefresh();
-    this.searchSubs.forEach(s => s.unsubscribe());
-    this.clientSearchSubject.complete();
-    this.serviceSearchSubject.complete();
-    if (this.dragBooking) {
-      document.removeEventListener('pointermove', this.boundPointerMove);
-      document.removeEventListener('pointerup', this.boundPointerUp);
-      document.removeEventListener('pointercancel', this.boundPointerUp);
-    }
-  }
+  ngOnDestroy() { this.stopAutoRefresh(); }
 
   @HostListener('document:keydown', ['$event'])
   handleCalendarShortcut(event: KeyboardEvent): void {
@@ -2440,7 +2620,7 @@ export class CalendarComponent {
     this.loading = true;
     this.error = '';
     this.drawerBooking = null;
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
+    const dateStr = this.toLocalDateString(this.currentDate);
     const params: CalendarQueryParams = { date: dateStr };
     if (this.selectedBranchId) params.branchId = this.selectedBranchId;
 
@@ -2502,7 +2682,8 @@ export class CalendarComponent {
 
   private canAutoRefresh(): boolean {
     return !this.showCreate && !this.showWalkin && !this.showReschedule && !this.showCancelForm
-      && !this.showEditForm && !this.showConfirmAction && !this.dragLockClick && !this.loading;
+      && !this.showEditForm && !this.showConfirmAction && !this.drawerBooking
+      && !this.dragLockClick && !this.loading;
   }
 
   private startAutoRefresh() {
@@ -2527,15 +2708,13 @@ export class CalendarComponent {
     if (this.resourceFilter) params.type = this.resourceFilter;
     this.resourcesApi.getAll(params).subscribe({
       next: (d) => this.resourceList = Array.isArray(d) ? d : [],
-      error: () => {},
     });
   }
 
   private loadBranches() {
     if (this.branchList.length === 0) {
-      this.http.get<BranchOption[]>(`${environment.apiUrl}/branches`).subscribe({
+      this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
         next: (d) => this.branchList = Array.isArray(d) ? d : [],
-        error: () => {},
       });
     }
   }
@@ -2550,9 +2729,12 @@ export class CalendarComponent {
   loadWaitlist(): void {
     this.waitlistLoading = true;
     this.waitlistError = '';
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
-    this.http.get<WaitlistEntry[]>(`${environment.apiUrl}/waitlist`, {
-      params: { branchId: '1', status: 'WAITING', from: dateStr, to: dateStr }
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const branchId = this.getDefaultBranchId();
+    const params: CalendarQueryParams = { status: 'WAITING', from: dateStr, to: dateStr };
+    if (branchId) params.branchId = branchId;
+    this.http.get<WaitlistEntry[]>('http://localhost:3000/api/waitlist', {
+      params: params as any
     }).subscribe({
       next: (d) => {
         this.waitlistEntries = Array.isArray(d) ? d : [];
@@ -2566,11 +2748,10 @@ export class CalendarComponent {
   }
 
   removeWaitlistEntry(id: string): void {
-    this.http.delete(`${environment.apiUrl}/waitlist/${id}`).subscribe({
+    this.http.delete(`http://localhost:3000/api/waitlist/${id}`).subscribe({
       next: () => {
         this.waitlistEntries = this.waitlistEntries.filter(e => e.id !== id);
       },
-      error: () => {},
     });
   }
 
@@ -2587,8 +2768,10 @@ export class CalendarComponent {
   }
 
   loadAiSuggestions(): void {
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
-    const params: CalendarQueryParams = { branchId: '1', date: dateStr };
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const branchId = this.getDefaultBranchId();
+    const params: CalendarQueryParams = { date: dateStr };
+    if (branchId) params.branchId = branchId;
     if (this.aiServiceId) {
       const svc = this.serviceList.find((s: any) => s.id === this.aiServiceId);
       if (svc?.durationMin) params.durationMinutes = svc.durationMin;
@@ -2611,8 +2794,10 @@ export class CalendarComponent {
   }
 
   loadAiOptimizeDay(): void {
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
-    const params: CalendarQueryParams = { branchId: '1', date: dateStr };
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const branchId = this.getDefaultBranchId();
+    const params: CalendarQueryParams = { date: dateStr };
+    if (branchId) params.branchId = branchId;
     if (this.aiServiceId) {
       const svc = this.serviceList.find((s: any) => s.id === this.aiServiceId);
       if (svc?.durationMin) params.durationMinutes = svc.durationMin;
@@ -2753,19 +2938,31 @@ export class CalendarComponent {
   private detectConflicts(): void {
     const result: ConflictInfo[] = [];
     const bookings = this.bookings;
+    const addConflict = (type: ConflictInfo['type'], current: CalendarBooking, other: CalendarBooking, message: string) => {
+      result.push({
+        type,
+        message,
+        conflictingBookingId: current.id,
+        conflictingTitle: other.title,
+        conflictingTime: `${this.formatTime(other.startTime)}-${this.formatTime(other.endTime)}`,
+      });
+    };
     for (let i = 0; i < bookings.length; i++) {
       for (let j = i + 1; j < bookings.length; j++) {
         const a = bookings[i];
         const b = bookings[j];
         if (!this.timesOverlap(a.startTime, a.endTime, b.startTime, b.endTime)) continue;
         if (a.staffId && b.staffId && a.staffId === b.staffId && a.id !== b.id) {
-          result.push({ type: 'staff', message: `Staff overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+          addConflict('staff', a, b, `Staff overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`);
+          addConflict('staff', b, a, `Staff overlap: ${b.client?.fullName || '?'} & ${a.client?.fullName || '?'}`);
         }
         if (a.clientId && b.clientId && a.clientId === b.clientId && a.id !== b.id) {
-          result.push({ type: 'client', message: `Client overlap: ${a.client?.fullName || '?'} has conflicting booking`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+          addConflict('client', a, b, `Client overlap: ${a.client?.fullName || '?'} has conflicting booking`);
+          addConflict('client', b, a, `Client overlap: ${b.client?.fullName || '?'} has conflicting booking`);
         }
         if (a.resourceId && b.resourceId && a.resourceId === b.resourceId && a.id !== b.id) {
-          result.push({ type: 'resource', message: `Resource overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`, conflictingBookingId: b.id, conflictingTitle: b.title, conflictingTime: `${this.formatTime(b.startTime)}-${this.formatTime(b.endTime)}` });
+          addConflict('resource', a, b, `Resource overlap: ${a.client?.fullName || '?'} & ${b.client?.fullName || '?'}`);
+          addConflict('resource', b, a, `Resource overlap: ${b.client?.fullName || '?'} & ${a.client?.fullName || '?'}`);
         }
       }
     }
@@ -2774,10 +2971,7 @@ export class CalendarComponent {
 
   getBookingConflicts(b: CalendarBooking): ConflictInfo[] {
     if (!b) return [];
-    return this.conflicts.filter(c =>
-      c.conflictingBookingId === b.id ||
-      c.conflictingBookingId === (b.id || '')
-    );
+    return this.conflicts.filter(c => c.conflictingBookingId === b.id);
   }
 
   hasConflict(b: CalendarBooking): boolean {
@@ -2814,7 +3008,7 @@ export class CalendarComponent {
   loadSmartRebookSuggestions(): void {
     if (!this.drawerBooking) return;
     const b = this.drawerBooking;
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = this.toLocalDateString(new Date());
     const staffId = b.staffId || '';
     const branchId = b.branchId || this.getDefaultBranchId();
     const svcIds = (b.services || []).map(s => s.serviceId).filter(Boolean).join(',');
@@ -2893,14 +3087,13 @@ export class CalendarComponent {
   }
 
   bookRebookSlot(slot: RebookSlot): void {
-    if (!this.drawerBooking) return;
+    const b = this.drawerBooking;
+    if (!b) return;
     this.closeSmartRebook();
-    this.closeDrawer();
     this.showCreate = true;
     this.createBusy = false;
     this.createError = '';
     this.resetCreateLookupState();
-    const b = this.drawerBooking;
     this.createForm = {
       clientId: b.clientId || '',
       staffId: slot.staffId || b.staffId || '',
@@ -2916,6 +3109,7 @@ export class CalendarComponent {
         price: s.price,
       })),
     };
+    this.closeDrawer();
     this.loadClientsAndServices();
   }
 
@@ -2943,14 +3137,16 @@ export class CalendarComponent {
   }
 
   loadWaitlistSuggestions(): void {
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
-    this.waitlistSuggestLoading = true;
-    this.waitlistSuggestError = '';
-    this.api.getWaitlistSuggestions({
-      branchId: '1',
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const branchId = this.getDefaultBranchId();
+    const params: CalendarQueryParams = {
       startTime: `${dateStr}T10:00:00Z`,
       endTime: `${dateStr}T20:00:00Z`,
-    }).subscribe({
+    };
+    if (branchId) params.branchId = branchId;
+    this.waitlistSuggestLoading = true;
+    this.waitlistSuggestError = '';
+    this.api.getWaitlistSuggestions(params).subscribe({
       next: (d: any) => {
         this.waitlistSuggestions = Array.isArray(d) ? d : [];
         this.waitlistSuggestLoading = false;
@@ -2965,14 +3161,16 @@ export class CalendarComponent {
   }
 
   autofillWaitlistSlot(): void {
-    const dateStr = this.currentDate.toISOString().slice(0, 10);
-    this.waitlistSuggestLoading = true;
-    this.waitlistSuggestError = '';
-    this.api.autofillWaitlist({
-      branchId: '1',
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const branchId = this.getDefaultBranchId();
+    const body: CalendarQueryParams = {
       startTime: `${dateStr}T10:00:00Z`,
       endTime: `${dateStr}T20:00:00Z`,
-    }).subscribe({
+    };
+    if (branchId) body.branchId = branchId;
+    this.waitlistSuggestLoading = true;
+    this.waitlistSuggestError = '';
+    this.api.autofillWaitlist(body).subscribe({
       next: (d: any) => {
         this.waitlistSuggestLoading = false;
         if (d?.matched && d?.suggestion?.entry) {
@@ -3004,7 +3202,7 @@ export class CalendarComponent {
     const booking = this.drawerBooking;
     if (!booking) { this.drawerError = 'No booking selected.'; return; }
     this.editBusy = true; this.drawerError = '';
-    this.http.patch(`${environment.apiUrl}/bookings/${booking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
+    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}`, { title: title.trim(), notes: notes?.trim() || undefined }).subscribe({
       next: () => { this.editBusy = false; this.closeEditForm(); this.closeDrawer(); this.load(); },
       error: (e) => { this.editBusy = false; this.drawerError = this.extractCalendarError(e); },
     });
@@ -3055,6 +3253,11 @@ export class CalendarComponent {
   private toLocalDatetimeString(d: Date): string {
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  private toLocalDateString(d: Date): string {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
 
   private getDefaultBranchId(): string {
@@ -3369,7 +3572,7 @@ export class CalendarComponent {
     if (!booking) { this.cancelDropReschedule(); return; }
     this.dropConfirmBusy = true;
     this.dropConfirmError = '';
-    this.http.patch(`${environment.apiUrl}/bookings/${booking.id}/reschedule`, this.dropConfirmPayload).subscribe({
+    this.http.patch(`http://localhost:3000/api/bookings/${booking.id}/reschedule`, this.dropConfirmPayload).subscribe({
       next: () => {
         this.dropConfirmBusy = false;
         this.showDropConfirm = false;
@@ -3508,7 +3711,7 @@ export class CalendarComponent {
     if (existing) {
       this.createWalkinBooking(existing.id);
     } else {
-      this.http.post<{ id: string }>(`${environment.apiUrl}/clients`, { fullName: name }).subscribe({
+      this.http.post<{ id: string }>('http://localhost:3000/api/clients', { fullName: name }).subscribe({
         next: (client) => this.createWalkinBooking(client.id),
         error: () => { this.walkinBusy = false; this.walkinError = 'Failed to create client.'; },
       });
@@ -3530,7 +3733,7 @@ export class CalendarComponent {
       }],
     };
     if (this.walkinForm.notes) payload.notes = this.walkinForm.notes;
-    this.http.post(`${environment.apiUrl}/bookings`, payload).subscribe({
+    this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
       next: () => { this.walkinBusy = false; this.showWalkin = false; this.load(); },
       error: (e) => { this.walkinBusy = false; this.walkinError = this.extractCalendarError(e); },
     });
@@ -3654,14 +3857,14 @@ export class CalendarComponent {
       services: validServices,
     };
     if (this.createForm.resourceId) payload.resourceId = this.createForm.resourceId;
-    this.http.post(`${environment.apiUrl}/bookings`, payload).subscribe({
+    this.http.post('http://localhost:3000/api/bookings', payload).subscribe({
       next: () => {
         this.createBusy = false; this.showCreate = false;
         if (this.fillWaitlistEntry) {
           const wlId = this.fillWaitlistEntry.id;
           this.fillWaitlistEntry = null;
           this.resetCreateLookupState();
-          this.http.post(`${environment.apiUrl}/waitlist/${wlId}/booked`, {}).subscribe({
+          this.http.post(`http://localhost:3000/api/waitlist/${wlId}/booked`, {}).subscribe({
             next: () => { this.loadWaitlist(); },
             error: () => { this.loadWaitlist(); },
           });
@@ -3699,7 +3902,7 @@ export class CalendarComponent {
     if (this.rescheduleForm.resourceId !== (b.resourceId || '')) {
       payload.resourceId = this.rescheduleForm.resourceId || null;
     }
-    this.http.patch(`${environment.apiUrl}/bookings/${b.id}/reschedule`, payload).subscribe({
+    this.http.patch(`http://localhost:3000/api/bookings/${b.id}/reschedule`, payload).subscribe({
       next: () => { this.rescheduleBusy = false; this.closeDrawer(); this.load(); },
       error: (e) => { this.rescheduleBusy = false; this.rescheduleError = this.extractCalendarError(e); },
     });
@@ -4423,9 +4626,8 @@ export class CalendarComponent {
   loadClientsAndServices() {
     this.loadClients();
     this.loadServices();
-    this.http.get<BranchOption[]>(`${environment.apiUrl}/branches`).subscribe({
+    this.http.get<BranchOption[]>('http://localhost:3000/api/branches').subscribe({
       next: (d) => this.branchList = Array.isArray(d) ? d : [],
-      error: () => {},
     });
   }
 
