@@ -115,10 +115,11 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
       </div>
 
       <div class="drawer-overlay" *ngIf="showDetail" (click)="closeDetail()">
-        <div class="drawer-panel" (click)="$event.stopPropagation()">
+        <div class="drawer-panel luxe-drawer" (click)="$event.stopPropagation()">
           <ng-container *ngIf="selectedBooking; else noBooking">
-            <div class="drawer-header">
+            <div class="drawer-header luxe-header">
               <div class="dh-left">
+                <span class="dh-eyebrow">Salon Booking</span>
                 <h2>{{ selectedBooking.client?.fullName || 'Booking' }}</h2>
                 <span class="dh-subtitle">{{ selectedBooking.title }}</span>
               </div>
@@ -146,44 +147,61 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                   <button [class.active]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'">Activity Log</button>
                 </div>
 
-                <div class="drawer-section">
-                  <h3>Client Summary</h3>
-                  <div class="client-summary-card">
-                    <div class="cs-avatar">{{ (selectedBooking.client?.fullName || '?').charAt(0) }}</div>
-                    <div class="cs-info">
-                      <span class="cs-name">{{ selectedBooking.client?.fullName || 'Walk-in Client' }}</span>
-                      <span class="cs-contact" *ngIf="selectedBooking.client?.phone">{{ selectedBooking.client.phone }}</span>
-                      <span class="cs-contact" *ngIf="selectedBooking.client?.email">{{ selectedBooking.client.email }}</span>
-                    </div>
-                    <div class="cs-wallet" *ngIf="viewBillData.clientDetail && viewBillData.clientDetail.walletBalance !== undefined">
-                      <span class="wl-label">Wallet</span>
-                      <span class="wl-amount">{{ viewBillData.clientDetail.walletBalance | currency }}</span>
-                    </div>
+                <div class="luxe-card glass lx-client">
+                  <div class="lx-accent"></div>
+                  <div class="cs-avatar luxe-avatar">{{ (selectedBooking.client?.fullName || '?').charAt(0) }}</div>
+                  <div class="cs-info">
+                    <span class="cs-name">{{ selectedBooking.client?.fullName || 'Walk-in Client' }}</span>
+                    <span class="cs-contact" *ngIf="selectedBooking.client?.phone">{{ selectedBooking.client.phone }}</span>
+                    <span class="cs-contact" *ngIf="selectedBooking.client?.email">{{ selectedBooking.client.email }}</span>
+                    <span class="cs-history" *ngIf="clientBookingCount">Past visits: <strong>{{ clientBookingCount }}</strong></span>
+                  </div>
+                  <div class="cs-wallet" *ngIf="viewBillData.clientDetail && viewBillData.clientDetail.walletBalance !== undefined">
+                    <span class="wl-label">Wallet</span>
+                    <span class="wl-amount">{{ viewBillData.clientDetail.walletBalance | currency }}</span>
                   </div>
                 </div>
 
-                <div class="drawer-section">
-                  <h3>Appointment</h3>
-                  <div class="info-row"><span>Date</span><span>{{ selectedBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span></div>
-                  <div class="info-row"><span>Time</span><span>{{ selectedBooking.startTime | date:'h:mm a' }} – {{ selectedBooking.endTime | date:'h:mm a' }}</span></div>
-                  <div class="info-row"><span>Staff</span><span>{{ selectedBooking.staff?.fullName || 'Unassigned' }}</span></div>
-                  <div class="info-row" *ngIf="selectedBooking.resource?.name"><span>Resource</span><span>{{ selectedBooking.resource.name }} ({{ selectedBooking.resource.type }})</span></div>
-                  <div class="info-row" *ngIf="selectedBooking.branch?.name"><span>Branch</span><span>{{ selectedBooking.branch.name }}</span></div>
+                <div class="luxe-grid">
+                  <div class="luxe-card glass lx-mini" *ngIf="selectedBooking.staff">
+                    <span class="lx-ico">&#x1F464;</span>
+                    <span class="lx-k">Staff</span>
+                    <span class="lx-v">{{ selectedBooking.staff?.fullName || 'Unassigned' }}</span>
+                  </div>
+                  <div class="luxe-card glass lx-mini" *ngIf="selectedBooking.resource?.name">
+                    <span class="lx-ico">&#x1F4E6;</span>
+                    <span class="lx-k">Resource</span>
+                    <span class="lx-v">{{ selectedBooking.resource.name }}<em *ngIf="selectedBooking.resource.type"> ({{ selectedBooking.resource.type }})</em></span>
+                  </div>
+                  <div class="luxe-card glass lx-mini" *ngIf="selectedBooking.branch?.name">
+                    <span class="lx-ico">&#x1F3E2;</span>
+                    <span class="lx-k">Branch</span>
+                    <span class="lx-v">{{ selectedBooking.branch.name }}</span>
+                  </div>
                 </div>
 
-                <div class="drawer-section" *ngIf="selectedBooking.services?.length">
+                <div class="luxe-card glass lx-date">
+                  <div class="lx-date-row">
+                    <span class="lx-ico">&#x1F4C5;</span>
+                    <div class="lx-date-main">
+                      <span class="lx-date-day">{{ selectedBooking.startTime | date:'EEE, MMM dd, yyyy' }}</span>
+                      <span class="lx-date-time">{{ selectedBooking.startTime | date:'h:mm a' }} – {{ selectedBooking.endTime | date:'h:mm a' }}</span>
+                    </div>
+                    <span class="lx-duration" *ngIf="getDurationMin(selectedBooking) as dur">{{ dur }} min</span>
+                  </div>
+                </div>
+
+                <div class="luxe-card glass drawer-section lx-services" *ngIf="selectedBooking.services?.length">
                   <h3>Services ({{ selectedBooking.services.length }})</h3>
-                  <div class="bill-svc-header">
-                    <span class="bsh-item">Service</span>
-                    <span class="bsh-qty">Qty</span>
-                    <span class="bsh-price">Price</span>
-                    <span class="bsh-total">Total</span>
-                  </div>
-                  <div class="bill-svc-row" *ngFor="let s of selectedBooking.services">
-                    <span class="bsr-name">{{ s.name }}</span>
-                    <span class="bsr-qty">1</span>
-                    <span class="bsr-price">{{ s.price | currency }}</span>
-                    <span class="bsr-total">{{ s.price | currency }}</span>
+                  <div class="lx-svc" *ngFor="let s of selectedBooking.services">
+                    <div class="lx-svc-top">
+                      <span class="lx-svc-name">{{ s.name }}</span>
+                      <span class="lx-svc-price">{{ s.price | currency }}</span>
+                    </div>
+                    <div class="lx-svc-sub">
+                      <span class="lx-svc-dur">{{ s.durationMin }} min</span>
+                      <span class="lx-svc-qty">Qty 1</span>
+                    </div>
                   </div>
                   <div class="bill-divider"></div>
                   <div class="bill-summary">
@@ -199,7 +217,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                   </div>
                 </div>
 
-                <div class="drawer-section" *ngIf="selectedBooking.notes || viewBillData.staffAlert">
+                <div class="luxe-card glass drawer-section lx-notes" *ngIf="selectedBooking.notes || viewBillData.staffAlert">
                   <h3>Notes & Alerts</h3>
                   <div class="notes-content" *ngIf="selectedBooking.notes">
                     <span class="notes-label">Notes:</span>
@@ -212,7 +230,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 </div>
 
                 <div class="drawer-section bill-actions">
-                  <button class="btn-print" (click)="printBill()">&#x1F5A8; Print Bill</button>
+                  <button class="btn-print luxe-print" (click)="printBill()">&#x1F5A8; Print Bill</button>
                 </div>
               </ng-container>
 
@@ -243,7 +261,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
 
               <div class="drawer-loading" *ngIf="viewBillLoading"><div class="spinner"></div><span>Loading bill details...</span></div>
 
-              <div class="status-workflow" *ngIf="selectedBooking && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
+              <div class="status-workflow luxe-card glass" *ngIf="selectedBooking && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
                 <div class="sw-label">Status Workflow</div>
                 <div class="sw-buttons">
                   <button class="sw-btn sw-confirmed" [class.sw-active]="selectedBooking.status==='CONFIRMED'" [disabled]="selectedBooking.status==='CONFIRMED'" (click)="doStatus(selectedBooking, 'CONFIRMED')">Confirmed</button>
@@ -255,7 +273,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 </div>
               </div>
 
-              <div class="reschedule-form" *ngIf="showReschedule">
+              <div class="reschedule-form luxe-card glass" *ngIf="showReschedule">
                 <h3>Reschedule Booking</h3>
                 <label>Staff</label>
                 <select [(ngModel)]="rescheduleForm.staffId">
@@ -276,7 +294,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <div class="drawer-error" *ngIf="rescheduleError">{{ rescheduleError }}</div>
               </div>
 
-              <div class="cancel-form" *ngIf="showCancelForm">
+              <div class="cancel-form luxe-card glass" *ngIf="showCancelForm">
                 <h3>Cancel Booking</h3>
                 <label>Reason for cancellation</label>
                 <select [(ngModel)]="cancelReason">
@@ -295,7 +313,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
               </div>
 
-              <div class="edit-form" *ngIf="showEditForm">
+              <div class="edit-form luxe-card glass" *ngIf="showEditForm">
                 <h3>Edit Details</h3>
                 <label>Title</label>
                 <input [(ngModel)]="editForm.title" placeholder="Booking title" maxlength="200">
@@ -309,7 +327,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
               </div>
 
-              <div class="payment-form" *ngIf="showAddPayment">
+              <div class="payment-form luxe-card glass" *ngIf="showAddPayment">
                 <h3>Add Payment</h3>
                 <label>Amount</label>
                 <input [(ngModel)]="addPaymentForm.amount" type="number" min="0" step="0.01" placeholder="0.00">
@@ -327,7 +345,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <div class="drawer-error" *ngIf="addPaymentError">{{ addPaymentError }}</div>
               </div>
 
-              <div class="payment-form" *ngIf="showAddTip">
+              <div class="payment-form luxe-card glass" *ngIf="showAddTip">
                 <h3>Add Tip</h3>
                 <label>Tip Amount</label>
                 <input [(ngModel)]="addTipAmount" type="number" min="0" step="0.01" placeholder="0.00">
@@ -341,10 +359,10 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <div class="drawer-error" *ngIf="addTipError">{{ addTipError }}</div>
               </div>
 
-              <div class="drawer-actions" *ngIf="selectedBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
-                <button class="btn-secondary" (click)="openEditForm(selectedBooking)">Edit Details</button>
-                <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" class="btn-secondary" (click)="openRescheduleForm(selectedBooking)">Reschedule</button>
-                <button *ngIf="canCancel(selectedBooking)" class="btn-danger" (click)="openCancelForm()">Cancel Booking</button>
+              <div class="luxe-footer" *ngIf="selectedBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
+                <button class="btn-secondary luxe-btn" (click)="openEditForm(selectedBooking)">Edit Details</button>
+                <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" class="btn-secondary luxe-btn" (click)="openRescheduleForm(selectedBooking)">Reschedule</button>
+                <button *ngIf="canCancel(selectedBooking)" class="btn-danger luxe-btn" (click)="openCancelForm()">Cancel Booking</button>
               </div>
 
               <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip"><div class="spinner"></div><span>Updating...</span></div>
@@ -363,50 +381,53 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
       </div>
 
       <div class="drawer-overlay drawer-centered" *ngIf="showCreate" (click)="closeCreate()">
-        <div class="create-panel" (click)="$event.stopPropagation()">
-          <div class="drawer-header">
-            <h2>New Booking</h2>
+        <div class="create-panel luxe-create" (click)="$event.stopPropagation()">
+          <div class="drawer-header luxe-header">
+            <div class="dh-left">
+              <span class="dh-eyebrow">New Appointment</span>
+              <h2>New Booking</h2>
+            </div>
             <button class="close-btn" (click)="closeCreate()">&times;</button>
           </div>
-          <div class="drawer-body">
-            <div class="create-form">
-              <label class="form-label">Client *</label>
-              <select [(ngModel)]="createForm.clientId" class="form-select" [class.field-error]="formErrors.clientId">
+          <div class="drawer-body luxe-body">
+            <div class="create-form luxe-form">
+              <label class="form-label luxe-label">Client *</label>
+              <select [(ngModel)]="createForm.clientId" class="form-select luxe-input" [class.field-error]="formErrors.clientId">
                 <option value="">— Select Client —</option>
                 <option *ngFor="let c of clients" [value]="c.id">{{ c.fullName }} <ng-container *ngIf="c.phone">— {{ c.phone }}</ng-container></option>
               </select>
               <span class="field-msg" *ngIf="formErrors.clientId">{{ formErrors.clientId }}</span>
 
-              <label class="form-label">Staff *</label>
-              <select [(ngModel)]="createForm.staffId" class="form-select" [class.field-error]="formErrors.staffId">
+              <label class="form-label luxe-label">Staff *</label>
+              <select [(ngModel)]="createForm.staffId" class="form-select luxe-input" [class.field-error]="formErrors.staffId">
                 <option value="">— Select Staff —</option>
                 <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }} <ng-container *ngIf="s.specialization">— {{ s.specialization }}</ng-container></option>
               </select>
               <span class="field-msg" *ngIf="formErrors.staffId">{{ formErrors.staffId }}</span>
 
-              <label class="form-label">Branch *</label>
-              <select [(ngModel)]="createForm.branchId" class="form-select" [class.field-error]="formErrors.branchId">
+              <label class="form-label luxe-label">Branch *</label>
+              <select [(ngModel)]="createForm.branchId" class="form-select luxe-input" [class.field-error]="formErrors.branchId">
                 <option value="">— Select Branch —</option>
                 <option *ngFor="let b of branches" [value]="b.id">{{ b.name }} <ng-container *ngIf="b.city">— {{ b.city }}</ng-container></option>
               </select>
               <span class="field-msg" *ngIf="formErrors.branchId">{{ formErrors.branchId }}</span>
 
-              <label class="form-label">Title</label>
-              <input [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input">
+              <label class="form-label luxe-label">Title</label>
+              <input [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input luxe-input">
 
-              <label class="form-label">Start Time *</label>
-              <div class="time-picker-row">
-                <input [(ngModel)]="createDate" type="date" class="form-input time-date" (change)="syncTimeToForm()" [class.field-error]="formErrors.startTime">
-                <select [(ngModel)]="createHour" class="form-input time-hour" (change)="syncTimeToForm()">
+              <label class="form-label luxe-label">Start Time *</label>
+              <div class="time-picker-row luxe-date-picker">
+                <input [(ngModel)]="createDate" type="date" class="form-input time-date luxe-time-input" (change)="syncTimeToForm()" [class.field-error]="formErrors.startTime">
+                <select [(ngModel)]="createHour" class="form-input time-hour luxe-time-input" (change)="syncTimeToForm()">
                   <option *ngFor="let h of [1,2,3,4,5,6,7,8,9,10,11,12]" [value]="h">{{ h }}</option>
                 </select>
-                <select [(ngModel)]="createMinute" class="form-input time-min" (change)="syncTimeToForm()">
+                <select [(ngModel)]="createMinute" class="form-input time-min luxe-time-input" (change)="syncTimeToForm()">
                   <option value="00">:00</option>
                   <option value="15">:15</option>
                   <option value="30">:30</option>
                   <option value="45">:45</option>
                 </select>
-                <select [(ngModel)]="createAmPm" class="form-input time-ampm" (change)="syncTimeToForm()">
+                <select [(ngModel)]="createAmPm" class="form-input time-ampm luxe-time-input" (change)="syncTimeToForm()">
                   <option value="AM">AM</option>
                   <option value="PM">PM</option>
                 </select>
@@ -414,15 +435,15 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
               </div>
               <span class="field-msg" *ngIf="formErrors.startTime">{{ formErrors.startTime }}</span>
 
-              <label class="form-label">Services *</label>
+              <label class="form-label luxe-label">Services *</label>
               <div class="svc-picker">
-                <select #svcSelect class="form-select" (change)="addCatalogService(svcSelect.value); svcSelect.value = ''">
+                <select #svcSelect class="form-select luxe-input" (change)="addCatalogService(svcSelect.value); svcSelect.value = ''">
                   <option value="">— Add Service from Catalog —</option>
                   <option *ngFor="let sv of catalogServices" [value]="sv.id" [disabled]="isServiceAdded(sv.id)">{{ sv.name }} ({{ sv.durationMin }} min — {{ sv.price | currency }})</option>
                 </select>
               </div>
               <div class="create-services" *ngIf="createForm.services.length > 0">
-                <div class="svc-card" *ngFor="let s of createForm.services; let i = index">
+                <div class="svc-card luxe-svc-card" *ngFor="let s of createForm.services; let i = index">
                   <div class="svc-card-info">
                     <span class="svc-card-name">{{ s.name }}</span>
                     <span class="svc-card-meta">{{ s.durationMin }} min</span>
@@ -442,12 +463,12 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <span>({{ getFormDuration() }} min total)</span>
               </div>
 
-              <label class="form-label">Notes</label>
-              <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." class="form-input form-textarea" rows="2"></textarea>
+              <label class="form-label luxe-label">Notes</label>
+              <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." class="form-input form-textarea luxe-input" rows="2"></textarea>
 
               <div class="drawer-actions">
                 <button (click)="closeCreate()">Cancel</button>
-                <button class="btn-primary" (click)="doCreate()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Create Booking' }}</button>
+                <button class="btn-primary luxe-btn-primary" (click)="doCreate()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Create Booking' }}</button>
               </div>
             </div>
             <div class="drawer-loading" *ngIf="createBusy"><div class="spinner"></div><span>Creating...</span></div>
@@ -691,6 +712,69 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .al-user{font-size:11px;color:#6366f1;font-weight:600}
     .al-details{font-size:12px;color:#4b5563}
     .al-empty{padding:16px;text-align:center;color:#9ca3af;font-size:13px}
+    /* ===== Luxury booking drawer upgrade ===== */
+    .drawer-overlay{background:rgba(15,23,42,.45);backdrop-filter:blur(2px)}
+    .luxe-drawer{background:linear-gradient(160deg,#ffffff 0%,#fbfaff 100%);border-left:4px solid #c9a227;box-shadow:-30px 0 80px rgba(15,23,42,.18);border-top-left-radius:22px;border-bottom-left-radius:22px}
+    .luxe-create{background:linear-gradient(160deg,#ffffff 0%,#fbfaff 100%);box-shadow:0 30px 80px rgba(15,23,42,.25)}
+    .glass{background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.6);box-shadow:0 10px 30px rgba(15,23,42,.08)}
+    .luxe-header{background:linear-gradient(120deg,#1c1530 0%,#3a2d5c 55%,#5b4a8a 100%);border-bottom:0;padding:22px 26px}
+    .luxe-header .dh-left{flex:1;min-width:0}
+    .luxe-header h2{color:#fff;font-size:20px;margin:2px 0 0}
+    .dh-eyebrow{display:block;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#e7c873}
+    .luxe-header .dh-subtitle{color:rgba(255,255,255,.72)}
+    .luxe-header .close-btn,.luxe-header .action-menu-trigger{color:rgba(255,255,255,.85);background:rgba(255,255,255,.12)}
+    .luxe-header .action-menu-trigger:hover{background:rgba(255,255,255,.22)}
+    .luxe-badge{box-shadow:0 4px 12px rgba(0,0,0,.18)}
+    .luxe-body{gap:16px;padding:20px 22px}
+    .luxe-card{position:relative;border-radius:18px;padding:18px 18px 18px 22px;overflow:hidden}
+    .luxe-card h3{margin:0 0 12px}
+    .lx-accent{position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,#c9a227,#e7c873);border-radius:18px 0 0 18px}
+    .lx-client{display:flex;align-items:center;gap:14px}
+    .luxe-avatar{width:52px;height:52px;font-size:22px;background:linear-gradient(135deg,#c9a227,#8a6d1f);box-shadow:0 6px 16px rgba(201,162,39,.4)}
+    .cs-history{font-size:11px;color:#9ca3af;font-weight:600}
+    .cs-history strong{color:#6b7280}
+    .luxe-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .lx-mini{display:flex;flex-direction:column;gap:6px;padding:14px}
+    .lx-ico{font-size:22px;line-height:1}
+    .lx-k{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+    .lx-v{font-size:14px;font-weight:700;color:#1f2937}
+    .lx-v em{font-style:normal;color:#6b7280;font-weight:600;font-size:12px}
+    .lx-date-row{display:flex;align-items:center;gap:14px}
+    .lx-date-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+    .lx-date-day{font-size:16px;font-weight:800;color:#1f2937}
+    .lx-date-time{font-size:13px;color:#6b7280}
+    .lx-duration{font-size:12px;font-weight:700;color:#8a6d1f;background:rgba(201,162,39,.14);padding:4px 12px;border-radius:20px;white-space:nowrap}
+    .lx-services .lx-svc{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.65);border:1px solid rgba(15,23,42,.05);margin-bottom:8px}
+    .lx-svc-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .lx-svc-name{font-weight:700;font-size:14px;color:#111827}
+    .lx-svc-price{font-weight:800;font-size:14px;color:#8a6d1f}
+    .lx-svc-sub{display:flex;gap:12px;font-size:12px;color:#6b7280}
+    .lx-svc-sub .lx-svc-qty{margin-left:auto;font-weight:600}
+    .lx-notes .staff-alert{margin-top:0}
+    .luxe-print{background:linear-gradient(135deg,#1c1530,#5b4a8a);color:#fff;box-shadow:0 8px 20px rgba(28,21,48,.3)}
+    .luxe-print:hover{background:linear-gradient(135deg,#3a2d5c,#5b4a8a);opacity:1}
+    .luxe-footer{position:sticky;bottom:0;display:flex;gap:10px;flex-wrap:wrap;padding:14px 16px;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-top:1px solid rgba(15,23,42,.06);border-radius:0 0 22px 22px;margin:0 -22px -20px}
+    .luxe-footer .luxe-btn{flex:1;border:0;border-radius:14px;padding:14px;font-weight:800;cursor:pointer;font-size:13px;transition:transform .12s,box-shadow .12s}
+    .luxe-footer .luxe-btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(15,23,42,.14)}
+    .luxe-footer .luxe-btn.btn-secondary{background:rgba(201,162,39,.12);color:#8a6d1f}
+    .luxe-footer .luxe-btn.btn-danger{background:rgba(220,38,38,.1);color:#991b1b}
+    .luxe-footer .luxe-btn.btn-danger:hover{box-shadow:0 10px 22px rgba(220,38,38,.18)}
+    .btn-primary{background:linear-gradient(135deg,#c9a227,#8a6d1f);color:#fff;box-shadow:0 10px 24px rgba(201,162,39,.35);border:0}
+    .btn-primary:hover{opacity:1;box-shadow:0 14px 30px rgba(201,162,39,.45);transform:translateY(-1px)}
+    .btn-secondary{background:#f3f4f6;color:#374151}
+    .btn-danger{background:#fee2e2;color:#991b1b}
+    .btn-ghost{background:transparent;border:1px solid #e5e7eb;color:#6b7280;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:13px;flex:1;transition:all .2s}
+    .btn-ghost:hover{border-color:#9ca3af;color:#374151}
+    .luxe-form .luxe-label{font-size:12px;font-weight:800;letter-spacing:.04em;color:#6b7280;text-transform:uppercase}
+    .luxe-input{background:rgba(255,255,255,.8);border:1px solid #e5e7eb;border-radius:14px;transition:border-color .2s,box-shadow .2s}
+    .luxe-input:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.15)}
+    .luxe-date-picker{background:rgba(201,162,39,.06);border:1px solid rgba(201,162,39,.2);border-radius:16px;padding:12px;gap:8px}
+    .luxe-time-input{border-radius:12px!important;background:white;border:1px solid #e5e7eb}
+    .luxe-svc-card{background:rgba(255,255,255,.8);border:1px solid rgba(15,23,42,.06);border-radius:14px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+    .luxe-footer-actions .btn-primary,.luxe-footer-actions .btn-ghost{border-radius:14px;padding:14px}
+    .luxe-footer-actions .btn-primary{box-shadow:0 10px 24px rgba(201,162,39,.35)}
+    .status-workflow{background:rgba(249,250,251,.7)!important}
+    .luxe-tabs.bill-tabs button.active{background:linear-gradient(135deg,#c9a227,#8a6d1f);color:#fff;box-shadow:0 6px 16px rgba(201,162,39,.3)}
     @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{flex-direction:column}.toolbar .filter-input{min-width:0}
       .sw-buttons{gap:4px}.sw-btn{min-width:60px;padding:4px 10px;font-size:11px}
       .bill-svc-header{font-size:9px}.bill-svc-row{font-size:11px}
@@ -698,6 +782,13 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
       .cs-wallet{padding:4px 8px}.wl-amount{font-size:13px}
       .action-menu-dropdown{right:auto;left:0}
       .tip-presets button{padding:8px;font-size:13px}
+    }
+    @media(max-width:640px){
+      .luxe-grid{grid-template-columns:1fr}
+      .luxe-body{padding:16px}
+      .luxe-footer{flex-direction:column;margin:0 -16px -16px}
+      .luxe-header{padding:18px 18px}
+      .luxe-create{width:94%}
     }
   `]
 })
@@ -1254,3 +1345,5 @@ export class BookingsComponent implements OnDestroy {
     return entries;
   }
 }
+
+
