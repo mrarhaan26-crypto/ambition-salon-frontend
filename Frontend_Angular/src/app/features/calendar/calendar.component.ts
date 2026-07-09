@@ -1432,12 +1432,8 @@ import {
     .page{display:flex;flex-direction:column;gap:20px;flex:1;min-height:0}
     h1{font-size:34px;margin:0}
     p{color:#6b7280;margin:6px 0 0}
-    .today-btn,.nav-btn,.refresh-btn{border:1px solid #e5e7eb;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:white}
-    .refresh-btn{font-size:12px;padding:10px 14px;min-height:40px}
-    .refresh-btn:disabled{opacity:.5;cursor:default}
-    .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
+    .today-btn,.nav-btn{border:1px solid #e5e7eb;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:white}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
-    .vm-btn{font-size:12px;padding:8px 16px!important}
     .res-filter{border:1px solid #e5e7eb;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:600;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);transition:border-color .15s,box-shadow .15s}
     .res-filter:focus,.branch-filter:focus,.status-filter:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.18)}
     .filter-bar{display:flex;gap:10px;align-items:center;padding:0 0 10px}
@@ -1515,9 +1511,7 @@ import {
     .wl-fill-badge{font-size:10px;font-weight:700;background:#f59e0b;color:white;border-radius:6px;padding:2px 8px;text-transform:uppercase;letter-spacing:.03em}
     .wl-fill-cancel{font-size:11px;padding:5px 14px;background:rgba(255,255,255,.9);border:1px solid rgba(220,38,38,.15);border-radius:8px;cursor:pointer;color:#991b1b;font-weight:600;transition:all .2s;box-shadow:0 2px 6px rgba(0,0,0,.06)}
     .wl-fill-cancel:hover{background:linear-gradient(135deg,rgba(254,242,242,.9),rgba(254,226,226,.9));border-color:rgba(220,38,38,.25);box-shadow:0 4px 10px rgba(220,38,38,.12)}
-    .view-transition{animation:calFadeIn .2s ease}
-    @keyframes calFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    .view-transition{animation:fadeIn .2s ease}
     .day-view{
       background:linear-gradient(180deg,#ffffff 0%,#f8faff 50%,#f0f4ff 100%);
       border:1px solid rgba(99,102,241,.15);border-radius:24px;display:flex;flex-direction:column;
@@ -1619,7 +1613,6 @@ import {
     .dv-bookings-layer .booking-chip.status-checked_in{background:linear-gradient(135deg,rgba(237,233,254,.95),rgba(221,214,254,.9));border-left-color:#7c3aed;box-shadow:0 4px 16px rgba(124,58,237,.2)}
     .dv-bookings-layer .booking-chip strong{display:block;font-size:11px;font-weight:700;color:#0b0b0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
     .dv-bookings-layer .booking-chip span{display:block;font-size:9px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
-    .dv-bookings-layer .booking-chip{transition:all .2s cubic-bezier(.4,0,.2,1)}
     @media(hover:hover){.dv-bookings-layer .booking-chip:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:20}}
     .dv-bookings-layer .booking-chip:active{transform:scale(.97)}
     .booking-chip:focus-visible,.week-booking:focus-visible,.month-preview-chip:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:6px}
@@ -2660,7 +2653,7 @@ import {
     .lsb-staff-item{
       display:flex;align-items:center;gap:10px;width:100%;
       padding:8px 10px;border:1px solid transparent;border-radius:12px;
-      background:transparent;cursor:pointer;transition:all .15s;text-align:left;
+      background:transparent;cursor:pointer;transition:all .2s;text-align:left;
     }
     .lsb-staff-item:hover{background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.15)}
     .lsb-staff-item:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:8px}
@@ -3066,6 +3059,303 @@ import {
     .walkin-btn:hover{box-shadow:0 6px 18px rgba(5,150,105,.45)!important}
     .waitlist-toggle-btn.active{box-shadow:0 4px 14px rgba(99,102,241,.25)!important}
     .ai-toggle-btn.active{box-shadow:0 4px 14px rgba(124,58,237,.25)!important}
+
+    /* ====================================================
+       PHASE 3: MOTION + INTERACTION POLISH
+       ==================================================== */
+
+    /* --- 1. BOOKING CARD HOVER ANIMATIONS --- */
+    @media(hover:hover){
+      .booking-chip{
+        transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s ease,border-color .22s ease;
+      }
+      .booking-chip:hover{
+        transform:translateY(-3px) scale(1.03);
+        z-index:10;
+      }
+      .dv-bookings-layer .booking-chip{
+        transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s ease,filter .22s ease;
+      }
+      .dv-bookings-layer .booking-chip:hover{
+        transform:translateY(-3px) scale(1.04);
+        filter:brightness(1.06);
+        z-index:20;
+      }
+      .week-booking{
+        transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .22s ease;
+      }
+      .week-booking:hover{
+        transform:translateY(-2px) scale(1.02);
+      }
+      .month-preview-chip{
+        transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s ease;
+      }
+      .month-preview-chip:hover{
+        transform:translateX(3px) scale(1.02);
+      }
+    }
+
+    /* --- 2. BOOKING CARD SELECTED/ACTIVE STATE --- */
+    .booking-chip.selected,.dv-bookings-layer .booking-chip.selected{
+      outline:2px solid #6366f1;outline-offset:1px;
+      box-shadow:0 0 0 3px rgba(99,102,241,.25),0 8px 24px rgba(99,102,241,.2)!important;
+      transform:scale(1.02);
+      z-index:15;
+    }
+    .booking-chip.selected::after,.dv-bookings-layer .booking-chip.selected::after{
+      content:'';position:absolute;top:-1px;right:-1px;width:8px;height:8px;
+      background:#6366f1;border-radius:50%;
+      box-shadow:0 0 6px rgba(99,102,241,.6);
+      animation:selectedPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes selectedPulse{
+      0%,100%{transform:scale(1);opacity:1}
+      50%{transform:scale(1.3);opacity:.7}
+    }
+    .week-booking.selected{
+      outline:2px solid #6366f1;outline-offset:1px;
+      box-shadow:0 0 0 3px rgba(99,102,241,.25),0 6px 18px rgba(99,102,241,.2)!important;
+    }
+
+    /* --- 3. CURRENT TIME LINE ANIMATION --- */
+    .current-time-line{
+      animation:timePulse 2s ease-in-out infinite,timeSweep 4s linear infinite;
+    }
+    @keyframes timeSweep{
+      0%{opacity:.85}
+      50%{opacity:1}
+      100%{opacity:.85}
+    }
+    .current-time-line::after{
+      content:'';position:absolute;left:0;top:0;width:40px;height:100%;
+      background:linear-gradient(90deg,rgba(255,255,255,.4),transparent);
+      border-radius:2px;pointer-events:none;
+      animation:timeSweepDot 3s ease-in-out infinite;
+    }
+    @keyframes timeSweepDot{
+      0%{left:0;opacity:0}
+      20%{opacity:.6}
+      80%{opacity:.6}
+      100%{left:calc(100% - 40px);opacity:0}
+    }
+    .current-time-label{
+      animation:timeLabelPulse 2s ease-in-out infinite,labelBreathe 3s ease-in-out infinite;
+    }
+    @keyframes labelBreathe{
+      0%,100%{transform:translateY(-50%) scale(1)}
+      50%{transform:translateY(-50%) scale(1.05)}
+    }
+
+    /* --- 4. EMPTY SLOT HOVER GLOW --- */
+    @media(hover:hover){
+      .dv-hour-row{
+        transition:all .2s cubic-bezier(.4,0,.2,1),background .15s ease;
+      }
+      .dv-hour-row:hover{
+        background:linear-gradient(90deg,rgba(99,102,241,.1),rgba(168,85,247,.06),rgba(14,165,233,.04),transparent)!important;
+        box-shadow:inset 0 0 0 1px rgba(99,102,241,.2),0 0 28px rgba(99,102,241,.1),0 0 0 1px rgba(124,58,237,.08);
+        transform:scaleY(1.01);
+      }
+      .dv-hour-row-alt:hover{
+        background:linear-gradient(90deg,rgba(124,58,237,.1),rgba(99,102,241,.06),rgba(236,72,153,.04),transparent)!important;
+        box-shadow:inset 0 0 0 1px rgba(124,58,237,.22),0 0 32px rgba(124,58,237,.12),0 0 0 1px rgba(99,102,241,.08);
+        transform:scaleY(1.01);
+      }
+      .dv-hour-busy:hover{
+        background:rgba(99,102,241,.1)!important;
+        box-shadow:inset 0 0 0 1px rgba(99,102,241,.15);
+      }
+    }
+
+    /* --- 5. STAFF COLUMN HOVER POLISH --- */
+    @media(hover:hover){
+      .dv-staff-col{
+        transition:background .25s ease,box-shadow .25s ease;
+      }
+      .dv-staff-col:hover{
+        background:linear-gradient(180deg,rgba(236,72,153,.04),rgba(99,102,241,.02),transparent)!important;
+        box-shadow:inset 2px 0 12px rgba(99,102,241,.06);
+      }
+      .dv-staff-col:last-child:hover{
+        box-shadow:inset 2px 0 12px rgba(99,102,241,.06),inset -2px 0 12px rgba(236,72,153,.04);
+      }
+    }
+
+    /* --- 6. RESOURCE COLUMN HOVER POLISH --- */
+    @media(hover:hover){
+      .week-day-col{
+        transition:background .25s ease,box-shadow .25s ease;
+      }
+      .week-day-col:hover{
+        background:linear-gradient(180deg,rgba(14,165,233,.06),rgba(99,102,241,.03),transparent)!important;
+        box-shadow:inset 0 2px 12px rgba(14,165,233,.06);
+      }
+      .month-day{
+        transition:background .2s ease,transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease;
+      }
+      .month-day:hover{
+        transform:scale(1.02);
+        box-shadow:0 4px 16px rgba(99,102,241,.1);
+      }
+    }
+
+    /* --- 7. TIMELINE SCROLL FEEL --- */
+    .dv-container{
+      scroll-behavior:smooth;
+      scroll-snap-type:x proximity;
+    }
+    .dv-staff-col{
+      scroll-snap-align:start;
+    }
+    .dv-time-col{
+      transition:box-shadow .2s ease;
+    }
+    .dv-container:not([style*="scrollLeft: 0"]) .dv-time-col,
+    .dv-container[data-scrolled="true"] .dv-time-col{
+      box-shadow:6px 0 20px rgba(79,70,229,.1);
+    }
+    .dv-header-gap{
+      position:sticky;top:0;z-index:4;
+      transition:box-shadow .2s ease;
+    }
+
+    /* --- 8. MINI CALENDAR SELECTED-DAY POLISH --- */
+    .lsb-cal-day.selected{
+      position:relative;
+    }
+    .lsb-cal-day.selected::before{
+      content:'';position:absolute;inset:-3px;border-radius:10px;
+      background:linear-gradient(135deg,rgba(124,58,237,.3),rgba(168,85,250,.2));
+      z-index:-1;animation:selectedRing 2s ease-in-out infinite;
+    }
+    @keyframes selectedRing{
+      0%,100%{opacity:.5;transform:scale(1)}
+      50%{opacity:.8;transform:scale(1.08)}
+    }
+    .lsb-cal-day.today.selected::before{
+      background:linear-gradient(135deg,rgba(79,70,229,.3),rgba(124,58,237,.25));
+    }
+    .lsb-cal-day:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.2);
+    }
+
+    /* --- 9. FOCUS-VISIBLE STATES --- */
+    .today-btn:focus-visible,.nav-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.3);
+    }
+    .view-btn:focus-visible,.mode-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+    }
+    .primary-btn:focus-visible{
+      outline:2px solid #4f46e5;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(79,70,229,.25);
+    }
+    .secondary-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+    }
+    .empty-btn:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.2);
+    }
+    .branch-filter:focus-visible,.status-filter:focus-visible,.res-filter:focus-visible{
+      outline:none;
+      box-shadow:0 0 0 3px rgba(99,102,241,.25),0 4px 14px rgba(99,102,241,.12);
+    }
+    .staff-filter-pill:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.2);
+    }
+    .lsb-staff-item:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      background:rgba(99,102,241,.06);
+    }
+    .lsb-queue-item:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .action-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.25);
+    }
+    .booking-chip:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.2);
+    }
+    .dv-bookings-layer .booking-chip:focus-visible{
+      outline:2px solid #6366f1;outline-offset:1px;
+      z-index:25;
+    }
+    .week-booking:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .month-preview-chip:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .walkin-btn:focus-visible,.waitlist-toggle-btn:focus-visible,.ai-toggle-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(99,102,241,.25);
+    }
+    .nb-btn:focus-visible,.btn:focus-visible,.vd-btn:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .nb-btn-cancel:focus-visible,.btn-secondary:focus-visible,.vd-btn-secondary:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .nb-btn-primary:focus-visible,.btn-primary:focus-visible,.vd-btn-primary:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(79,70,229,.3);
+    }
+    .close-btn:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+      border-radius:8px;
+    }
+    .drop-dialog-actions button:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+    .rebook-book-btn:focus-visible{
+      outline:2px solid #fff;outline-offset:2px;
+    }
+    .sd-option:focus-visible,.action-menu-dropdown button:focus-visible{
+      outline:2px solid #6366f1;outline-offset:-2px;
+      background:rgba(99,102,241,.08);
+    }
+    .tip-presets button:focus-visible{
+      outline:2px solid #6366f1;outline-offset:2px;
+    }
+
+    /* --- 10. REDUCED-MOTION SUPPORT --- */
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{
+        animation-duration:0.01ms!important;
+        animation-iteration-count:1!important;
+        transition-duration:0.01ms!important;
+        scroll-behavior:auto!important;
+      }
+      .page::before{animation:none!important;opacity:.7!important}
+      .day-view::after,.week-view::after,.month-view::after{transition:none!important}
+      .booking-chip,.dv-bookings-layer .booking-chip,.week-booking,.month-preview-chip{
+        transition:box-shadow .1s ease!important;
+      }
+      .booking-chip:hover,.dv-bookings-layer .booking-chip:hover,.week-booking:hover,.month-preview-chip:hover{
+        transform:none!important;
+      }
+      .dv-hour-row:hover,.dv-hour-row-alt:hover{transform:none!important}
+      .month-day:hover{transform:none!important}
+      .kpi-card:hover{transform:none!important}
+      .kpi-card::after{display:none!important}
+      .lsb-cal-day:hover{transform:none!important}
+      .lsb-cal-day.selected::before{animation:none!important;opacity:.6!important}
+      .current-time-line::after{display:none!important}
+      .booking-chip.selected::after{animation:none!important}
+      .dv-staff-avatar:hover{transform:none!important}
+      .sf-avatar:hover{transform:none!important}
+    }
+
+    /* --- BONUS: SMOOTH FOCUS RING TRANSITION --- */
+    :focus-visible{
+      transition:outline-offset .15s ease,box-shadow .15s ease;
+    }
   `]
 })
 export class CalendarComponent {
