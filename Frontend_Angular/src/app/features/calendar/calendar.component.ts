@@ -100,6 +100,10 @@ import {
           </div>
 
           <div class="action-buttons">
+            <div class="header-search-wrap">
+              <input type="text" class="header-search-input" placeholder="Search bookings..." disabled aria-label="Search bookings (coming soon)">
+              <span class="header-search-icon">&#128269;</span>
+            </div>
             <button (click)="refresh()" class="btn action-btn" [disabled]="loading" aria-label="Refresh calendar"><span class="btn-icon">&#8635;</span> Refresh</button>
             <button (click)="openCreateBookingForDate(currentDate)" class="btn action-btn primary-btn" aria-label="New booking">+ New Booking</button>
             <button (click)="openWalkin()" class="btn action-btn secondary-btn" aria-label="Add walk-in">Walk-in</button>
@@ -2256,6 +2260,15 @@ import {
     .view-btn.active,.mode-btn.active{background:#fff;color:#4f46e5;box-shadow:0 2px 8px rgba(0,0,0,.15)}
     .timeline-btn{border-left:2px solid rgba(255,255,255,.3)}
     .action-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .header-search-wrap{position:relative;display:flex;align-items:center}
+    .header-search-input{
+      width:180px;padding:8px 12px 8px 32px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);
+      color:#fff;border-radius:10px;font-size:12px;font-weight:600;cursor:not-allowed;opacity:.7;
+      transition:all .15s;backdrop-filter:blur(4px);
+    }
+    .header-search-input::placeholder{color:rgba(255,255,255,.7)}
+    .header-search-input:focus{outline:none;border-color:rgba(255,255,255,.6);opacity:.85}
+    .header-search-icon{position:absolute;left:10px;font-size:13px;pointer-events:none;opacity:.7}
     .btn{font-family:inherit}
     .today-btn,.nav-btn{border:none;cursor:pointer;font-weight:700;font-size:12px;border-radius:10px;transition:all .15s}
     .today-btn{background:rgba(255,255,255,.18);color:#fff;padding:8px 14px}
@@ -2313,12 +2326,17 @@ import {
       .nav-section{justify-content:center}
       .view-selector,.action-buttons{justify-content:center;flex-wrap:wrap}
       .premium-kpi-strip{grid-template-columns:repeat(2,1fr)}
+      .header-search-wrap{width:100%}
+      .header-search-input{width:100%}
     }
     @media(max-width:560px){
       .premium-header{border-radius:14px;padding:14px}
       .header-branding h1{font-size:22px}
       .premium-kpi-strip{grid-template-columns:1fr 1fr}
       .action-btn.primary-btn{flex-shrink:0}
+      .header-search-wrap{width:100%;order:10}
+      .header-search-input{width:100%;font-size:11px;padding:6px 10px 6px 28px}
+      .header-search-icon{left:8px;font-size:12px}
     }
   `]
 })
