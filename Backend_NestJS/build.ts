@@ -1,10 +1,8 @@
-"""
-Build script for Ambition Unisex Salon Backend.
-
-This script:
-1. Generates Prisma client
-2. Runs TypeScript compilation
-"""
+// Build script for Ambition Unisex Salon Backend.
+//
+// This script:
+// 1. Generates Prisma client
+// 2. Runs TypeScript compilation
 
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
