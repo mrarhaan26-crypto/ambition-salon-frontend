@@ -1430,18 +1430,12 @@ import {
   `,
   styles: [`
     .page{display:flex;flex-direction:column;gap:20px;flex:1;min-height:0}
-    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:#f7f7f7;padding:4px 0;margin:-4px 0}
     h1{font-size:34px;margin:0}
     p{color:#6b7280;margin:6px 0 0}
-    .head-actions{display:flex;gap:8px;align-items:center}
     .today-btn,.nav-btn,.refresh-btn{border:1px solid #e5e7eb;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:white}
     .refresh-btn{font-size:12px;padding:10px 14px;min-height:40px}
     .refresh-btn:disabled{opacity:.5;cursor:default}
     .updated-text{font-size:11px;color:#9ca3af;white-space:nowrap}
-    .date-label{font-weight:700;font-size:16px;min-width:200px;text-align:center;color:#374151;letter-spacing:-.02em}
-    .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:#f7f7f7;padding:4px 0}
-    .tabs button{border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer;background:white}
-    .tabs button.active{background:#0b0b0b;color:white;border-color:#0b0b0b}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
     .vm-btn{font-size:12px;padding:8px 16px!important}
     .res-filter{border:1px solid #e5e7eb;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:600;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);transition:border-color .15s,box-shadow .15s}
@@ -1482,7 +1476,6 @@ import {
       transition:all .2s;
     }
     .error button:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(239,68,68,.4)}
-    .summary-bar{display:flex;gap:8px;flex-wrap:wrap;background:white;border:1px solid #e5e7eb;border-radius:14px;padding:8px 12px}
     .status-legend{
       display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 0 6px;align-items:center;
     }
@@ -1494,10 +1487,6 @@ import {
     }
     .legend-item:hover{background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.2)}
     .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.15)}
-    .sum-card{flex:1;text-align:center;padding:2px 8px;border-right:1px solid #e5e7eb;min-width:80px}
-    .sum-card:last-child{border-right:0}
-    .sum-card span{display:block;font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:1px}
-    .sum-card b{font-size:16px;color:#0b0b0b}
     .green{color:#16a34a}.amber{color:#d97706}
     .staff-filter-bar{display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid rgba(99,102,241,.08)}
     .staff-filter-pill{border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#6366f1;transition:all .2s;box-shadow:0 2px 6px rgba(0,0,0,.04)}
@@ -1528,7 +1517,7 @@ import {
     .wl-fill-cancel:hover{background:linear-gradient(135deg,rgba(254,242,242,.9),rgba(254,226,226,.9));border-color:rgba(220,38,38,.25);box-shadow:0 4px 10px rgba(220,38,38,.12)}
     .view-transition{animation:calFadeIn .2s ease}
     @keyframes calFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    @media(prefers-reduced-motion:reduce){.view-transition{animation:none}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
     .day-view{
       background:linear-gradient(180deg,#ffffff 0%,#f8faff 50%,#f0f4ff 100%);
       border:1px solid rgba(99,102,241,.15);border-radius:24px;display:flex;flex-direction:column;
@@ -1611,11 +1600,9 @@ import {
     .booking-chip.status-checked_in{background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-left:4px solid #7c3aed;box-shadow:0 2px 8px rgba(124,58,237,.2)}
     .booking-chip strong{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .booking-chip span{display:none}
-    .booking-chip{transition:transform .2s cubic-bezier(.4,0,.2,1),box-shadow .2s}
     @media(hover:hover){.booking-chip:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 6px 16px rgba(0,0,0,.12);z-index:10}}
     .booking-chip:active{transform:scale(.97)}
     .booking-bar{position:absolute;bottom:2px;left:6px;right:6px;height:2px;border-radius:1px;background:rgba(0,0,0,.08);pointer-events:none}
-    .dv-staff-body{position:relative}
     .dv-bookings-layer{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
     .dv-bookings-layer .booking-chip{
       pointer-events:auto;position:absolute;overflow:hidden;z-index:1;border-radius:12px;
@@ -1973,8 +1960,6 @@ import {
     }
     @media(max-width:900px){
       .drawer-panel{width:100%}
-      .summary-bar{gap:4px;padding:6px 10px}
-      .sum-card{padding:2px 6px;min-width:60px}
       .week-view,.month-view{overflow-x:auto;-webkit-overflow-scrolling:touch}
       .month-grid{min-width:700px}
       .week-header{min-width:700px}
@@ -1983,24 +1968,17 @@ import {
       .dv-staff-col{min-width:160px;flex:0 0 160px}
       .dv-hour-row{height:48px}
       .dv-time-row{height:48px}
-      .head-actions{flex-wrap:wrap;justify-content:center}
       .staff-filter-bar{gap:4px;padding:8px}
       .dv-sidebar-stack{min-width:240px;max-width:280px}
       .wl-fill-banner{flex-wrap:wrap;gap:6px;padding:6px 12px}
       .create-panel{width:min(500px,95%)}
     }
     @media(max-width:768px){
-      .head h1{font-size:24px}
-      .head p{display:none}
-      .date-label{font-size:14px;min-width:auto}
       .today-btn,.nav-btn{padding:8px 12px;font-size:13px;min-height:40px}
       .refresh-btn{padding:8px 12px;font-size:12px;min-height:40px}
       .updated-text{font-size:10px}
       .tabs button{padding:8px 14px;font-size:12px;min-height:40px}
       .vm-btn{padding:6px 12px!important}
-      .summary-bar{gap:2px;padding:6px 8px}
-      .sum-card{padding:2px 4px;min-width:50px}
-      .sum-card b{font-size:14px}
       .dv-staff-col{min-width:150px;flex:0 0 150px}
       .dv-hour-row{height:44px}
       .dv-time-row{height:44px}
@@ -2037,22 +2015,12 @@ import {
     }
     @media(max-width:640px){
       .page{gap:12px}
-      .head{flex-direction:column;align-items:stretch;gap:8px}
-      .head h1{font-size:20px}
-      .head-actions{flex-wrap:wrap;justify-content:center;gap:4px}
-      .date-label{font-size:12px;min-width:0;width:100%;order:-1;text-align:center}
       .today-btn,.nav-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
       .refresh-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1}
       .updated-text{display:none}
-      .tabs{gap:2px;justify-content:center}
-      .tabs button{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
       .vm-btn{padding:4px 8px!important}
       .filter-bar{flex-wrap:wrap;gap:4px}
       .branch-filter,.status-filter{font-size:11px;min-width:0;width:100%;padding:6px 10px}
-      .summary-bar{gap:2px;padding:4px 6px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
-      .sum-card{padding:2px 4px;min-width:60px;flex:0 0 auto;border-right:1px solid #e5e7eb}
-      .sum-card b{font-size:13px}
-      .sum-card span{font-size:8px}
       .staff-filter-bar{padding:6px;gap:3px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;justify-content:flex-start}
       .staff-filter-pill{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
       .walkin-btn,.waitlist-toggle-btn,.ai-toggle-btn{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
@@ -2116,6 +2084,7 @@ import {
     }
     .action-menu-dropdown button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:all .15s}
     .action-menu-dropdown button:hover{background:rgba(99,102,241,.06);color:#4f46e5}
+    .action-menu-dropdown button:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .am-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
     .client-summary-card{display:flex;align-items:center;gap:14px}
     .cs-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#0b0b0b,#1e1b4b);color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;box-shadow:0 4px 12px rgba(11,11,11,.3)}
@@ -2129,6 +2098,7 @@ import {
     .bill-tabs button{border:0;background:transparent;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#6366f1;transition:all .15s}
     .bill-tabs button.active{background:rgba(99,102,241,.08);color:#0b0b0b;box-shadow:0 1px 4px rgba(99,102,241,.1)}
     .bill-tabs button:hover:not(.active){color:#4f46e5}
+    .bill-tabs button:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:4px}
     .bill-svc-header{display:flex;gap:8px;padding:6px 0;font-size:10px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid rgba(99,102,241,.08)}
     .bsh-item{flex:2}
     .bsh-qty{width:36px;text-align:center}
@@ -2166,6 +2136,7 @@ import {
     .sw-buttons{display:flex;flex-wrap:wrap;gap:6px}
     .sw-btn{border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.9);color:#374151;transition:all .2s;flex:1;min-width:80px;text-align:center}
     .sw-btn:hover:not(:disabled){background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.3)}
+    .sw-btn:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
     .sw-btn:disabled{opacity:.4;cursor:default}
     .sw-btn.sw-active{background:linear-gradient(135deg,#0b0b0b,#1e1b4b);color:white;border-color:#1e1b4b;box-shadow:0 4px 12px rgba(11,11,11,.3)}
     .sw-confirmed.sw-active{background:linear-gradient(135deg,#2563eb,#3b82f6);border-color:#3b82f6;box-shadow:0 4px 12px rgba(59,130,246,.3)}
@@ -2218,6 +2189,7 @@ import {
     }
     .sd-option{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:all .15s}
     .sd-option:hover:not(:disabled){background:rgba(99,102,241,.06)}
+    .sd-option:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .sd-option:disabled{opacity:.35;cursor:default}
     .sd-option .sd-dot{width:8px;height:8px}
     .sd-option.sd-current{background:rgba(99,102,241,.06);font-weight:700}
@@ -2348,6 +2320,7 @@ import {
     .client-search-results,.service-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.98));border:1px solid rgba(99,102,241,.12);border-radius:12px;box-shadow:0 12px 32px rgba(79,70,229,.12),0 4px 12px rgba(0,0,0,.06);z-index:20;max-height:220px;overflow-y:auto;backdrop-filter:blur(12px)}
     .csr-item,.ssr-item{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;border:0;background:transparent;font-size:13px;cursor:pointer;text-align:left;transition:all .15s}
     .csr-item:hover,.ssr-item:hover{background:rgba(99,102,241,.06)}
+    .csr-item:focus-visible,.ssr-item:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .csr-main,.ssr-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
     .csr-name,.ssr-name{font-weight:700;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .csr-email,.ssr-category{color:#6366f1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2374,18 +2347,9 @@ import {
     .cs-clear:hover{opacity:1;transform:scale(1.1)}
     .nb-field-full{grid-column:1 / -1;margin-bottom:10px}
     @media(max-width:480px){
-      .head h1{font-size:18px}
-      .head-actions{justify-content:center;gap:4px}
-      .date-label{font-size:12px;min-width:0}
       .today-btn,.nav-btn{padding:5px 8px;font-size:11px;min-height:32px}
       .refresh-btn{padding:5px 8px;font-size:10px;min-height:32px}
-      .tabs{justify-content:center}
-      .tabs button{padding:5px 8px;font-size:10px;min-height:32px}
       .vm-btn{padding:3px 6px!important}
-      .summary-bar{gap:2px;padding:4px 6px}
-      .sum-card{padding:2px 2px;min-width:50px}
-      .sum-card span{font-size:8px}
-      .sum-card b{font-size:12px}
       .dv-time-col{width:34px}
       .dv-staff-col{min-width:120px;flex:0 0 120px}
       .dv-hour-row{height:36px}
@@ -2663,6 +2627,7 @@ import {
       transition:all .12s;
     }
     .lsb-cal-day:hover{background:#eef2ff;color:#4f46e5}
+    .lsb-cal-day:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .lsb-cal-day.today{background:#4f46e5;color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(79,70,229,.35)}
     .lsb-cal-day.selected{background:#7c3aed;color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(124,58,237,.35)}
     .lsb-cal-day.today.selected{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
@@ -2698,6 +2663,7 @@ import {
       background:transparent;cursor:pointer;transition:all .15s;text-align:left;
     }
     .lsb-staff-item:hover{background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.15)}
+    .lsb-staff-item:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:8px}
     .lsb-staff-item.active{
       background:linear-gradient(135deg,#eef2ff,#e0e7ff);
       border-color:#a5b4fc;box-shadow:0 2px 8px rgba(99,102,241,.18);
@@ -2867,6 +2833,239 @@ import {
     .lsb-queue-waiting .lsb-queue-count{color:#7c2d12}
     .status-badge{filter:saturate(1.15)}
     .kpi-icon{filter:saturate(1.2) drop-shadow(0 4px 10px rgba(0,0,0,.12))}
+
+    /* ===== PREMIUM AURORA PAGE BACKGROUND ===== */
+    .page{
+      position:relative;
+      background:
+        radial-gradient(ellipse 120% 60% at 10% 0%,rgba(99,102,241,.08),transparent 50%),
+        radial-gradient(ellipse 100% 50% at 90% 100%,rgba(236,72,153,.06),transparent 50%),
+        radial-gradient(ellipse 80% 40% at 50% 50%,rgba(14,165,233,.04),transparent 60%),
+        linear-gradient(180deg,#fafbff 0%,#f5f3ff 40%,#ede9fe 100%);
+    }
+    .page::before{
+      content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:0;
+      background:
+        radial-gradient(ellipse 600px 400px at 20% 20%,rgba(124,58,237,.06),transparent 70%),
+        radial-gradient(ellipse 500px 350px at 80% 80%,rgba(236,72,153,.05),transparent 70%);
+      animation:auroraShift 20s ease-in-out infinite alternate;
+    }
+    @keyframes auroraShift{
+      0%{opacity:.6;transform:translate(0,0) scale(1)}
+      50%{opacity:1;transform:translate(20px,-15px) scale(1.05)}
+      100%{opacity:.7;transform:translate(-10px,10px) scale(.98)}
+    }
+    .page > *{position:relative;z-index:1}
+
+    /* ===== AURORA OVERLAYS ON VIEWS ===== */
+    .day-view::after,.week-view::after,.month-view::after{
+      content:'';position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;
+      border-radius:inherit;opacity:0;transition:opacity .4s ease;
+    }
+    .day-view::after{
+      background:
+        radial-gradient(ellipse 400px 300px at 20% 30%,rgba(124,58,237,.07),transparent 70%),
+        radial-gradient(ellipse 350px 250px at 80% 70%,rgba(236,72,153,.05),transparent 70%);
+    }
+    .week-view::after{
+      background:
+        radial-gradient(ellipse 350px 280px at 80% 20%,rgba(14,165,233,.07),transparent 70%),
+        radial-gradient(ellipse 300px 220px at 20% 80%,rgba(236,72,153,.05),transparent 70%);
+    }
+    .month-view::after{
+      background:
+        radial-gradient(ellipse 350px 280px at 20% 30%,rgba(16,185,129,.07),transparent 70%),
+        radial-gradient(ellipse 300px 220px at 80% 70%,rgba(245,158,11,.05),transparent 70%);
+    }
+    .day-view:hover::after,.week-view:hover::after,.month-view:hover::after{opacity:1}
+
+    /* ===== STICKY STAFF HEADER GLASS GLOW ===== */
+    .dv-staff-header{
+      background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(248,250,252,.92))!important;
+      backdrop-filter:blur(16px)!important;
+      box-shadow:0 2px 12px rgba(79,70,229,.08),0 0 0 1px rgba(99,102,241,.06)!important;
+    }
+    .dv-staff-header::after{
+      content:'';position:absolute;bottom:0;left:8px;right:8px;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(99,102,241,.15),rgba(168,85,247,.1),transparent);
+    }
+
+    /* ===== ANIMATED PULSING CURRENT TIME ===== */
+    .current-time-line{
+      animation:timePulse 2s ease-in-out infinite;
+    }
+    @keyframes timePulse{
+      0%,100%{box-shadow:0 0 12px rgba(239,68,68,.5),0 0 4px rgba(239,68,68,.8)}
+      50%{box-shadow:0 0 20px rgba(239,68,68,.7),0 0 8px rgba(239,68,68,1),0 0 40px rgba(239,68,68,.2)}
+    }
+    .current-time-label{
+      animation:timeLabelPulse 2s ease-in-out infinite;
+    }
+    @keyframes timeLabelPulse{
+      0%,100%{box-shadow:0 2px 8px rgba(239,68,68,.4)}
+      50%{box-shadow:0 2px 14px rgba(239,68,68,.6),0 0 20px rgba(239,68,68,.15)}
+    }
+    .current-time-line::before{
+      content:'';position:absolute;left:0;right:0;top:-4px;height:11px;
+      background:linear-gradient(90deg,transparent,rgba(239,68,68,.08),transparent);
+      pointer-events:none;
+    }
+
+    /* ===== ENHANCED BOOKING CHIP HOVER GLOW ===== */
+    @media(hover:hover){
+      .booking-chip:hover{
+        box-shadow:0 6px 20px rgba(0,0,0,.15),0 0 0 1px rgba(255,255,255,.5) inset;
+      }
+      .booking-chip.status-confirmed:hover{box-shadow:0 8px 24px rgba(59,130,246,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+      .booking-chip.status-completed:hover{box-shadow:0 8px 24px rgba(16,185,129,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+      .booking-chip.status-pending:hover{box-shadow:0 8px 24px rgba(245,158,11,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+      .booking-chip.status-cancelled:hover{box-shadow:0 8px 24px rgba(220,38,38,.35),0 0 0 1px rgba(255,255,255,.4) inset}
+      .booking-chip.status-checked_in:hover{box-shadow:0 8px 24px rgba(124,58,237,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+      .dv-bookings-layer .booking-chip.status-confirmed:hover{box-shadow:0 10px 28px rgba(59,130,246,.45),0 0 0 1px rgba(255,255,255,.35) inset}
+      .dv-bookings-layer .booking-chip.status-completed:hover{box-shadow:0 10px 28px rgba(16,185,129,.45),0 0 0 1px rgba(255,255,255,.35) inset}
+      .dv-bookings-layer .booking-chip.status-pending:hover{box-shadow:0 10px 28px rgba(245,158,11,.45),0 0 0 1px rgba(255,255,255,.35) inset}
+      .dv-bookings-layer .booking-chip.status-cancelled:hover{box-shadow:0 10px 28px rgba(220,38,38,.4),0 0 0 1px rgba(255,255,255,.35) inset}
+      .dv-bookings-layer .booking-chip.status-checked_in:hover{box-shadow:0 10px 28px rgba(124,58,237,.45),0 0 0 1px rgba(255,255,255,.35) inset}
+      .week-booking:hover{box-shadow:0 6px 18px rgba(0,0,0,.12)}
+      .week-booking.status-confirmed:hover{box-shadow:0 8px 22px rgba(59,130,246,.35)}
+      .week-booking.status-completed:hover{box-shadow:0 8px 22px rgba(16,185,129,.35)}
+      .week-booking.status-pending:hover{box-shadow:0 8px 22px rgba(245,158,11,.35)}
+      .week-booking.status-cancelled:hover{box-shadow:0 8px 22px rgba(220,38,38,.3)}
+      .week-booking.status-checked_in:hover{box-shadow:0 8px 22px rgba(124,58,237,.35)}
+      .month-preview-chip:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}
+    }
+
+    /* ===== PREMIUM MINI CALENDAR ===== */
+    .lsb-cal-day{transition:all .18s cubic-bezier(.4,0,.2,1)}
+    .lsb-cal-day:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(79,70,229,.18)}
+    .lsb-cal-day.today{
+      background:linear-gradient(135deg,#4f46e5,#6366f1)!important;
+      box-shadow:0 3px 12px rgba(79,70,229,.4)!important;
+      animation:todayGlow 3s ease-in-out infinite;
+    }
+    @keyframes todayGlow{
+      0%,100%{box-shadow:0 3px 12px rgba(79,70,229,.4)}
+      50%{box-shadow:0 3px 18px rgba(79,70,229,.55),0 0 24px rgba(79,70,229,.12)}
+    }
+    .lsb-cal-day.selected{
+      background:linear-gradient(135deg,#7c3aed,#a78bfa)!important;
+      box-shadow:0 3px 12px rgba(124,58,237,.4)!important;
+    }
+    .lsb-cal-day.today.selected{
+      background:linear-gradient(135deg,#4f46e5,#7c3aed)!important;
+      box-shadow:0 3px 14px rgba(99,102,241,.45)!important;
+    }
+    .lsb-cal-nav-btn{transition:all .18s cubic-bezier(.4,0,.2,1)}
+    .lsb-cal-nav-btn:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(79,70,229,.2)}
+
+    /* ===== PREMIUM QUEUE CARDS ===== */
+    .lsb-queue-item{
+      border-radius:14px;padding:12px 8px;
+      box-shadow:0 3px 10px rgba(0,0,0,.08);
+      transition:all .2s cubic-bezier(.4,0,.2,1);
+    }
+    .lsb-queue-item:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12)}
+    .lsb-queue-icon{filter:drop-shadow(0 2px 4px rgba(0,0,0,.15))}
+
+    /* ===== PREMIUM STATUS LEGEND ===== */
+    .lsb-legend-item{
+      background:rgba(255,255,255,.7)!important;backdrop-filter:blur(6px);
+      border:1px solid rgba(255,255,255,.8)!important;
+      box-shadow:0 1px 4px rgba(0,0,0,.05);
+      transition:all .15s;
+    }
+    .lsb-legend-item:hover{background:rgba(255,255,255,.9)!important;box-shadow:0 2px 8px rgba(0,0,0,.08);transform:translateY(-1px)}
+    .lsb-legend-dot{box-shadow:0 1px 4px rgba(0,0,0,.15),0 0 0 1px rgba(255,255,255,.8)}
+
+    /* ===== PREMIUM STAFF FILTER PILLS ===== */
+    .sf-avatar{box-shadow:0 2px 6px rgba(0,0,0,.15),0 0 0 2px rgba(255,255,255,.9);transition:all .15s}
+    .staff-filter-pill:hover .sf-avatar{transform:scale(1.1)}
+    .sf-count{
+      background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;
+      box-shadow:0 1px 4px rgba(99,102,241,.3);
+    }
+
+    /* ===== PREMIUM RESOURCE TYPE BADGES ===== */
+    .res-type-badge{
+      background:rgba(255,255,255,.85)!important;backdrop-filter:blur(4px);
+      border:1px solid rgba(99,102,241,.1);box-shadow:0 1px 3px rgba(0,0,0,.05);
+      transition:all .15s;
+    }
+    .res-type-badge:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,.08)}
+
+    /* ===== KPI CARD SHINE EFFECT ===== */
+    .kpi-card::after{
+      content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);
+      transition:left .5s ease;pointer-events:none;border-radius:inherit;
+    }
+    .kpi-card:hover::after{left:120%}
+
+    /* ===== PREMIUM LOADING SPINNER ===== */
+    .spinner{
+      border-color:rgba(99,102,241,.12);
+      border-top-color:#6366f1;border-right-color:#8b5cf6;border-bottom-color:#a78bfa;
+      filter:drop-shadow(0 2px 6px rgba(99,102,241,.3));
+    }
+
+    /* ===== PREMIUM FILTER INPUTS ===== */
+    .branch-filter,.status-filter,.res-filter{
+      box-shadow:0 2px 8px rgba(0,0,0,.04),0 0 0 1px rgba(99,102,241,.06);
+    }
+    .branch-filter:focus,.status-filter:focus,.res-filter:focus{
+      box-shadow:0 4px 14px rgba(99,102,241,.12),0 0 0 2px rgba(99,102,241,.2);
+    }
+
+    /* ===== PREMIUM EMPTY STATE ===== */
+    .empty{
+      background:rgba(255,255,255,.75)!important;
+      box-shadow:0 12px 40px rgba(79,70,229,.1),0 4px 12px rgba(0,0,0,.04)!important;
+    }
+
+    /* ===== FIX LEGACY COLORS IN RESPONSIVE ===== */
+    @media(max-width:768px){
+      .dv-sidebar-stack{border-top:1px solid rgba(99,102,241,.08)!important}
+    }
+    @media(max-width:640px){
+      .dv-sidebar-stack{border-top:1px solid rgba(99,102,241,.08)!important}
+    }
+
+    /* ===== PREMIUM DAY VIEW SCROLLBAR ===== */
+    .dv-container{scrollbar-color:#a78bfa rgba(99,102,241,.06)}
+    .dv-container::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#a78bfa,#818cf8,#6366f1);border-radius:999px}
+    .dv-container::-webkit-scrollbar-track{background:rgba(99,102,241,.04)}
+
+    /* ===== SUBTLE GRID LINE GLOW ===== */
+    .dv-hour-row{border-bottom-color:rgba(99,102,241,.04)!important}
+    .dv-time-row{border-bottom-color:rgba(99,102,241,.04)!important}
+    .dv-staff-col{border-right-color:rgba(99,102,241,.05)!important}
+
+    /* ===== DRAWER OVERLAY GLASS ===== */
+    .drawer-overlay{background:rgba(15,15,35,.4)!important;backdrop-filter:blur(6px) saturate(1.2)!important}
+
+    /* ===== PREMIUM DROP DIALOG ===== */
+    .drop-dialog{
+      box-shadow:0 24px 64px rgba(79,70,229,.18),0 8px 24px rgba(0,0,0,.08)!important;
+      border:1px solid rgba(99,102,241,.12)!important;
+    }
+
+    /* ===== PREMIUM CREATE PANEL ===== */
+    .create-panel{
+      box-shadow:0 24px 64px rgba(79,70,229,.16),0 8px 24px rgba(0,0,0,.06)!important;
+      border:1px solid rgba(99,102,241,.1)!important;
+    }
+
+    /* ===== BOOKING CHIP ACTIVE PRESS ===== */
+    .booking-chip:active{transform:scale(.96)!important;transition-duration:.08s}
+    .dv-bookings-layer .booking-chip:active{transform:scale(.96)!important;transition-duration:.08s}
+    .week-booking:active{transform:scale(.97);transition-duration:.08s}
+    .month-preview-chip:active{transform:scale(.97);transition-duration:.08s}
+
+    /* ===== PREMIUM WALKIN/AI/WAITLIST TOGGLE ===== */
+    .walkin-btn{box-shadow:0 4px 14px rgba(5,150,105,.35)!important}
+    .walkin-btn:hover{box-shadow:0 6px 18px rgba(5,150,105,.45)!important}
+    .waitlist-toggle-btn.active{box-shadow:0 4px 14px rgba(99,102,241,.25)!important}
+    .ai-toggle-btn.active{box-shadow:0 4px 14px rgba(124,58,237,.25)!important}
   `]
 })
 export class CalendarComponent {
