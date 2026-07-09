@@ -114,7 +114,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
         </ng-container>
       </div>
 
-      <div class="drawer-overlay" *ngIf="showDetail" (click)="closeDetail()">
+      <div class="drawer-overlay" *ngIf="showDetail" (click)="closeDetail()" [class.is-open]="showDetail">
         <div class="drawer-panel luxe-drawer" (click)="$event.stopPropagation()">
           <ng-container *ngIf="selectedBooking; else noBooking">
             <div class="drawer-header luxe-header">
@@ -124,20 +124,20 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                 <span class="dh-subtitle">{{ selectedBooking.title }}</span>
               </div>
               <div class="dh-right">
-                <span class="status-badge" [class]="'badge-' + (selectedBooking.status || '').toLowerCase()">{{ getStatusLabel(selectedBooking.status) }}</span>
+                <span class="status-badge luxe-badge" [class]="'badge-' + (selectedBooking.status || '').toLowerCase()">{{ getStatusLabel(selectedBooking.status) }}</span>
                 <div class="action-menu-wrapper" (click)="$event.stopPropagation()">
-                  <button class="action-menu-trigger" (click)="toggleActionMenu()">&#x22EE;</button>
-                  <div class="action-menu-dropdown" *ngIf="showActionMenu" (click)="$event.stopPropagation()">
-                    <button (click)="closeActionMenu(); openEditForm(selectedBooking)"><span class="am-icon">&#x270E;</span> Edit Booking</button>
-                    <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" (click)="closeActionMenu(); openRescheduleForm(selectedBooking)"><span class="am-icon">&#x1F552;</span> Reschedule Booking</button>
-                    <button (click)="closeActionMenu(); openAddPayment()"><span class="am-icon">&#x1F4B3;</span> Add Payment</button>
-                    <button (click)="closeActionMenu(); openAddTip()"><span class="am-icon">&#x1F381;</span> Add Tip</button>
-                    <button (click)="closeActionMenu(); doRebook()"><span class="am-icon">&#x1F504;</span> Rebook</button>
-                    <button (click)="closeActionMenu(); printBill()"><span class="am-icon">&#x1F5A8;</span> Print</button>
-                    <button (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client</button>
+                  <button class="action-menu-trigger" (click)="toggleActionMenu()" aria-label="More actions" [attr.aria-expanded]="showActionMenu" aria-haspopup="true">&#x22EE;</button>
+                  <div class="action-menu-dropdown" *ngIf="showActionMenu" (click)="$event.stopPropagation()" role="menu">
+                    <button role="menuitem" (click)="closeActionMenu(); openEditForm(selectedBooking)"><span class="am-icon">&#x270E;</span> Edit Booking</button>
+                    <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" role="menuitem" (click)="closeActionMenu(); openRescheduleForm(selectedBooking)"><span class="am-icon">&#x1F552;</span> Reschedule Booking</button>
+                    <button role="menuitem" (click)="closeActionMenu(); openAddPayment()"><span class="am-icon">&#x1F4B3;</span> Add Payment</button>
+                    <button role="menuitem" (click)="closeActionMenu(); openAddTip()"><span class="am-icon">&#x1F381;</span> Add Tip</button>
+                    <button role="menuitem" (click)="closeActionMenu(); doRebook()"><span class="am-icon">&#x1F504;</span> Rebook</button>
+                    <button role="menuitem" (click)="closeActionMenu(); printBill()"><span class="am-icon">&#x1F5A8;</span> Print</button>
+                    <button role="menuitem" (click)="closeActionMenu(); viewClientProfile()"><span class="am-icon">&#x1F464;</span> View Client</button>
                   </div>
                 </div>
-                <button class="close-btn" (click)="closeDetail()">&times;</button>
+                <button class="close-btn" (click)="closeDetail()" aria-label="Close booking details">&times;</button>
               </div>
             </div>
             <div class="drawer-body">
@@ -235,20 +235,23 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
               </ng-container>
 
               <ng-template #mainTabs>
-                <div class="bill-tabs" *ngIf="selectedBooking">
-                  <button [class.active]="viewBillActiveTab==='details'" (click)="viewBillActiveTab='details'">Bill Details</button>
-                  <button [class.active]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'">Activity Log</button>
+                <div class="bill-tabs" *ngIf="selectedBooking" role="tablist" aria-label="Bill sections">
+                  <button role="tab" [class.active]="viewBillActiveTab==='details'" [attr.aria-selected]="viewBillActiveTab==='details'" (click)="viewBillActiveTab='details'" aria-controls="tab-details">Bill Details</button>
+                  <button role="tab" [class.active]="viewBillActiveTab==='activity'" [attr.aria-selected]="viewBillActiveTab==='activity'" (click)="viewBillActiveTab='activity'" aria-controls="tab-activity">Activity Log</button>
                 </div>
               </ng-template>
 
-              <div class="activity-log-section" *ngIf="viewBillActiveTab==='activity' && viewBillData">
+              <!-- Activity Log Tab -->
+              <section class="activity-log-section" *ngIf="viewBillActiveTab==='activity' && viewBillData" id="tab-activity" role="tabpanel" aria-labelledby="activity-tab">
                 <div class="drawer-section">
                   <h3>Activity Log</h3>
-                  <div class="al-empty" *ngIf="viewBillData.activityLog.length === 0">
-                    <span>No activity recorded yet.</span>
+                  <div class="al-empty premium-empty" *ngIf="viewBillData.activityLog.length === 0">
+                    <span class="empty-icon" aria-hidden="true">&#x1F4DC;</span>
+                    <p>No activity recorded yet.</p>
+                    <span class="empty-hint">Activity will appear here as the booking progresses.</span>
                   </div>
                   <div class="al-entry" *ngFor="let entry of viewBillData.activityLog">
-                    <div class="al-dot"></div>
+                    <div class="al-dot" aria-hidden="true"></div>
                     <div class="al-content">
                       <span class="al-action">{{ entry.action }}</span>
                       <span class="al-time">{{ entry.timestamp | date:'MMM dd, h:mm a' }}</span>
@@ -257,123 +260,149 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
                     </div>
                   </div>
                 </div>
+              </section>
+
+              <!-- Premium Loading State -->
+              <div class="drawer-loading premium-loading" *ngIf="viewBillLoading" role="status" aria-live="polite">
+                <div class="spinner"></div>
+                <span>Loading bill details...</span>
               </div>
 
-              <div class="drawer-loading" *ngIf="viewBillLoading"><div class="spinner"></div><span>Loading bill details...</span></div>
-
-              <div class="status-workflow luxe-card glass" *ngIf="selectedBooking && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
-                <div class="sw-label">Status Workflow</div>
-                <div class="sw-buttons">
-                  <button class="sw-btn sw-confirmed" [class.sw-active]="selectedBooking.status==='CONFIRMED'" [disabled]="selectedBooking.status==='CONFIRMED'" (click)="doStatus(selectedBooking, 'CONFIRMED')">Confirmed</button>
-                  <button class="sw-btn sw-arrived" [class.sw-active]="selectedBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(selectedBooking, 'CHECKED_IN')">Arrived</button>
-                  <button class="sw-btn sw-start" [class.sw-active]="selectedBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(selectedBooking, 'CHECKED_IN')">Start</button>
-                  <button class="sw-btn sw-completed" [class.sw-active]="selectedBooking.status==='COMPLETED'" [disabled]="selectedBooking.status==='COMPLETED'" (click)="doStatus(selectedBooking, 'COMPLETED')">Completed</button>
+              <!-- Status Workflow -->
+              <section class="status-workflow luxe-card glass" *ngIf="selectedBooking && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip" aria-labelledby="workflow-heading">
+                <div class="sw-label" id="workflow-heading">Status Workflow</div>
+                <div class="sw-buttons" role="group" aria-label="Booking status actions">
+                  <button class="sw-btn sw-confirmed" [class.sw-active]="selectedBooking.status==='CONFIRMED'" [disabled]="selectedBooking.status==='CONFIRMED'" (click)="doStatus(selectedBooking, 'CONFIRMED')" [attr.aria-pressed]="selectedBooking.status==='CONFIRMED'">Confirmed</button>
+                  <button class="sw-btn sw-arrived" [class.sw-active]="selectedBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(selectedBooking, 'CHECKED_IN')" [attr.aria-pressed]="selectedBooking.status==='CHECKED_IN'">Arrived</button>
+                  <button class="sw-btn sw-start" [class.sw-active]="selectedBooking.status==='CHECKED_IN'" [disabled]="!canTransitionTo('CHECKED_IN')" (click)="doStatus(selectedBooking, 'CHECKED_IN')" [attr.aria-pressed]="selectedBooking.status==='CHECKED_IN'">Start</button>
+                  <button class="sw-btn sw-completed" [class.sw-active]="selectedBooking.status==='COMPLETED'" [disabled]="selectedBooking.status==='COMPLETED'" (click)="doStatus(selectedBooking, 'COMPLETED')" [attr.aria-pressed]="selectedBooking.status==='COMPLETED'">Completed</button>
                   <button class="sw-btn sw-cancel" [disabled]="!canCancel(selectedBooking)" (click)="openCancelForm()">Cancel</button>
                   <button class="sw-btn sw-notcame" [disabled]="selectedBooking.status==='NO_SHOW'" (click)="doStatus(selectedBooking, 'NO_SHOW')">Not Came</button>
                 </div>
-              </div>
+              </section>
 
-              <div class="reschedule-form luxe-card glass" *ngIf="showReschedule">
-                <h3>Reschedule Booking</h3>
-                <label>Staff</label>
-                <select [(ngModel)]="rescheduleForm.staffId">
-                  <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }}</option>
-                </select>
-                <label>Resource</label>
-                <select [(ngModel)]="rescheduleForm.resourceId">
-                  <option value="">None</option>
-                  <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }}</option>
-                </select>
-                <label>Date & Time</label>
-                <input [(ngModel)]="rescheduleForm.startTime" type="datetime-local">
-                <div class="drawer-actions">
-                  <button (click)="closeReschedule()">Back</button>
-                  <button class="btn-primary" (click)="doReschedule()" [disabled]="rescheduleBusy">{{ rescheduleBusy ? 'Saving...' : 'Save Changes' }}</button>
+              <!-- Forms with Premium Styling -->
+              <section class="reschedule-form luxe-card glass premium-form" *ngIf="showReschedule" aria-labelledby="reschedule-heading">
+                <h3 id="reschedule-heading">Reschedule Booking</h3>
+                <div class="form-field">
+                  <label for="reschedule-staff">Staff</label>
+                  <select id="reschedule-staff" [(ngModel)]="rescheduleForm.staffId" class="luxe-input">
+                    <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }}</option>
+                  </select>
                 </div>
-                <div class="drawer-loading" *ngIf="rescheduleBusy"><div class="spinner"></div><span>Rescheduling...</span></div>
-                <div class="drawer-error" *ngIf="rescheduleError">{{ rescheduleError }}</div>
-              </div>
+                <div class="form-field">
+                  <label for="reschedule-resource">Resource</label>
+                  <select id="reschedule-resource" [(ngModel)]="rescheduleForm.resourceId" class="luxe-input">
+                    <option value="">None</option>
+                    <option *ngFor="let r of resourceList" [value]="r.id">{{ r.name }}</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="reschedule-datetime">Date & Time</label>
+                  <input id="reschedule-datetime" [(ngModel)]="rescheduleForm.startTime" type="datetime-local" class="luxe-input">
+                </div>
+                <div class="drawer-actions premium-actions">
+                  <button class="btn-ghost" (click)="closeReschedule()">Back</button>
+                  <button class="btn-primary luxe-btn-primary" (click)="doReschedule()" [disabled]="rescheduleBusy">{{ rescheduleBusy ? 'Saving...' : 'Save Changes' }}</button>
+                </div>
+                <div class="drawer-loading premium-loading" *ngIf="rescheduleBusy" role="status" aria-live="polite"><div class="spinner"></div><span>Rescheduling...</span></div>
+                <div class="drawer-error premium-error" *ngIf="rescheduleError" role="alert">{{ rescheduleError }}</div>
+              </section>
 
-              <div class="cancel-form luxe-card glass" *ngIf="showCancelForm">
-                <h3>Cancel Booking</h3>
-                <label>Reason for cancellation</label>
-                <select [(ngModel)]="cancelReason">
-                  <option value="">Select a reason...</option>
-                  <option *ngFor="let r of cancelReasonOptions" [value]="r">{{ r }}</option>
-                </select>
-                <div class="cancel-custom-row" *ngIf="cancelReason === 'Other'">
-                  <label>Please specify</label>
-                  <input [(ngModel)]="cancelCustomReason" placeholder="Enter cancellation reason" maxlength="200">
+              <section class="cancel-form luxe-card glass premium-form" *ngIf="showCancelForm" aria-labelledby="cancel-heading">
+                <h3 id="cancel-heading">Cancel Booking</h3>
+                <div class="form-field">
+                  <label for="cancel-reason">Reason for cancellation</label>
+                  <select id="cancel-reason" [(ngModel)]="cancelReason" class="luxe-input">
+                    <option value="">Select a reason...</option>
+                    <option *ngFor="let r of cancelReasonOptions" [value]="r">{{ r }}</option>
+                  </select>
                 </div>
-                <div class="drawer-actions">
-                  <button (click)="closeCancelForm()">Back</button>
-                  <button class="btn-danger" (click)="doCancel(selectedBooking)" [disabled]="!cancelReason || drawerBusy">{{ drawerBusy ? 'Cancelling...' : 'Confirm Cancellation' }}</button>
+                <div class="form-field cancel-custom-row" *ngIf="cancelReason === 'Other'">
+                  <label for="cancel-custom">Please specify</label>
+                  <input id="cancel-custom" [(ngModel)]="cancelCustomReason" placeholder="Enter cancellation reason" maxlength="200" class="luxe-input">
                 </div>
-                <div class="drawer-loading" *ngIf="drawerBusy"><div class="spinner"></div><span>Cancelling...</span></div>
-                <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
-              </div>
+                <div class="drawer-actions premium-actions">
+                  <button class="btn-ghost" (click)="closeCancelForm()">Back</button>
+                  <button class="btn-danger luxe-btn-danger" (click)="doCancel(selectedBooking)" [disabled]="!cancelReason || drawerBusy">{{ drawerBusy ? 'Cancelling...' : 'Confirm Cancellation' }}</button>
+                </div>
+                <div class="drawer-loading premium-loading" *ngIf="drawerBusy" role="status" aria-live="polite"><div class="spinner"></div><span>Cancelling...</span></div>
+                <div class="drawer-error premium-error" *ngIf="drawerError" role="alert">{{ drawerError }}</div>
+              </section>
 
-              <div class="edit-form luxe-card glass" *ngIf="showEditForm">
-                <h3>Edit Details</h3>
-                <label>Title</label>
-                <input [(ngModel)]="editForm.title" placeholder="Booking title" maxlength="200">
-                <label>Notes</label>
-                <textarea [(ngModel)]="editForm.notes" placeholder="Optional notes" rows="3" maxlength="1000"></textarea>
-                <div class="drawer-actions">
-                  <button (click)="closeEditForm()">Back</button>
-                  <button class="btn-primary" (click)="doEdit()" [disabled]="editBusy">{{ editBusy ? 'Saving...' : 'Save Changes' }}</button>
+              <section class="edit-form luxe-card glass premium-form" *ngIf="showEditForm" aria-labelledby="edit-heading">
+                <h3 id="edit-heading">Edit Details</h3>
+                <div class="form-field">
+                  <label for="edit-title">Title</label>
+                  <input id="edit-title" [(ngModel)]="editForm.title" placeholder="Booking title" maxlength="200" class="luxe-input">
                 </div>
-                <div class="drawer-loading" *ngIf="editBusy"><div class="spinner"></div><span>Saving...</span></div>
-                <div class="drawer-error" *ngIf="drawerError">{{ drawerError }}</div>
-              </div>
-
-              <div class="payment-form luxe-card glass" *ngIf="showAddPayment">
-                <h3>Add Payment</h3>
-                <label>Amount</label>
-                <input [(ngModel)]="addPaymentForm.amount" type="number" min="0" step="0.01" placeholder="0.00">
-                <label>Payment Method</label>
-                <select [(ngModel)]="addPaymentForm.method">
-                  <option value="CASH">Cash</option>
-                  <option value="CARD">Card</option>
-                  <option value="UPI">UPI</option>
-                  <option value="WALLET">Wallet</option>
-                </select>
-                <div class="drawer-actions">
-                  <button (click)="closeAddPayment()">Back</button>
-                  <button class="btn-primary" (click)="doAddPayment()" [disabled]="addPaymentBusy || !addPaymentForm.amount">{{ addPaymentBusy ? 'Processing...' : 'Pay' }}</button>
+                <div class="form-field">
+                  <label for="edit-notes">Notes</label>
+                  <textarea id="edit-notes" [(ngModel)]="editForm.notes" placeholder="Optional notes for this booking..." rows="3" maxlength="1000" class="luxe-input luxe-textarea"></textarea>
                 </div>
-                <div class="drawer-error" *ngIf="addPaymentError">{{ addPaymentError }}</div>
-              </div>
-
-              <div class="payment-form luxe-card glass" *ngIf="showAddTip">
-                <h3>Add Tip</h3>
-                <label>Tip Amount</label>
-                <input [(ngModel)]="addTipAmount" type="number" min="0" step="0.01" placeholder="0.00">
-                <div class="tip-presets">
-                  <button *ngFor="let t of [5,10,20]" (click)="addTipAmount = t" [class.active]="addTipAmount === t">{{ t | currency }}</button>
+                <div class="drawer-actions premium-actions">
+                  <button class="btn-ghost" (click)="closeEditForm()">Back</button>
+                  <button class="btn-primary luxe-btn-primary" (click)="doEdit()" [disabled]="editBusy">{{ editBusy ? 'Saving...' : 'Save Changes' }}</button>
                 </div>
-                <div class="drawer-actions">
-                  <button (click)="closeAddTip()">Back</button>
-                  <button class="btn-primary" (click)="doAddTip()" [disabled]="addTipBusy || !addTipAmount">{{ addTipBusy ? 'Processing...' : 'Add Tip' }}</button>
+                <div class="drawer-loading premium-loading" *ngIf="editBusy" role="status" aria-live="polite"><div class="spinner"></div><span>Saving...</span></div>
+                <div class="drawer-error premium-error" *ngIf="drawerError" role="alert">{{ drawerError }}</div>
+              </section>
+
+              <section class="payment-form luxe-card glass premium-form" *ngIf="showAddPayment" aria-labelledby="payment-heading">
+                <h3 id="payment-heading">Add Payment</h3>
+                <div class="form-field">
+                  <label for="payment-amount">Amount</label>
+                  <input id="payment-amount" [(ngModel)]="addPaymentForm.amount" type="number" min="0" step="0.01" placeholder="0.00" class="luxe-input">
                 </div>
-                <div class="drawer-error" *ngIf="addTipError">{{ addTipError }}</div>
-              </div>
+                <div class="form-field">
+                  <label for="payment-method">Payment Method</label>
+                  <select id="payment-method" [(ngModel)]="addPaymentForm.method" class="luxe-input">
+                    <option value="CASH">Cash</option>
+                    <option value="CARD">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="WALLET">Wallet</option>
+                  </select>
+                </div>
+                <div class="drawer-actions premium-actions">
+                  <button class="btn-ghost" (click)="closeAddPayment()">Back</button>
+                  <button class="btn-primary luxe-btn-primary" (click)="doAddPayment()" [disabled]="addPaymentBusy || !addPaymentForm.amount">{{ addPaymentBusy ? 'Processing...' : 'Pay' }}</button>
+                </div>
+                <div class="drawer-error premium-error" *ngIf="addPaymentError" role="alert">{{ addPaymentError }}</div>
+              </section>
 
-              <div class="luxe-footer" *ngIf="selectedBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">
-                <button class="btn-secondary luxe-btn" (click)="openEditForm(selectedBooking)">Edit Details</button>
-                <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" class="btn-secondary luxe-btn" (click)="openRescheduleForm(selectedBooking)">Reschedule</button>
-                <button *ngIf="canCancel(selectedBooking)" class="btn-danger luxe-btn" (click)="openCancelForm()">Cancel Booking</button>
-              </div>
+              <section class="payment-form luxe-card glass premium-form" *ngIf="showAddTip" aria-labelledby="tip-heading">
+                <h3 id="tip-heading">Add Tip</h3>
+                <div class="form-field">
+                  <label for="tip-amount">Tip Amount</label>
+                  <input id="tip-amount" [(ngModel)]="addTipAmount" type="number" min="0" step="0.01" placeholder="0.00" class="luxe-input">
+                </div>
+                <div class="tip-presets" role="group" aria-label="Quick tip amounts">
+                  <button *ngFor="let t of [5,10,20]" (click)="addTipAmount = t" [class.active]="addTipAmount === t" class="luxe-tip-btn">{{ t | currency }}</button>
+                </div>
+                <div class="drawer-actions premium-actions">
+                  <button class="btn-ghost" (click)="closeAddTip()">Back</button>
+                  <button class="btn-primary luxe-btn-primary" (click)="doAddTip()" [disabled]="addTipBusy || !addTipAmount">{{ addTipBusy ? 'Processing...' : 'Add Tip' }}</button>
+                </div>
+                <div class="drawer-error premium-error" *ngIf="addTipError" role="alert">{{ addTipError }}</div>
+              </section>
 
-              <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip"><div class="spinner"></div><span>Updating...</span></div>
-              <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip">{{ drawerError }}</div>
+              <!-- Premium Footer Actions -->
+              <footer class="luxe-footer" *ngIf="selectedBooking.status && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip" role="region" aria-label="Booking actions">
+                <button class="btn-secondary luxe-btn" (click)="openEditForm(selectedBooking)"><span class="btn-icon" aria-hidden="true">&#x270E;</span> Edit Details</button>
+                <button *ngIf="selectedBooking.status !== 'COMPLETED' && selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'NO_SHOW'" class="btn-secondary luxe-btn" (click)="openRescheduleForm(selectedBooking)"><span class="btn-icon" aria-hidden="true">&#x1F552;</span> Reschedule</button>
+                <button *ngIf="canCancel(selectedBooking)" class="btn-danger luxe-btn" (click)="openCancelForm()"><span class="btn-icon" aria-hidden="true">&#x1F6AB;</span> Cancel Booking</button>
+              </footer>
+
+              <div class="drawer-loading premium-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip" role="status" aria-live="polite"><div class="spinner"></div><span>Updating...</span></div>
+              <div class="drawer-error premium-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showAddPayment && !showAddTip" role="alert">{{ drawerError }}</div>
             </div>
           </ng-container>
           <ng-template #noBooking>
             <div class="drawer-body">
-              <div class="empty-drawer">
+              <div class="empty-drawer premium-empty">
+                <span class="empty-icon" aria-hidden="true">&#x1F4C5;</span>
                 <p>Booking information is not available.</p>
-                <button class="btn-primary" (click)="closeDetail()">Close</button>
+                <button class="btn-primary luxe-btn-primary" (click)="closeDetail()">Close</button>
               </div>
             </div>
           </ng-template>
@@ -387,92 +416,106 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
               <span class="dh-eyebrow">New Appointment</span>
               <h2>New Booking</h2>
             </div>
-            <button class="close-btn" (click)="closeCreate()">&times;</button>
+            <button class="close-btn" (click)="closeCreate()" aria-label="Close booking form">&times;</button>
           </div>
           <div class="drawer-body luxe-body">
             <div class="create-form luxe-form">
-              <label class="form-label luxe-label">Client *</label>
-              <select [(ngModel)]="createForm.clientId" class="form-select luxe-input" [class.field-error]="formErrors.clientId">
-                <option value="">— Select Client —</option>
-                <option *ngFor="let c of clients" [value]="c.id">{{ c.fullName }} <ng-container *ngIf="c.phone">— {{ c.phone }}</ng-container></option>
-              </select>
-              <span class="field-msg" *ngIf="formErrors.clientId">{{ formErrors.clientId }}</span>
-
-              <label class="form-label luxe-label">Staff *</label>
-              <select [(ngModel)]="createForm.staffId" class="form-select luxe-input" [class.field-error]="formErrors.staffId">
-                <option value="">— Select Staff —</option>
-                <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }} <ng-container *ngIf="s.specialization">— {{ s.specialization }}</ng-container></option>
-              </select>
-              <span class="field-msg" *ngIf="formErrors.staffId">{{ formErrors.staffId }}</span>
-
-              <label class="form-label luxe-label">Branch *</label>
-              <select [(ngModel)]="createForm.branchId" class="form-select luxe-input" [class.field-error]="formErrors.branchId">
-                <option value="">— Select Branch —</option>
-                <option *ngFor="let b of branches" [value]="b.id">{{ b.name }} <ng-container *ngIf="b.city">— {{ b.city }}</ng-container></option>
-              </select>
-              <span class="field-msg" *ngIf="formErrors.branchId">{{ formErrors.branchId }}</span>
-
-              <label class="form-label luxe-label">Title</label>
-              <input [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input luxe-input">
-
-              <label class="form-label luxe-label">Start Time *</label>
-              <div class="time-picker-row luxe-date-picker">
-                <input [(ngModel)]="createDate" type="date" class="form-input time-date luxe-time-input" (change)="syncTimeToForm()" [class.field-error]="formErrors.startTime">
-                <select [(ngModel)]="createHour" class="form-input time-hour luxe-time-input" (change)="syncTimeToForm()">
-                  <option *ngFor="let h of [1,2,3,4,5,6,7,8,9,10,11,12]" [value]="h">{{ h }}</option>
+              <div class="form-field">
+                <label for="create-client" class="form-label luxe-label">Client <span class="required" aria-hidden="true">*</span></label>
+                <select id="create-client" [(ngModel)]="createForm.clientId" class="form-select luxe-input" [class.field-error]="formErrors.clientId">
+                  <option value="">— Select Client —</option>
+                  <option *ngFor="let c of clients" [value]="c.id">{{ c.fullName }} <ng-container *ngIf="c.phone">— {{ c.phone }}</ng-container></option>
                 </select>
-                <select [(ngModel)]="createMinute" class="form-input time-min luxe-time-input" (change)="syncTimeToForm()">
-                  <option value="00">:00</option>
-                  <option value="15">:15</option>
-                  <option value="30">:30</option>
-                  <option value="45">:45</option>
-                </select>
-                <select [(ngModel)]="createAmPm" class="form-input time-ampm luxe-time-input" (change)="syncTimeToForm()">
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-                <span class="time-12-preview" *ngIf="createForm.startTime">{{ createForm.startTime | date:'h:mm a' }}</span>
+                <span class="field-msg" *ngIf="formErrors.clientId">{{ formErrors.clientId }}</span>
               </div>
-              <span class="field-msg" *ngIf="formErrors.startTime">{{ formErrors.startTime }}</span>
 
-              <label class="form-label luxe-label">Services *</label>
-              <div class="svc-picker">
-                <select #svcSelect class="form-select luxe-input" (change)="addCatalogService(svcSelect.value); svcSelect.value = ''">
-                  <option value="">— Add Service from Catalog —</option>
-                  <option *ngFor="let sv of catalogServices" [value]="sv.id" [disabled]="isServiceAdded(sv.id)">{{ sv.name }} ({{ sv.durationMin }} min — {{ sv.price | currency }})</option>
+              <div class="form-field">
+                <label for="create-staff" class="form-label luxe-label">Staff <span class="required" aria-hidden="true">*</span></label>
+                <select id="create-staff" [(ngModel)]="createForm.staffId" class="form-select luxe-input" [class.field-error]="formErrors.staffId">
+                  <option value="">— Select Staff —</option>
+                  <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }} <ng-container *ngIf="s.specialization">— {{ s.specialization }}</ng-container></option>
                 </select>
+                <span class="field-msg" *ngIf="formErrors.staffId">{{ formErrors.staffId }}</span>
               </div>
-              <div class="create-services" *ngIf="createForm.services.length > 0">
-                <div class="svc-card luxe-svc-card" *ngFor="let s of createForm.services; let i = index">
-                  <div class="svc-card-info">
-                    <span class="svc-card-name">{{ s.name }}</span>
-                    <span class="svc-card-meta">{{ s.durationMin }} min</span>
-                    <span class="svc-card-price">{{ s.price | currency }}</span>
+
+              <div class="form-field">
+                <label for="create-branch" class="form-label luxe-label">Branch <span class="required" aria-hidden="true">*</span></label>
+                <select id="create-branch" [(ngModel)]="createForm.branchId" class="form-select luxe-input" [class.field-error]="formErrors.branchId">
+                  <option value="">— Select Branch —</option>
+                  <option *ngFor="let b of branches" [value]="b.id">{{ b.name }} <ng-container *ngIf="b.city">— {{ b.city }}</ng-container></option>
+                </select>
+                <span class="field-msg" *ngIf="formErrors.branchId">{{ formErrors.branchId }}</span>
+              </div>
+
+              <div class="form-field">
+                <label for="create-title" class="form-label luxe-label">Title</label>
+                <input id="create-title" [(ngModel)]="createForm.title" placeholder="e.g. Birthday haircut & style" class="form-input luxe-input">
+              </div>
+
+              <div class="form-field">
+                <label class="form-label luxe-label">Start Time <span class="required" aria-hidden="true">*</span></label>
+                <div class="time-picker-row luxe-date-picker">
+                  <input [(ngModel)]="createDate" type="date" class="form-input time-date luxe-time-input" (change)="syncTimeToForm()" [class.field-error]="formErrors.startTime">
+                  <select [(ngModel)]="createHour" class="form-input time-hour luxe-time-input" (change)="syncTimeToForm()">
+                    <option *ngFor="let h of [1,2,3,4,5,6,7,8,9,10,11,12]" [value]="h">{{ h }}</option>
+                  </select>
+                  <select [(ngModel)]="createMinute" class="form-input time-min luxe-time-input" (change)="syncTimeToForm()">
+                    <option value="00">:00</option>
+                    <option value="15">:15</option>
+                    <option value="30">:30</option>
+                    <option value="45">:45</option>
+                  </select>
+                  <select [(ngModel)]="createAmPm" class="form-input time-ampm luxe-time-input" (change)="syncTimeToForm()">
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                  <span class="time-12-preview" *ngIf="createForm.startTime">{{ createForm.startTime | date:'h:mm a' }}</span>
+                </div>
+                <span class="field-msg" *ngIf="formErrors.startTime">{{ formErrors.startTime }}</span>
+              </div>
+
+              <div class="form-field">
+                <label class="form-label luxe-label">Services <span class="required" aria-hidden="true">*</span></label>
+                <div class="svc-picker">
+                  <select #svcSelect class="form-select luxe-input" (change)="addCatalogService(svcSelect.value); svcSelect.value = ''">
+                    <option value="">— Add Service from Catalog —</option>
+                    <option *ngFor="let sv of catalogServices" [value]="sv.id" [disabled]="isServiceAdded(sv.id)">{{ sv.name }} ({{ sv.durationMin }} min — {{ sv.price | currency }})</option>
+                  </select>
+                </div>
+                <div class="create-services" *ngIf="createForm.services.length > 0">
+                  <div class="svc-card luxe-svc-card" *ngFor="let s of createForm.services; let i = index">
+                    <div class="svc-card-info">
+                      <span class="svc-card-name">{{ s.name }}</span>
+                      <span class="svc-card-meta">{{ s.durationMin }} min</span>
+                      <span class="svc-card-price">{{ s.price | currency }}</span>
+                    </div>
+                    <button class="remove-btn" (click)="removeService(i)" aria-label="Remove {{ s.name }}">&times;</button>
                   </div>
-                  <button class="remove-btn" (click)="removeService(i)">&times;</button>
+                  <div class="svc-summary">
+                    <span>Total: <strong>{{ getFormDuration() }} min</strong></span>
+                    <span><strong>{{ getFormTotal() | currency }}</strong></span>
+                  </div>
                 </div>
-                <div class="svc-summary">
-                  <span>Total: <strong>{{ getFormDuration() }} min</strong></span>
-                  <span><strong>{{ getFormTotal() | currency }}</strong></span>
-                </div>
+                <span class="field-msg" *ngIf="formErrors.services">{{ formErrors.services }}</span>
               </div>
-              <span class="field-msg" *ngIf="formErrors.services">{{ formErrors.services }}</span>
 
               <div class="duration-hint" *ngIf="createForm.services.length > 0 && createForm.startTime">
                 <span>Scheduled: <strong>{{ createForm.startTime | date:'h:mm a' }}</strong> – <strong>{{ getEstimatedEndTime() | date:'h:mm a' }}</strong></span>
                 <span>({{ getFormDuration() }} min total)</span>
               </div>
 
-              <label class="form-label luxe-label">Notes</label>
-              <textarea [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." class="form-input form-textarea luxe-input" rows="2"></textarea>
+              <div class="form-field">
+                <label for="create-notes" class="form-label luxe-label">Notes</label>
+                <textarea id="create-notes" [(ngModel)]="createForm.notes" placeholder="Optional notes for this booking..." class="form-input form-textarea luxe-input" rows="2"></textarea>
+              </div>
 
-              <div class="drawer-actions">
-                <button (click)="closeCreate()">Cancel</button>
+              <div class="drawer-actions premium-actions">
+                <button class="btn-ghost" (click)="closeCreate()">Cancel</button>
                 <button class="btn-primary luxe-btn-primary" (click)="doCreate()" [disabled]="createBusy">{{ createBusy ? 'Creating...' : 'Create Booking' }}</button>
               </div>
             </div>
-            <div class="drawer-loading" *ngIf="createBusy"><div class="spinner"></div><span>Creating...</span></div>
-            <div class="drawer-error" *ngIf="createError">{{ createError }}</div>
+            <div class="drawer-loading premium-loading" *ngIf="createBusy" role="status" aria-live="polite"><div class="spinner"></div><span>Creating...</span></div>
+            <div class="drawer-error premium-error" *ngIf="createError" role="alert">{{ createError }}</div>
           </div>
         </div>
       </div>
@@ -481,60 +524,77 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     </section>
   `,
   styles: [`
-    .page{display:grid;gap:20px;max-width:1200px;background:radial-gradient(800px 400px at 0% 0%,rgba(201,162,39,.08),transparent 60%),radial-gradient(600px 400px at 100% 100%,rgba(28,21,48,.06),transparent 55%)}
-    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:rgba(255,255,255,.8);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.9);border-radius:20px;padding:18px 22px;box-shadow:0 8px 28px rgba(15,23,42,.06)}
+    .page{display:grid;gap:24px;max-width:1200px;background:radial-gradient(900px 500px at 0% 0%,rgba(201,162,39,.06),transparent 60%),radial-gradient(700px 500px at 100% 100%,rgba(28,21,48,.04),transparent 55%)}
+    .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;background:rgba(255,255,255,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.92);border-radius:24px;padding:20px 26px;box-shadow:0 10px 32px rgba(15,23,42,.07),0 0 0 1px rgba(201,162,39,.06)}
     h1{font-size:34px;margin:0;background:linear-gradient(135deg,#1c1530,#5b4a8a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     p{color:#6b7280;margin:6px 0 0;font-size:14px}
-    .primary{border:0;border-radius:14px;padding:12px 20px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#c9a227,#8a6d1f);color:white;font-size:14px;white-space:nowrap;box-shadow:0 8px 20px rgba(201,162,39,.3);transition:all .2s}
-    .primary:hover{transform:translateY(-1px);box-shadow:0 12px 28px rgba(201,162,39,.45)}
-    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,.55);backdrop-filter:blur(10px);border-radius:16px;padding:14px 18px;border:1px solid rgba(255,255,255,.7)}
-    .filter-input{flex:1;min-width:180px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;outline:none;background:rgba(255,255,255,.85);transition:border-color .2s,box-shadow .2s}
-    .filter-input:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.15)}
-    .filter-select{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;background:rgba(255,255,255,.85);outline:none;cursor:pointer;transition:border-color .2s,box-shadow .2s}
-    .filter-select:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.15)}
-    .filter-date{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;background:rgba(255,255,255,.85);outline:none;transition:border-color .2s,box-shadow .2s}
-    .filter-date:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.15)}
-    .clear-btn{border:1px solid #e5e7eb;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.85);font-size:13px;transition:all .2s}
-    .clear-btn:hover{border-color:#dc2626;color:#dc2626}
-    .client-filter-banner{display:flex;align-items:center;gap:12px;background:rgba(201,162,39,.08);border:1px solid rgba(201,162,39,.25);border-radius:12px;padding:10px 16px;font-size:14px;color:#8a6d1f;backdrop-filter:blur(8px)}
+    .primary{border:0;border-radius:14px;padding:12px 22px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#c9a227,#8a6d1f);color:white;font-size:14px;white-space:nowrap;box-shadow:0 8px 22px rgba(201,162,39,.32);transition:all .25s cubic-bezier(.4,0,.2,1)}
+    .primary:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(201,162,39,.45)}
+    .primary:focus-visible{outline:2px solid #c9a227;outline-offset:3px}
+    .toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:18px;padding:14px 20px;border:1px solid rgba(255,255,255,.75);box-shadow:0 4px 16px rgba(15,23,42,.04)}
+    .filter-input{flex:1;min-width:200px;padding:12px 16px;border:1px solid rgba(201,162,39,.12);border-radius:14px;font-size:14px;outline:none;background:rgba(255,255,255,.9);transition:border-color .2s,box-shadow .2s;color:#1f2937}
+    .filter-input::placeholder{color:#9ca3af}
+    .filter-input:focus{border-color:#c9a227;box-shadow:0 0 0 4px rgba(201,162,39,.12)}
+    .filter-select{padding:12px 16px;border:1px solid rgba(201,162,39,.12);border-radius:14px;font-size:14px;background:rgba(255,255,255,.9);outline:none;cursor:pointer;transition:border-color .2s,box-shadow .2s;color:#1f2937;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%238a6d1f'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+    .filter-select:focus{border-color:#c9a227;box-shadow:0 0 0 4px rgba(201,162,39,.12)}
+    .filter-date{padding:12px 16px;border:1px solid rgba(201,162,39,.12);border-radius:14px;font-size:14px;background:rgba(255,255,255,.9);outline:none;transition:border-color .2s,box-shadow .2s;color:#1f2937}
+    .filter-date:focus{border-color:#c9a227;box-shadow:0 0 0 4px rgba(201,162,39,.12)}
+    .clear-btn{border:1px solid rgba(220,38,38,.15);border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer;background:rgba(254,242,242,.7);font-size:13px;color:#991b1b;transition:all .2s;backdrop-filter:blur(6px)}
+    .clear-btn:hover{background:rgba(254,226,226,.9);border-color:rgba(220,38,38,.3)}
+    .client-filter-banner{display:flex;align-items:center;gap:14px;background:rgba(201,162,39,.07);border:1px solid rgba(201,162,39,.2);border-radius:14px;padding:12px 18px;font-size:14px;color:#8a6d1f;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
     .client-filter-banner strong{font-weight:800}
-    .clear-client-filter{border:1px solid rgba(201,162,39,.25);background:rgba(255,255,255,.9);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#8a6d1f;transition:all .2s;margin-left:auto}
-    .clear-client-filter:hover{background:rgba(201,162,39,.12)}
-    .summary{padding:4px 2px}
-    .count{font-size:13px;color:#6b7280;font-weight:600}
-    .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280;background:rgba(255,255,255,.7);backdrop-filter:blur(12px);border-radius:20px;border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 28px rgba(15,23,42,.06)}
-    .spinner{width:26px;height:26px;border:3px solid rgba(201,162,39,.15);border-top-color:#c9a227;border-right-color:#8a6d1f;border-radius:50%;animation:spin .7s linear infinite}
+    .clear-client-filter{border:1px solid rgba(201,162,39,.2);background:rgba(255,255,255,.9);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#8a6d1f;transition:all .2s;margin-left:auto}
+    .clear-client-filter:hover{background:rgba(201,162,39,.14)}
+    .summary{display:flex;align-items:center;gap:8px;padding:2px 4px}
+    .count{font-size:13px;color:#6b7280;font-weight:700;background:rgba(201,162,39,.08);padding:2px 12px;border-radius:999px}
+    .loading{display:flex;align-items:center;gap:16px;padding:56px;justify-content:center;color:#6b7280;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:22px;border:1px solid rgba(255,255,255,.85);box-shadow:0 10px 32px rgba(15,23,42,.06),inset 0 1px 0 rgba(255,255,255,.9)}
+    .spinner{width:28px;height:28px;border:3px solid rgba(201,162,39,.12);border-top-color:#c9a227;border-right-color:#8a6d1f;border-bottom-color:rgba(201,162,39,.08);border-radius:50%;animation:spin .75s cubic-bezier(.4,0,.2,1) infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .error{background:linear-gradient(135deg,rgba(254,242,242,.9),rgba(254,226,226,.9));border:1px solid rgba(239,68,68,.2);border-radius:20px;padding:24px;text-align:center;backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(239,68,68,.1)}
-    .error strong{color:#991b1b}.error p{color:#7f1d1d;margin:8px 0}
-    .error button{margin-top:12px;background:linear-gradient(135deg,#c9a227,#8a6d1f);color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(201,162,39,.3)}
-    .empty{padding:48px 24px;text-align:center;background:rgba(255,255,255,.7);backdrop-filter:blur(12px);border-radius:20px;border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 28px rgba(15,23,42,.06)}
-    .empty-icon{font-size:40px;margin-bottom:12px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.1))}
-    .empty p{font-size:16px;font-weight:600;margin:0 0 6px;color:#374151}
+    .error{background:linear-gradient(135deg,rgba(254,242,242,.92),rgba(254,226,226,.88));border:1px solid rgba(239,68,68,.18);border-radius:22px;padding:28px;text-align:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 28px rgba(239,68,68,.08)}
+    .error strong{color:#991b1b;font-size:16px}.error p{color:#7f1d1d;margin:8px 0;font-size:13px}
+    .error button{margin-top:14px;background:linear-gradient(135deg,#c9a227,#8a6d1f);color:white;border:0;border-radius:12px;padding:10px 20px;font-weight:800;cursor:pointer;font-size:13px;box-shadow:0 4px 14px rgba(201,162,39,.3);transition:all .2s}
+    .error button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(201,162,39,.4)}
+    .empty{padding:56px 28px;text-align:center;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:22px;border:1px solid rgba(255,255,255,.85);box-shadow:0 10px 32px rgba(15,23,42,.06)}
+    .empty-icon{font-size:48px;margin-bottom:14px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.08));opacity:.85}
+    .empty p{font-size:17px;font-weight:700;margin:0 0 6px;color:#374151}
     .empty-hint{font-size:13px;color:#9ca3af}
-    .empty-hint a{color:#c9a227;text-decoration:underline;cursor:pointer;font-weight:700}
-    .bookings-list{display:grid;gap:6px}
-    .list-section-label{font-size:12px;font-weight:800;text-transform:uppercase;color:#8a6d1f;letter-spacing:.08em;padding:14px 4px 6px;margin-top:8px;border-top:1px solid rgba(201,162,39,.12)}
+    .empty-hint a{color:#c9a227;text-decoration:none;cursor:pointer;font-weight:800;border-bottom:1.5px solid rgba(201,162,39,.3);transition:border-color .2s}
+    .empty-hint a:hover{border-color:#c9a227}
+    .bookings-list{display:grid;gap:8px}
+    .list-section-label{font-size:12px;font-weight:800;text-transform:uppercase;color:#8a6d1f;letter-spacing:.1em;padding:16px 4px 8px;margin-top:12px;border-top:1.5px solid rgba(201,162,39,.1);display:flex;align-items:center;gap:10px}
+    .list-section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(201,162,39,.12),transparent)}
     .list-section-label:first-child{border-top:0;margin-top:0}
-    .booking-row{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.9);border-radius:18px;padding:14px 18px;border-left:5px solid #e5e7eb;box-shadow:0 4px 16px rgba(15,23,42,.06);transition:all .25s cubic-bezier(.4,0,.2,1);cursor:pointer}
-    .booking-row:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(15,23,42,.12),0 0 0 1px rgba(201,162,39,.15)}
+    .booking-row{display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.92);border-radius:20px;padding:16px 20px;border-left:6px solid #e5e7eb;box-shadow:0 4px 18px rgba(15,23,42,.05),0 0 0 1px rgba(15,23,42,.02);transition:all .28s cubic-bezier(.4,0,.2,1);cursor:pointer;position:relative;overflow:hidden}
+    .booking-row::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(201,162,39,0),rgba(201,162,39,.12),rgba(201,162,39,0));opacity:0;transition:opacity .3s}
+    .booking-row:hover{transform:translateY(-3px);box-shadow:0 14px 36px rgba(15,23,42,.12),0 0 0 1px rgba(201,162,39,.12);background:rgba(255,255,255,.94)}
+    .booking-row:hover::before{opacity:1}
+    .booking-row:focus-visible{outline:2px solid #c9a227;outline-offset:2px;border-radius:16px}
     .booking-row.status-confirmed{border-left-color:#3b82f6}
+    .booking-row.status-confirmed::before{background:linear-gradient(90deg,transparent,rgba(59,130,246,.15),transparent)}
     .booking-row.status-completed{border-left-color:#16a34a}
+    .booking-row.status-completed::before{background:linear-gradient(90deg,transparent,rgba(22,163,74,.15),transparent)}
     .booking-row.status-pending{border-left-color:#eab308}
-    .booking-row.status-cancelled{border-left-color:#dc2626;opacity:.65}
-    .booking-row.status-no_show{border-left-color:#6b7280;opacity:.65}
+    .booking-row.status-pending::before{background:linear-gradient(90deg,transparent,rgba(234,179,8,.15),transparent)}
+    .booking-row.status-cancelled{border-left-color:#dc2626;opacity:.6}
+    .booking-row.status-cancelled::before{background:linear-gradient(90deg,transparent,rgba(220,38,38,.12),transparent)}
+    .booking-row.status-no_show{border-left-color:#6b7280;opacity:.55}
+    .booking-row.status-no_show::before{background:linear-gradient(90deg,transparent,rgba(107,114,128,.1),transparent)}
     .booking-row.status-checked_in{border-left-color:#8b5cf6}
-    .booking-main{flex:2;display:grid;gap:6px;min-width:0}
-    .booking-client strong{display:block;font-size:15px;line-height:1.3;color:#1c1530}
-    .booking-title{font-size:13px;color:#6b7280;display:block}
-    .booking-datetime{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#6b7280}
-    .booking-datetime .date{font-weight:700;color:#8a6d1f}
+    .booking-row.status-checked_in::before{background:linear-gradient(90deg,transparent,rgba(139,92,246,.15),transparent)}
+    .booking-main{flex:2;display:grid;gap:8px;min-width:0}
+    .booking-client{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+    .booking-client strong{font-size:16px;line-height:1.3;color:#1c1530}
+    .booking-title{font-size:13px;color:#6b7280;font-weight:500}
+    .booking-datetime{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:#6b7280}
+    .booking-datetime .date{font-weight:800;color:#8a6d1f;font-size:13px}
     .booking-datetime .time{color:#4b5563;font-weight:600}
-    .booking-datetime .duration{background:rgba(201,162,39,.1);padding:1px 8px;border-radius:8px;font-weight:700;color:#8a6d1f}
-    .booking-services{display:flex;flex-wrap:wrap;gap:4px}
-    .svc-tag{font-size:11px;background:rgba(201,162,39,.1);color:#8a6d1f;padding:2px 8px;border-radius:8px;font-weight:700}
-    .booking-side{flex-shrink:0;text-align:right;display:grid;gap:3px;align-items:end}
-    .status-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.03em;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+    .booking-datetime .duration{background:rgba(201,162,39,.1);padding:1px 10px;border-radius:8px;font-weight:700;color:#8a6d1f;font-size:11px}
+    .booking-services{display:flex;flex-wrap:wrap;gap:6px}
+    .svc-tag{font-size:11px;background:rgba(201,162,39,.08);color:#8a6d1f;padding:3px 10px;border-radius:999px;font-weight:700;border:1px solid rgba(201,162,39,.12);transition:background .15s}
+    .svc-tag:hover{background:rgba(201,162,39,.16)}
+    .booking-side{flex-shrink:0;text-align:right;display:grid;gap:4px;align-items:end}
+    .status-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 12px;border-radius:999px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.05em;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .2s,box-shadow .2s}
+    .status-badge:hover{transform:scale(1.04)}
     .badge-confirmed{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#1d4ed8}
     .badge-completed{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#065f46}
     .badge-pending{background:linear-gradient(135deg,#fef9c3,#fef3c7);color:#92400e}
@@ -543,7 +603,7 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .badge-checked_in{background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#6d28d9}
     .staff-name{font-size:12px;color:#6b7280;font-weight:600}
     .branch-name{font-size:11px;color:#9ca3af}
-    .amount{font-size:16px;font-weight:800;color:#1c1530}
+    .amount{font-size:17px;font-weight:800;color:#1c1530}
     .drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);display:flex;justify-content:flex-end;z-index:50}
     .drawer-centered{justify-content:center;align-items:center}
     .drawer-panel{background:linear-gradient(160deg,#ffffff 0%,#fbfaff 100%);width:min(460px,100%);max-height:100vh;overflow-y:auto;border-left:4px solid #c9a227;box-shadow:-30px 0 80px rgba(15,23,42,.18);border-top-left-radius:22px;border-bottom-left-radius:22px;animation:slideIn .25s ease}
@@ -777,19 +837,111 @@ import type { BookingListItem, BookingFilterState, CreateBookingForm, BookingSer
     .luxe-time-input{border-radius:12px!important;background:white;border:1px solid #e5e7eb}
     .luxe-svc-card{background:rgba(255,255,255,.8);border:1px solid rgba(15,23,42,.06);border-radius:14px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
     .status-workflow{background:rgba(249,250,251,.7)!important}
+
+    /* Premium Form Styles */
+    .premium-form{padding:20px}
+    .form-field{display:grid;gap:6px}
+    .form-field label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#8a6d1f}
+    .form-field .luxe-input,.form-field .luxe-textarea{padding:14px 16px;font-size:14px;border-radius:14px;border:1px solid #e5e7eb;background:rgba(255,255,255,.85);transition:border-color .2s,box-shadow .2s}
+    .form-field .luxe-input:focus,.form-field .luxe-textarea:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.15);outline:none}
+    .luxe-textarea{min-height:90px;resize:vertical;font-family:inherit}
+    .premium-actions{display:flex;gap:10px;margin-top:8px}
+    .premium-actions .btn-ghost,.premium-actions .btn-primary,.premium-actions .btn-danger{flex:1;padding:14px 16px;font-size:13px;font-weight:800;border-radius:14px;transition:transform .12s,box-shadow .12s}
+    .premium-actions .btn-ghost:hover,.premium-actions .btn-primary:hover,.premium-actions .btn-danger:hover{transform:translateY(-1px)}
+    .premium-actions button:focus-visible{outline:2px solid #c9a227;outline-offset:2px}
+    .btn-primary.luxe-btn-primary{background:linear-gradient(135deg,#c9a227,#8a6d1f);color:#fff;box-shadow:0 8px 22px rgba(201,162,39,.35);border:0}
+    .btn-primary.luxe-btn-primary:hover{box-shadow:0 12px 28px rgba(201,162,39,.45);transform:translateY(-1px)}
+    .btn-danger.luxe-btn-danger{background:rgba(220,38,38,.1);color:#991b1b;border:1px solid rgba(220,38,38,.15)}
+    .btn-danger.luxe-btn-danger:hover{background:rgba(220,38,38,.16);box-shadow:0 10px 22px rgba(220,38,38,.18)}
+    .btn-icon{margin-right:6px;display:inline-block}
+    .btn-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .75s linear infinite;margin-right:8px;vertical-align:middle}
+
+    /* Premium Loading & Empty States */
+    .premium-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 16px;color:#8a6d1f;font-weight:600}
+    .premium-loading .spinner{width:32px;height:32px;border:3px solid rgba(201,162,39,.12);border-top-color:#c9a227;border-right-color:#8a6d1f;border-bottom-color:rgba(201,162,39,.08);border-radius:50%;animation:spin .75s cubic-bezier(.4,0,.2,1) infinite}
+    .premium-error{background:linear-gradient(135deg,rgba(254,242,242,.95),rgba(254,226,226,.95));color:#991b1b;padding:14px 16px;border-radius:12px;font-size:13px;text-align:center;border:1px solid rgba(239,68,68,.15);backdrop-filter:blur(8px)}
+    .premium-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 24px;text-align:center;color:#6b7280}
+    .premium-empty .empty-icon{font-size:48px;opacity:.7;filter:drop-shadow(0 6px 14px rgba(0,0,0,.08))}
+    .premium-empty p{margin:0;font-size:16px;font-weight:700;color:#374151}
+    .premium-empty .empty-hint{font-size:13px;color:#9ca3af;max-width:280px;line-height:1.5}
+    .premium-empty .btn-primary{margin-top:8px}
+
+    /* Enhanced Activity Log Empty */
+    .al-empty.premium-empty{gap:8px}
+    .al-empty.premium-empty .empty-icon{font-size:36px}
+    .al-empty.premium-empty p{font-size:14px}
+
+    /* Bill Tabs Accessibility */
+    .bill-tabs[role="tablist"]{border-bottom:1px solid rgba(201,162,39,.1);padding-bottom:0}
+    .bill-tabs[role="tablist"] button{margin-bottom:-1px}
+    .bill-tabs[role="tablist"] button.active{border-bottom:2px solid #c9a227}
+
+    /* Action Menu Dropdown Animation */
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Tip Presets */
+    .luxe-tip-btn{border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.85);color:#374151;transition:all .12s;flex:1}
+    .luxe-tip-btn.active{background:rgba(209,250,229,.8);border-color:#16a34a;color:#16a34a}
+    .luxe-tip-btn:hover:not(.active){background:rgba(201,162,39,.08)}
+    .luxe-tip-btn:focus-visible{outline:2px solid #c9a227;outline-offset:2px}
+
+    /* Drawer Panel Animation */
+    .drawer-panel{animation:slideIn .3s cubic-bezier(.4,0,.2,1)}
+    .drawer-overlay.is-open .drawer-panel{animation:slideIn .3s cubic-bezier(.4,0,.2,1)}
+    @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+    /* Focus visible for all interactive elements */
+    button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid #c9a227;outline-offset:2px}
+    .close-btn:focus-visible,.action-menu-trigger:focus-visible{border-radius:8px}
+
+    /* Reduced Motion */
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-    @media(max-width:900px){.drawer-panel{width:100%}.booking-row{flex-direction:column;align-items:stretch;gap:10px}.booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{flex-direction:column}.toolbar .filter-input{min-width:0}
+
+    /* Mobile Responsive */
+    @media(max-width:900px){
+      .drawer-panel{width:100%}
+      .booking-row{flex-direction:column;align-items:stretch;gap:12px;padding:14px 16px}
+      .booking-side{text-align:left;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start}
+      .booking-side .amount{margin-left:auto}
+      .toolbar{flex-direction:column;padding:12px 14px}
+      .toolbar .filter-input{min-width:0}
+      .head{padding:16px 18px}
+      .head h1{font-size:28px}
       .sw-buttons{gap:4px}.sw-btn{min-width:60px;padding:4px 10px;font-size:11px}
       .bill-svc-header{font-size:9px}.bill-svc-row{font-size:11px}
       .bsh-price,.bsh-total,.bsr-price,.bsr-total{width:56px}
       .cs-wallet{padding:4px 8px}.wl-amount{font-size:13px}
       .action-menu-dropdown{right:auto;left:0}
       .tip-presets button{padding:8px;font-size:13px}
+      .luxe-grid{grid-template-columns:repeat(2,1fr)}
+      .luxe-footer{flex-direction:column}
+      .luxe-footer .luxe-btn{width:100%}
+      .premium-actions{flex-direction:column}
+      .premium-actions button{width:100%}
     }
     @media(max-width:640px){
+      .page{gap:16px}
+      .head{flex-direction:column;align-items:stretch;text-align:center;padding:14px 16px}
+      .head h1{font-size:24px}
+      .head .primary{width:100%;text-align:center}
+      .toolbar{gap:8px;padding:10px 12px}
+      .filter-input,.filter-select,.filter-date{font-size:13px;padding:10px 14px}
+      .bookings-list{gap:6px}
+      .booking-row{padding:12px 14px;gap:10px;border-radius:16px}
+      .booking-client strong{font-size:15px}
+      .booking-side{gap:6px}
+      .status-badge{font-size:10px;padding:3px 10px}
+      .loading{padding:40px 20px}
+      .empty{padding:40px 20px}
+      .empty-icon{font-size:36px}
+      .error{padding:20px}
       .luxe-grid{grid-template-columns:1fr}
       .luxe-header{padding:18px 18px}
       .luxe-create{width:94%}
+      .luxe-card{padding:16px}
+      .lx-mini{padding:12px}
+      .drawer-body{padding:16px 18px}
+      .drawer-header{padding:18px 20px}
     }
   `]
 })
