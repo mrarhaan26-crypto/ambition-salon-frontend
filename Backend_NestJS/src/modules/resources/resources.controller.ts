@@ -8,17 +8,32 @@ export class ResourcesController {
   @Get()
   findAll(@Query() query: any) { return this.service.findAll(query); }
 
+  @Get('statistics')
+  getStatistics(@Query() query: any) { return this.service.getStatistics(query); }
+
+  @Get('utilization')
+  getUtilization(@Query() query: any) { return this.service.getUtilization(query); }
+
+  @Get('timeline')
+  getTimeline(@Query() query: any) { return this.service.getTimeline(query); }
+
   @Get('availability')
   getAvailability(@Query() query: any) { return this.service.getAvailability(query); }
 
   @Get('conflicts')
   getConflicts(@Query() query: any) { return this.service.getConflicts(query); }
 
+  @Post('auto-assign')
+  autoAssign(@Body() body: any) { return this.service.autoAssign(body); }
+
   @Get(':id')
   findOne(@Param('id') id: string) { return this.service.findOne(id); }
 
   @Post()
   create(@Body() body: any) { return this.service.create(body); }
+
+  @Patch(':id/status')
+  setStatus(@Param('id') id: string, @Body() body: any) { return this.service.setStatus(id, body.status); }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: any) { return this.service.update(id, body); }

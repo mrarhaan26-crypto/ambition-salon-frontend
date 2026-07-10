@@ -25,6 +25,7 @@ model User {
   staffWaitlistEntries WaitlistEntry[]     @relation("StaffWaitlistEntries")
   staffWalkIns         WalkIn[]            @relation("StaffWalkIns")
   posSales             PosSale[]           @relation("StaffPosSales")
+  staffLeaves          StaffLeave[]
 }
 
 model Salon {
@@ -195,20 +196,25 @@ model WaitlistEntry {
 }
 
 model Resource {
-  id          String       @id @default(cuid())
-  branchId    String
-  name        String
-  type        ResourceType
-  description String?
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  branch      Branch       @relation(fields: [branchId], references: [id])
-  bookings    Booking[]
+  id               String         @id @default(cuid())
+  branchId         String
+  name             String
+  type             ResourceType
+  description      String?
+  isActive         Boolean        @default(true)
+  status           ResourceStatus @default(ACTIVE)
+  color            String?
+  capacity         Int            @default(1)
+  cleaningBufferMin Int           @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  branch           Branch         @relation(fields: [branchId], references: [id])
+  bookings         Booking[]
 
   @@index([branchId])
   @@index([type])
   @@index([isActive])
+  @@index([status])
 }
 
 model WalkIn {
@@ -828,6 +834,54 @@ model StaffAttendance {
   @@index([date])
 }
 
+model StaffLeave {
+  id          String     @id @default(cuid())
+  staffId     String
+  staff       User       @relation(fields: [staffId], references: [id])
+  leaveType   LeaveType
+  status      LeaveStatus @default(PENDING)
+  startDate   DateTime
+  endDate     DateTime
+  halfDay     Boolean    @default(false)
+  reason      String?
+  notes       String?
+  attachmentUrl String?
+  approvedBy  String?
+  approvedAt  DateTime?
+  rejectedBy  String?
+  rejectedAt  DateTime?
+  rejectReason String?
+  branchId    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([staffId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
+  @@index([branchId])
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  MEDICAL
+  VACATION
+  MATERNITY
+  PATERNITY
+  UNPAID
+  EMERGENCY
+  PUBLIC_HOLIDAY
+  HALF_DAY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model CommissionRule {
   id         String   @id @default(cuid())
   name       String
@@ -985,6 +1039,17 @@ enum ResourceType {
   ROOM
   EQUIPMENT
   STATION
+  MACHINE
+  SPA_ROOM
+  VIP_ROOM
+  MIRROR
+  WASH_STATION
+}
+
+enum ResourceStatus {
+  ACTIVE
+  MAINTENANCE
+  BLOCKED
 }
 
 enum Role {
@@ -1013,6 +1078,565 @@ enum BookingStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENTERPRISE MODULES — PHASE A
+// ═══════════════════════════════════════════════════════════════
+
+// --- 1. SHIFT PLANNING ---
+model ShiftTemplate {
+  id          String   @id @default(cuid())
+  branchId    String
+  name        String
+  startTime   String
+  endTime     String
+  breakMin    Int      @default(0)
+  color       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignments ShiftAssignment[]
+
+  @@index([branchId])
+  @@index([isActive])
+}
+
+model ShiftAssignment {
+  id           String   @id @default(cuid())
+  branchId     String
+  staffId      String
+  shiftId      String
+  date         DateTime
+  status       String   @default("SCHEDULED")
+  checkIn      DateTime?
+  checkOut     DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shift        ShiftTemplate @relation(fields: [shiftId], references: [id])
+
+  @@index([branchId])
+  @@index([staffId])
+  @@index([shiftId])
+  @@index([date])
+  @@index([status])
+}
+
+model ShiftSwap {
+  id           String   @id @default(cuid())
+  branchId     String
+  requesterId  String
+  targetId     String
+  requesterShiftId String
+  targetShiftId    String
+  requesterDate    DateTime
+  targetDate       DateTime
+  status       String   @default("PENDING")
+  approvedBy   String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+}
+
+// --- 2. ONLINE BOOKING PORTAL ---
+model BookingPortalSettings {
+  id                  String   @id @default(cuid())
+  branchId            String   @unique
+  slug                String   @unique
+  heroTitle           String   @default("Book Your Appointment")
+  heroSubtitle        String   @default("Choose your service, staff, and time")
+  heroImage           String?
+  logo                String?
+  primaryColor        String   @default("#6366f1")
+  accentColor         String   @default("#ec4899")
+  welcomeMessage      String?
+  bookingRules        String?
+  requireDeposit      Boolean  @default(false)
+  depositPercent      Float    @default(0)
+  cancellationPolicy  String?
+  allowGuestBooking   Boolean  @default(true)
+  requirePhone        Boolean  @default(true)
+  requireEmail        Boolean  @default(false)
+  maxAdvanceDays      Int      @default(30)
+  minAdvanceHours     Int      @default(2)
+  slotDurationMin     Int      @default(30)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  bookings            OnlineBooking[]
+
+  @@index([branchId])
+}
+
+model OnlineBooking {
+  id              String   @id @default(cuid())
+  branchId        String
+  portalSettingsId String
+  clientId        String?
+  clientName      String
+  clientPhone     String
+  clientEmail     String?
+  staffId         String?
+  serviceIds      String
+  date            DateTime
+  startTime       String
+  endTime         String
+  totalAmount     Float    @default(0)
+  depositPaid     Float    @default(0)
+  status          String   @default("PENDING")
+  notes           String?
+  source          String   @default("WEB")
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  portal          BookingPortalSettings @relation(fields: [portalSettingsId], references: [id])
+
+  @@index([branchId])
+  @@index([clientId])
+  @@index([staffId])
+  @@index([date])
+  @@index([status])
+}
+
+// --- 3. CALENDAR SYNC ---
+model CalendarSyncToken {
+  id              String   @id @default(cuid())
+  staffId         String
+  provider        String
+  accessToken     String
+  refreshToken    String?
+  tokenExpiry     DateTime?
+  calendarId      String?
+  calendarName    String?
+  syncEnabled     Boolean  @default(true)
+  lastSyncAt      DateTime?
+  syncDirection   String   @default("BIDIRECTIONAL")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([staffId, provider])
+  @@index([staffId])
+  @@index([provider])
+}
+
+model CalendarSyncLog {
+  id            String   @id @default(cuid())
+  staffId       String
+  provider      String
+  direction     String
+  eventType     String
+  externalId    String?
+  internalId    String?
+  status        String   @default("SUCCESS")
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@index([staffId])
+  @@index([provider])
+  @@index([createdAt])
+}
+
+// --- 4. WHATSAPP BUSINESS ---
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  language    String   @default("en")
+  body        String
+  variables   String?
+  status      String   @default("APPROVED")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+}
+
+model WhatsAppMessage {
+  id            String   @id @default(cuid())
+  branchId      String?
+  clientId      String?
+  bookingId     String?
+  templateId    String?
+  direction     String
+  fromNumber    String
+  toNumber      String
+  messageType   String   @default("TEXT")
+  content       String
+  mediaUrl      String?
+  status        String   @default("SENT")
+  errorMessage  String?
+  externalId    String?
+  readAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([clientId])
+  @@index([bookingId])
+  @@index([direction])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WhatsAppLog {
+  id          String   @id @default(cuid())
+  branchId    String?
+  type        String
+  toNumber    String?
+  templateName String?
+  status      String   @default("SENT")
+  error       String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENTERPRISE MODULES — PHASE B (AI & OPTIMIZATION)
+// ═══════════════════════════════════════════════════════════════
+
+// --- 5. AI CHAIR OPTIMIZATION ---
+model ChairOptimization {
+  id          String   @id @default(cuid())
+  branchId    String
+  resourceId  String
+  date        DateTime
+  hour        Int
+  utilization Float    @default(0)
+  recommendation String?
+  bookedMinutes  Int   @default(0)
+  availableMinutes Int @default(0)
+  score       Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([resourceId])
+  @@index([date])
+}
+
+// --- 6. AI STAFF OPTIMIZATION ---
+model StaffOptimization {
+  id          String   @id @default(cuid())
+  branchId    String
+  staffId     String
+  date        DateTime
+  hour        Int
+  utilization Float    @default(0)
+  recommendation String?
+  bookingCount  Int   @default(0)
+  revenuePerHour Float @default(0)
+  score       Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([staffId])
+  @@index([date])
+}
+
+// --- 7. AI REVENUE OPTIMIZATION ---
+model RevenueOptimization {
+  id              String   @id @default(cuid())
+  branchId        String
+  date            DateTime
+  hour            Int
+  peakScore       Float    @default(0)
+  dynamicPrice    Float?
+  idleOfferSent   Boolean  @default(false)
+  offerType       String?
+  discountPercent Float?
+  revenue         Float    @default(0)
+  bookings        Int      @default(0)
+  recommendation  String?
+  createdAt       DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+}
+
+// --- 8. OCCUPANCY HEATMAP ---
+model OccupancyHeatmap {
+  id            String   @id @default(cuid())
+  branchId      String
+  date          DateTime
+  hour          Int
+  minute        Int      @default(0)
+  occupancy     Float    @default(0)
+  activeBookings Int     @default(0)
+  totalResources Int     @default(0)
+  staffActive   Int      @default(0)
+  revenue       Float    @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+  @@index([hour])
+}
+
+// --- 9. BOOKING PREDICTION ---
+model BookingPrediction {
+  id            String   @id @default(cuid())
+  branchId      String
+  date          DateTime
+  hour          Int
+  predictedBookings Int  @default(0)
+  actualBookings Int?
+  confidence    Float    @default(0)
+  factors       String?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([date])
+}
+
+// --- 10. NO-SHOW PREDICTION ---
+model NoShowPrediction {
+  id            String   @id @default(cuid())
+  clientId      String
+  bookingId     String
+  riskScore     Float    @default(0)
+  factors       String?
+  actionTaken   String?
+  confirmed     Boolean  @default(false)
+  actualShow    Boolean?
+  createdAt     DateTime @default(now())
+
+  @@index([clientId])
+  @@index([bookingId])
+  @@index([riskScore])
+}
+
+// --- 11. AUTO WAITLIST FILL ---
+model WaitlistAutoFill {
+  id            String   @id @default(cuid())
+  branchId      String
+  cancelledBookingId String
+  filledBookingId String?
+  waitlistEntryId String
+  autoFilled    Boolean  @default(false)
+  notifiedAt    DateTime?
+  confirmedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([cancelledBookingId])
+  @@index([autoFilled])
+}
+
+// --- 12. SMART DOUBLE BOOKING RULES ---
+model DoubleBookingRule {
+  id            String   @id @default(cuid())
+  branchId      String
+  name          String
+  servicePattern String?
+  staffPattern  String?
+  allowOverlap  Boolean  @default(false)
+  maxOverlap    Int      @default(1)
+  priority      Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([isActive])
+}
+
+// --- 13. AI SERVICE ROUTE ---
+model ServiceRoute {
+  id            String   @id @default(cuid())
+  branchId      String
+  name          String
+  steps         String
+  totalDuration Int
+  totalRevenue  Float    @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([branchId])
+}
+
+// --- 14. ENTERPRISE RESOURCE MAP ---
+model FloorPlan {
+  id            String   @id @default(cuid())
+  branchId      String
+  name          String
+  width         Int      @default(800)
+  height        Int      @default(600)
+  backgroundImage String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  elements      FloorPlanElement[]
+
+  @@index([branchId])
+}
+
+model FloorPlanElement {
+  id            String   @id @default(cuid())
+  floorPlanId   String
+  resourceId    String?
+  type          String
+  label         String?
+  x             Int      @default(0)
+  y             Int      @default(0)
+  width         Int      @default(100)
+  height        Int      @default(100)
+  rotation      Int      @default(0)
+  color         String?
+  status        String   @default("available")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  floorPlan     FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+
+  @@index([floorPlanId])
+  @@index([resourceId])
+}
+
+// --- 15. VOICE BOOKING ---
+model VoiceCommand {
+  id            String   @id @default(cuid())
+  staffId       String?
+  rawText       String
+  parsedIntent  String?
+  parsedSlots   String?
+  confidence    Float    @default(0)
+  bookingId     String?
+  status        String   @default("PROCESSED")
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([staffId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// --- 16. AI RECEPTIONIST ---
+model AIReceptionistLog {
+  id            String   @id @default(cuid())
+  channel       String
+  direction     String
+  content       String
+  intent        String?
+  sentiment     String?
+  clientId      String?
+  bookingId     String?
+  resolved      Boolean  @default(false)
+  handoffTo     String?
+  createdAt     DateTime @default(now())
+
+  @@index([channel])
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+// --- 17. PREDICTIVE ANALYTICS ---
+model RevenuePrediction {
+  id            String   @id @default(cuid())
+  branchId      String
+  period        String
+  startDate     DateTime
+  endDate       DateTime
+  predicted     Float    @default(0)
+  actual        Float?
+  confidence    Float    @default(0)
+  factors       String?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([period])
+  @@index([startDate])
+}
+
+// --- 18. SMART PROMOTIONS ---
+model SmartPromotion {
+  id            String   @id @default(cuid())
+  branchId      String
+  name          String
+  type          String
+  targetSegment String?
+  audienceCount Int      @default(0)
+  content       String?
+  channel       String   @default("WHATSAPP")
+  discountType  String   @default("PERCENTAGE")
+  discountValue Float    @default(0)
+  status        String   @default("DRAFT")
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  deliveredCount Int     @default(0)
+  openedCount   Int      @default(0)
+  convertedCount Int     @default(0)
+  revenue       Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENTERPRISE MODULES — PHASE C (REAL-TIME & OFFLINE)
+// ═══════════════════════════════════════════════════════════════
+
+// --- 19. REAL-TIME COLLABORATION ---
+model CollaborationSession {
+  id            String   @id @default(cuid())
+  userId        String
+  sessionId     String   @unique
+  branchId      String?
+  deviceInfo    String?
+  ipAddress     String?
+  connectedAt   DateTime @default(now())
+  lastHeartbeat DateTime @default(now())
+  disconnectedAt DateTime?
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([branchId])
+}
+
+model RealtimeEvent {
+  id            String   @id @default(cuid())
+  branchId      String
+  eventType     String
+  entityId      String?
+  entityType    String?
+  payload       String?
+  userId        String?
+  createdAt     DateTime @default(now())
+
+  @@index([branchId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// --- 20. OFFLINE MODE ---
+model OfflineQueue {
+  id            String   @id @default(cuid())
+  userId        String
+  deviceId      String
+  action        String
+  entityType    String
+  entityId      String?
+  payload       String
+  status        String   @default("PENDING")
+  syncedAt      DateTime?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum WalkInStatus {

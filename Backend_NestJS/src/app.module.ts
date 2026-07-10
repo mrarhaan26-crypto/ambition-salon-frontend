@@ -53,6 +53,17 @@ import { ResourcesModule } from './modules/resources/resources.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { SurveysModule } from './modules/surveys/surveys.module';
 import { DeliverySettingsModule } from './modules/delivery-settings/delivery-settings.module';
+import { LeavesModule } from './modules/leaves/leaves.module';
+import { ShiftsModule } from './modules/shifts/shifts.module';
+import { OnlineBookingModule } from './modules/online-booking/online-booking.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { CalendarSyncModule } from './modules/calendar-sync/calendar-sync.module';
+import { AiOptimizationModule } from './modules/ai-optimization/ai-optimization.module';
+import { ResourceMapModule } from './modules/resource-map/resource-map.module';
+import { VoiceBookingModule } from './modules/voice-booking/voice-booking.module';
+import { AiReceptionistModule } from './modules/ai-receptionist/ai-receptionist.module';
+import { RealTimeModule } from './modules/real-time/real-time.module';
+import { OfflineModeModule } from './modules/offline-mode/offline-mode.module';
 
 @Module({
   imports: [
@@ -110,6 +121,17 @@ import { DeliverySettingsModule } from './modules/delivery-settings/delivery-set
     ReputationModule,
     SurveysModule,
     DeliverySettingsModule,
+    LeavesModule,
+    ShiftsModule,
+    OnlineBookingModule,
+    WhatsAppModule,
+    CalendarSyncModule,
+    AiOptimizationModule,
+    ResourceMapModule,
+    VoiceBookingModule,
+    AiReceptionistModule,
+    RealTimeModule,
+    OfflineModeModule,
   ],
   providers: [],
 })
