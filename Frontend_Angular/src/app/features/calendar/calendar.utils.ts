@@ -239,6 +239,7 @@ export function buildAppointmentCardData(
   const color = staffColorMap[booking.staffId ?? ''] || DEFAULT_STAFF_COLOR;
   const initials = (booking.staff?.fullName || '?').split(' ').map(s => s.charAt(0)).join('').toUpperCase().slice(0, 2);
   const pos = computeCardPosition(booking.startTime, booking.endTime);
+  const b = booking as any;
   return {
     id: booking.id,
     title: booking.title,
@@ -259,7 +260,16 @@ export function buildAppointmentCardData(
     isVIP: (booking.totalAmount ?? 0) >= VIP_THRESHOLD,
     hasPackage: (booking.services ?? []).length > PACKAGE_THRESHOLD,
     hasMembership: false,
+    hasResource: !!(b.resource || b.resourceId),
+    resourceName: b.resource?.name || b.resourceId || '',
+    source: b.source || b.bookingSource || '',
+    waitingMinutes: b.waitingMinutes || 0,
+    reminderState: b.reminderState || '',
+    paymentStatus: b.paymentStatus || '',
     colorStrip: booking.status,
+    isLate: b.status === 'WAITING' && b.waitingMinutes > 15,
+    isOnline: (b.source || b.bookingSource) === 'online',
+    isWalkIn: (b.source || b.bookingSource) === 'walk-in',
     ...pos,
   };
 }

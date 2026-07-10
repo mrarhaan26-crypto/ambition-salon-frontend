@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, inject, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, inject, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, NgZone } from '@angular/core';
 import { BUSINESS_HOURS_START, BUSINESS_HOURS_END, HOUR_HEIGHT_PX } from './calendar.constants';
 import { isToday, getHoursArray, formatHour, buildAppointmentCardData } from './calendar.utils';
 import type { CalendarBooking } from './calendar.models';
@@ -10,6 +10,11 @@ import { DragVisualService } from './calendar-drag-engine/calendar-drag-visual.s
 import type { ViewCoordinateAdapter } from './calendar-drag-engine/calendar-drag-engine.service';
 import type { DragTarget } from './calendar-drag-engine/calendar-drag-state.service';
 import { getDurationMinutes } from './calendar.utils';
+import type { SidebarStaff } from './calendar-sidebar.component';
+import { Subscription, fromEvent } from 'rxjs';
+
+const STAFF_COL_WIDTH = 200;
+const TIME_COL_WIDTH = 70;
 
 @Component({
   selector: 'app-calendar-day-view',
@@ -17,62 +22,92 @@ import { getDurationMinutes } from './calendar.utils';
   imports: [CommonModule, AppointmentCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="day-view" role="grid" aria-label="Day view for {{ currentDate | date:'fullDate' }}">
-      <div class="dv-header">
-        <div class="dv-header-info">
-          <span class="dv-day-name">{{ currentDate | date:'EEEE' }}</span>
-          <span
-            class="dv-day-num"
-            [class.today-num]="isTodayFn(currentDate)"
-          >{{ currentDate.getDate() }}</span>
-          <span class="dv-day-month">{{ currentDate | date:'MMMM yyyy' }}</span>
-          <span class="dv-count" *ngIf="appointments.length > 0">{{ appointments.length }} appointment{{ appointments.length !== 1 ? 's' : '' }}</span>
+    <div class="sdv-root" role="grid" aria-label="Staff day view for {{ currentDate | date:'fullDate' }}">
+      <!-- Header Row: time corner + staff headers -->
+      <div class="sdv-header-row">
+        <div class="sdv-time-corner" [style.width.px]="TIME_COL_WIDTH">
+          <span class="sdv-date-label">{{ currentDate | date:'EEE' }}</span>
+          <span class="sdv-date-num" [class.today]="isTodayFn(currentDate)">{{ currentDate.getDate() }}</span>
         </div>
-        <div class="dv-bh" *ngIf="isTodayFn(currentDate)">
-          <span class="dv-bh-dot"></span>
-          <span>Business hours: {{ formatHourFn(BUSINESS_HOURS_START) }} – {{ formatHourFn(BUSINESS_HOURS_END) }}</span>
+        <div class="sdv-staff-header" #staffHeaderRef>
+          <div class="sdv-staff-header-inner" [style.width.px]="headerInnerWidth">
+            <div
+              *ngFor="let staff of _staffList; let si = index"
+              class="sdv-sh-cell"
+              [style.width.px]="STAFF_COL_WIDTH"
+            >
+              <span class="sh-badge">{{ si + 1 }}</span>
+              <span class="sh-avatar" [style.background]="staff.color">{{ staff.initials }}</span>
+              <div class="sh-info">
+                <span class="sh-name">{{ staff.name }}</span>
+                <span class="sh-role">{{ staff.role || 'Staff' }}</span>
+              </div>
+              <span class="sh-count" *ngIf="getColumnAppointments(staff.id).length > 0">
+                {{ getColumnAppointments(staff.id).length }}
+              </span>
+            </div>
+            <div class="sdv-sh-cell sdv-sh-add" [style.width.px]="STAFF_COL_WIDTH">
+              <button class="sh-add-btn" (click)="addStaff.emit()" title="Add staff column" aria-label="Add staff">+</button>
+              <span class="sh-add-label">Add Staff</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="dv-body" #dvBodyRef>
-        <div class="dv-time-col">
-          <div *ngFor="let hour of hours" class="dv-time-row">
-            <span class="dv-time-label">{{ formatHourFn(hour) }}</span>
+      <!-- Body: time column + scrollable staff grid -->
+      <div class="sdv-body" #sdvBodyRef>
+        <div class="sdv-time-col" [style.width.px]="TIME_COL_WIDTH" #sdvTimeColRef>
+          <div class="sdv-time-col-inner" [style.height.px]="totalGridHeight">
+            <div *ngFor="let hour of hours" class="sdv-time-row" [style.height.px]="HOUR_HEIGHT_PX">
+              <span class="sdv-time-label">{{ formatHourFn(hour) }}</span>
+            </div>
           </div>
         </div>
 
-        <div class="dv-grid" #dvGridRef>
-          <div class="dv-day-col" [class.today]="isTodayFn(currentDate)">
-            <div
-              *ngFor="let hour of hours; let hi = index"
-              class="dv-hour-slot"
-              [class.business-hours]="hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END"
-              [class.dv-hour-alt]="hi % 2 === 1"
-              [class.dv-slot-valid]="isValidDropTarget(hour)"
-              (click)="onSlotClick(hour)"
-              [attr.aria-label]="'Time slot: ' + formatHourFn(hour)"
-            >
-              <div class="dv-hour-line"></div>
-              <div class="dv-half-line"></div>
+        <div class="sdv-grid-wrapper" #sdvGridWrapperRef>
+          <div class="sdv-grid" [style.width.px]="gridInnerWidth" [style.height.px]="totalGridHeight">
+            <ng-container *ngFor="let staff of _staffList; let si = index">
+              <div class="sdv-staff-col" [style.width.px]="STAFF_COL_WIDTH" [style.left.px]="si * STAFF_COL_WIDTH">
+                <div
+                  *ngFor="let hour of hours; let hi = index"
+                  class="sdv-hour-slot"
+                  [class.business-hours]="hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END"
+                  [class.sdv-alt]="hi % 2 === 1"
+                  [class.sdv-valid]="isValidDropTarget()"
+                  (click)="onSlotClick(staff.id, hour)"
+                  [attr.aria-label]="staff.name + ' ' + formatHourFn(hour)"
+                >
+                  <div class="sdv-hour-line"></div>
+                  <div class="sdv-half-line"></div>
+                </div>
+
+                <div class="sdv-appts-layer">
+                  <ng-container *ngFor="let apt of getColumnAppointments(staff.id); trackBy: trackById">
+                    <app-appointment-card
+                      [data]="apt"
+                      [top]="apt.top"
+                      [height]="apt.height"
+                      [dragging]="dragEngine.stateService.targetAppointmentId === apt.id && dragEngine.stateService.isDragging"
+                      (cardClick)="onAppointmentClick(apt.id)"
+                      (dragStart)="onCardDragStart($event)"
+                      (resizeStartEvent)="onCardResizeStart($event)"
+                    ></app-appointment-card>
+                  </ng-container>
+                </div>
+              </div>
+            </ng-container>
+
+            <!-- Add Staff column (empty grid area) -->
+            <div class="sdv-staff-col sdv-col-add" [style.width.px]="STAFF_COL_WIDTH" [style.left.px]="_staffList.length * STAFF_COL_WIDTH">
+              <div *ngFor="let hour of hours" class="sdv-hour-slot sdv-add-slot" (click)="addStaff.emit()">
+                <div class="sdv-hour-line"></div>
+              </div>
             </div>
 
-            <div class="dv-appointments-layer">
-              <ng-container *ngFor="let apt of appointmentCards; trackBy: trackById">
-                <app-appointment-card
-                  [data]="apt"
-                  [top]="apt.top"
-                  [height]="apt.height"
-                  [dragging]="dragEngine.stateService.targetAppointmentId === apt.id && dragEngine.stateService.isDragging"
-                  (cardClick)="onAppointmentClick($event)"
-                  (dragStart)="onCardDragStart($event)"
-                  (resizeStartEvent)="onCardResizeStart($event)"
-                ></app-appointment-card>
-              </ng-container>
-            </div>
-
-            <div class="dv-current-time" *ngIf="isTodayFn(currentDate)" [style.top.px]="getCurrentTimePosition()">
-              <span class="dv-now-dot" aria-label="Current time indicator"></span>
-              <span class="dv-now-line"></span>
+            <!-- Current time line across all staff columns -->
+            <div class="sdv-now-line" *ngIf="isTodayFn(currentDate)" [style.top.px]="currentTimeTop">
+              <span class="sdv-now-dot"></span>
+              <span class="sdv-now-bar"></span>
             </div>
           </div>
         </div>
@@ -85,8 +120,7 @@ import { getDurationMinutes } from './calendar.utils';
         [style.height.px]="visual.ghost.height || 60"
         [style.background]="visual.ghost.color + '20'"
         [style.border-left-color]="visual.ghost.color"
-        role="presentation"
-        aria-hidden="true"
+        role="presentation" aria-hidden="true"
       >
         <strong>{{ visual.ghost.title }}</strong>
         <span>{{ visual.ghost.durationMinutes }}m</span>
@@ -94,45 +128,79 @@ import { getDurationMinutes } from './calendar.utils';
     </div>
   `,
   styles: [`
-    .day-view { display: flex; flex-direction: column; height: 100%; position: relative; }
-    .dv-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 20px; border-bottom: 1px solid var(--border, #e5e7eb);
-      background: #fff; position: sticky; top: 0; z-index: 2;
+    .sdv-root { display: flex; flex-direction: column; height: 100%; position: relative; }
+
+    /* Header row */
+    .sdv-header-row { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--border, #e5e7eb); background: #fff; z-index: 3; position: sticky; top: 0; }
+    .sdv-time-corner { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-right: 1px solid var(--border, #e5e7eb); flex-shrink: 0; }
+    .sdv-date-label { font-size: 11px; font-weight: 600; color: var(--muted, #6b7280); text-transform: uppercase; }
+    .sdv-date-num { font-size: 18px; font-weight: 800; color: var(--text, #111); }
+    .sdv-date-num.today { background: var(--black, #0b0b0b); color: #fff; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+    .sdv-staff-header { overflow: hidden; flex: 1; }
+    .sdv-staff-header-inner { display: flex; }
+    .sdv-sh-cell {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+      border-right: 1px solid var(--border, #e5e7eb); flex-shrink: 0;
+      background: #fafbfc; position: relative;
     }
-    .dv-header-info { display: flex; align-items: center; gap: 12px; }
-    .dv-day-name { font-size: 14px; color: var(--muted, #6b7280); font-weight: 500; }
-    .dv-day-num { font-size: 28px; font-weight: 800; }
-    .dv-day-num.today-num {
-      background: var(--black, #0b0b0b); color: #fff; width: 40px; height: 40px;
-      border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    .sdv-sh-cell:last-child { border-right: none; }
+    .sh-badge {
+      width: 18px; height: 18px; border-radius: 4px; background: var(--soft, #e5e7eb);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--muted, #6b7280); flex-shrink: 0;
     }
-    .dv-day-month { font-size: 14px; color: var(--muted, #6b7280); }
-    .dv-count { font-size: 12px; font-weight: 600; color: var(--muted, #6b7280); background: var(--soft, #f7f7f7); padding: 4px 10px; border-radius: 12px; }
-    .dv-bh { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted, #6b7280); }
-    .dv-bh-dot { width: 6px; height: 6px; background: #50C878; border-radius: 50%; }
-    .dv-body { display: flex; flex: 1; overflow-y: auto; position: relative; }
-    .dv-time-col { width: 70px; min-width: 70px; border-right: 1px solid var(--border, #e5e7eb); flex-shrink: 0; }
-    .dv-time-row { height: 60px; display: flex; align-items: flex-start; justify-content: center; padding-top: 2px; }
-    .dv-time-label { font-size: 11px; font-weight: 500; color: var(--muted, #6b7280); }
-    .dv-grid { flex: 1; position: relative; }
-    .dv-day-col { position: relative; }
-    .dv-day-col.today { background: #f0f7ff; }
-    .dv-hour-slot { height: 60px; position: relative; cursor: pointer; }
-    .dv-hour-slot:hover { background: rgba(0,0,0,0.02); }
-    .dv-hour-slot.dv-hour-alt { background: rgba(0,0,0,0.01); }
-    .dv-slot-valid { background: rgba(99,102,241,0.06); }
-    .dv-hour-line { position: absolute; top: 0; left: 0; right: 0; border-top: 1px solid var(--border, #e5e7eb); }
-    .dv-half-line { position: absolute; top: 30px; left: 0; right: 0; border-top: 1px dashed var(--border, #e5e7eb); opacity: 0.5; }
-    .dv-appointments-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
-    .dv-appointments-layer app-appointment-card { pointer-events: auto; }
-    .dv-current-time { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
-    .dv-now-dot {
-      position: absolute; left: -5px; top: -5px; width: 10px; height: 10px;
-      background: #e53935; border-radius: 50%; z-index: 1;
-      box-shadow: 0 0 0 2px rgba(255,255,255,0.8);
+    .sh-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
-    .dv-now-line { position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid #e53935; }
+    .sh-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    .sh-name { font-size: 12px; font-weight: 700; color: var(--text, #111); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-role { font-size: 10px; color: var(--muted, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-count { font-size: 10px; font-weight: 700; color: var(--muted, #6b7280); background: var(--soft, #f7f7f7); padding: 2px 7px; border-radius: 999px; flex-shrink: 0; }
+    .sdv-sh-add { justify-content: center; gap: 4px; background: transparent; border-right: none; }
+    .sh-add-btn {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px dashed var(--border, #d1d5db);
+      background: transparent; color: var(--muted, #6b7280); font-size: 16px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .sh-add-btn:hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+    .sh-add-label { font-size: 10px; color: var(--muted, #9ca3af); }
+
+    /* Body */
+    .sdv-body { flex: 1; display: flex; overflow: hidden; position: relative; }
+    .sdv-time-col { flex-shrink: 0; border-right: 1px solid var(--border, #e5e7eb); background: #fff; overflow: hidden; position: relative; z-index: 1; }
+    .sdv-time-col-inner { }
+    .sdv-time-row { display: flex; align-items: flex-start; justify-content: center; padding-top: 2px; }
+    .sdv-time-label { font-size: 11px; font-weight: 500; color: var(--muted, #6b7280); }
+
+    /* Grid */
+    .sdv-grid-wrapper { flex: 1; overflow: auto; position: relative; }
+    .sdv-grid { position: relative; }
+    .sdv-staff-col { position: absolute; top: 0; border-right: 1px solid var(--border, #e5e7eb); }
+    .sdv-staff-col:last-child { border-right: none; }
+    .sdv-col-add { border-right: none; }
+    .sdv-add-slot { cursor: pointer; }
+    .sdv-add-slot:hover { background: rgba(99,102,241,0.04); }
+    .sdv-hour-slot { position: relative; cursor: pointer; }
+    .sdv-hour-slot:hover { background: rgba(0,0,0,0.015); }
+    .sdv-alt { background: rgba(0,0,0,0.008); }
+    .sdv-valid { background: rgba(99,102,241,0.05); }
+    .sdv-hour-line { position: absolute; top: 0; left: 0; right: 0; border-top: 1px solid var(--border, #e5e7eb); }
+    .sdv-half-line { position: absolute; top: 30px; left: 0; right: 0; border-top: 1px dashed var(--border, #e5e7eb); opacity: 0.4; }
+
+    /* Appointments layer */
+    .sdv-appts-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+    .sdv-appts-layer app-appointment-card { pointer-events: auto; }
+
+    /* Current time line */
+    .sdv-now-line { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+    .sdv-now-dot { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; background: #e53935; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.8); z-index: 1; }
+    .sdv-now-bar { position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid #e53935; }
+
+    /* Drag ghost */
     .drag-ghost {
       position: fixed; pointer-events: none; z-index: 9999;
       border-radius: 8px; border-left: 3px solid;
@@ -145,37 +213,108 @@ import { getDurationMinutes } from './calendar.utils';
     }
     .drag-ghost strong { font-size: 11px; font-weight: 700; color: #0b0b0b; overflow: hidden; text-overflow: ellipsis; }
     .drag-ghost span { font-size: 10px; color: #374151; }
+
+    @media (max-width: 1024px) {
+      .sdv-sh-cell { padding: 6px 8px; gap: 6px; }
+      .sh-avatar { width: 24px; height: 24px; font-size: 9px; }
+      .sh-name { font-size: 11px; }
+      .sh-role { display: none; }
+      .sdv-time-corner { padding: 6px 8px; }
+    }
+    @media (max-width: 768px) {
+      .sdv-header-row { display: none; }
+      .sdv-time-col { display: none; }
+      .sdv-grid-wrapper { overflow-y: auto; }
+      .sdv-staff-col { position: relative; left: auto !important; width: 100% !important; border-right: none; border-bottom: 2px solid var(--border, #e5e7eb); }
+      .sdv-grid { height: auto !important; }
+      .sdv-now-line { display: none; }
+    }
   `]
 })
-export class CalendarDayViewComponent implements OnInit, OnDestroy {
+export class CalendarDayViewComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() currentDate: Date = new Date();
   @Input() appointments: CalendarBooking[] = [];
   @Input() staffColorMap: Record<string, string> = {};
+  @Input() set staffList(val: SidebarStaff[] | null) {
+    this._staffList = (val || []).filter(s => s.active);
+  }
   @Output() appointmentClick = new EventEmitter<string>();
-  @Output() slotClick = new EventEmitter<{ date: Date; hour: number }>();
+  @Output() slotClick = new EventEmitter<{ date: Date; hour: number; staffId: string }>();
+  @Output() addStaff = new EventEmitter<void>();
 
-  @ViewChild('dvBodyRef') bodyRef?: ElementRef<HTMLElement>;
-  @ViewChild('dvGridRef') gridRef?: ElementRef<HTMLElement>;
+  @ViewChild('sdvBodyRef') bodyRef?: ElementRef<HTMLElement>;
+  @ViewChild('sdvGridWrapperRef') gridWrapperRef?: ElementRef<HTMLElement>;
+  @ViewChild('sdvTimeColRef') timeColRef?: ElementRef<HTMLElement>;
+  @ViewChild('staffHeaderRef') staffHeaderRef?: ElementRef<HTMLElement>;
 
   protected dragEngine = inject(DragEngineService);
   protected visual = inject(DragVisualService);
+  private ngZone = inject(NgZone);
 
-  BUSINESS_HOURS_START = BUSINESS_HOURS_START;
-  BUSINESS_HOURS_END = BUSINESS_HOURS_END;
+  readonly BUSINESS_HOURS_START = BUSINESS_HOURS_START;
+  readonly BUSINESS_HOURS_END = BUSINESS_HOURS_END;
+  readonly HOUR_HEIGHT_PX = HOUR_HEIGHT_PX;
+  readonly STAFF_COL_WIDTH = STAFF_COL_WIDTH;
+  readonly TIME_COL_WIDTH = TIME_COL_WIDTH;
   hours = getHoursArray(0, 24);
 
+  _staffList: SidebarStaff[] = [];
+  private scrollSubs: Subscription[] = [];
+
   private unregisterAdapter?: () => void;
+
+  get totalGridHeight(): number {
+    return this.hours.length * HOUR_HEIGHT_PX;
+  }
+
+  get gridInnerWidth(): number {
+    return (this._staffList.length + 1) * STAFF_COL_WIDTH;
+  }
+
+  get headerInnerWidth(): number {
+    return (this._staffList.length + 1) * STAFF_COL_WIDTH;
+  }
+
+  get currentTimeTop(): number {
+    const now = new Date();
+    return (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_HEIGHT_PX;
+  }
 
   ngOnInit(): void {
     this.dragEngine.registerAdapter(this.createAdapter());
   }
 
-  ngOnDestroy(): void {
-    this.dragEngine.unregisterAdapter();
+  ngAfterViewInit(): void {
+    this.setupScrollSync();
   }
 
-  get appointmentCards(): (AppointmentCardData & { top: number; height: number })[] {
-    return this.appointments.map(b => buildAppointmentCardData(b, this.staffColorMap));
+  ngOnDestroy(): void {
+    this.dragEngine.unregisterAdapter();
+    this.scrollSubs.forEach(s => s.unsubscribe());
+    this.scrollSubs = [];
+  }
+
+  private setupScrollSync(): void {
+    const grid = this.gridWrapperRef?.nativeElement;
+    const timeCol = this.timeColRef?.nativeElement;
+    const header = this.staffHeaderRef?.nativeElement;
+
+    if (!grid || !timeCol || !header) return;
+
+    this.ngZone.runOutsideAngular(() => {
+      const gridScroll$ = fromEvent(grid, 'scroll');
+      this.scrollSubs.push(
+        gridScroll$.subscribe(() => {
+          timeCol.scrollTop = grid.scrollTop;
+          header.scrollLeft = grid.scrollLeft;
+        })
+      );
+    });
+  }
+
+  getColumnAppointments(staffId: string): (AppointmentCardData & { top: number; height: number })[] {
+    const staffAppts = this.appointments.filter(b => b.staffId === staffId || b.staff?.id === staffId);
+    return staffAppts.map(b => buildAppointmentCardData(b, this.staffColorMap));
   }
 
   trackById(_index: number, item: AppointmentCardData): string { return item.id; }
@@ -184,19 +323,14 @@ export class CalendarDayViewComponent implements OnInit, OnDestroy {
 
   formatHourFn(hour: number): string { return formatHour(hour); }
 
-  getCurrentTimePosition(): number {
-    const now = new Date();
-    return (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_HEIGHT_PX;
-  }
-
   onAppointmentClick(id: string): void {
     if (this.dragEngine.stateService.isActive) return;
     this.appointmentClick.emit(id);
   }
 
-  onSlotClick(hour: number): void {
+  onSlotClick(staffId: string, hour: number): void {
     if (this.dragEngine.stateService.isActive) return;
-    this.slotClick.emit({ date: this.currentDate, hour });
+    this.slotClick.emit({ date: this.currentDate, hour, staffId });
   }
 
   onCardDragStart(event: { appointmentId: string; clientX: number; clientY: number }): void {
@@ -231,13 +365,13 @@ export class CalendarDayViewComponent implements OnInit, OnDestroy {
     this.dragEngine.startResize(target, event.edge, event.clientX, event.clientY);
   }
 
-  isValidDropTarget(hour: number): boolean {
+  isValidDropTarget(): boolean {
     return this.dragEngine.stateService.isActive;
   }
 
   private createAdapter(): ViewCoordinateAdapter {
     return {
-      getContainer: () => this.gridRef?.nativeElement || document.createElement('div'),
+      getContainer: () => this.gridWrapperRef?.nativeElement || document.createElement('div'),
       yToTime: (clientY: number, containerEl: HTMLElement) => {
         const rect = containerEl.getBoundingClientRect();
         const relativeY = clientY - rect.top + containerEl.scrollTop;
@@ -247,15 +381,21 @@ export class CalendarDayViewComponent implements OnInit, OnDestroy {
         date.setHours(hour, minutes % 60, 0, 0);
         return { date, minutes, hour };
       },
-      xToStaffId: () => '',
+      xToStaffId: (clientX: number) => {
+        const containerEl = this.gridWrapperRef?.nativeElement;
+        if (!containerEl) return '';
+        const rect = containerEl.getBoundingClientRect();
+        const relativeX = clientX - rect.left + containerEl.scrollLeft;
+        const colIndex = Math.floor(relativeX / STAFF_COL_WIDTH);
+        const staff = this._staffList[colIndex];
+        return staff?.id ?? '';
+      },
       getAppointmentElement: (id: string) => {
         const el = this.bodyRef?.nativeElement?.querySelector(`[data-appointment-id="${id}"]`);
         return el as HTMLElement | null;
       },
       getStaffColor: (staffId: string) => this.staffColorMap[staffId] || '#6366f1',
-      onAppointmentUpdated: (_id, _newStart, _newEnd, _newStaffId) => {
-        // Will be wired to API in future sprint
-      },
+      onAppointmentUpdated: (_id, _newStart, _newEnd, _newStaffId) => {},
     };
   }
 }

@@ -17,36 +17,72 @@ function section(title: string, description: string, icon: string, parentKey: st
   };
 }
 
+const so = () => import('./features/staff/pages/staff-overview.component').then(m => m.StaffOverviewComponent);
+const sp = () => import('./features/staff/pages/staff-profile.component').then(m => m.StaffProfileComponent);
+const sc = () => import('./features/staff/pages/staff-calendar.component').then(m => m.StaffCalendarComponent);
+const sapt = () => import('./features/staff/pages/staff-appointments.component').then(m => m.StaffAppointmentsComponent);
+const savail = () => import('./features/staff/pages/staff-availability.component').then(m => m.StaffAvailabilityComponent);
+const swh = () => import('./features/staff/pages/staff-working-hours.component').then(m => m.StaffWorkingHoursComponent);
+const satt = () => import('./features/staff/pages/staff-attendance.component').then(m => m.StaffAttendanceComponent);
+const sleave = () => import('./features/staff/pages/staff-leaves.component').then(m => m.StaffLeavesComponent);
+const ssvc = () => import('./features/staff/pages/staff-services.component').then(m => m.StaffServicesComponent);
+const sskill = () => import('./features/staff/pages/staff-skills.component').then(m => m.StaffSkillsComponent);
+const sperf = () => import('./features/staff/pages/staff-performance.component').then(m => m.StaffPerformanceComponent);
+const starg = () => import('./features/staff/pages/staff-targets.component').then(m => m.StaffTargetsComponent);
+const scomm = () => import('./features/staff/pages/staff-commission.component').then(m => m.StaffCommissionComponent);
+const spay = () => import('./features/staff/pages/staff-payroll.component').then(m => m.StaffPayrollComponent);
+const stip = () => import('./features/staff/pages/staff-tips.component').then(m => m.StaffTipsComponent);
+const sdoc = () => import('./features/staff/pages/staff-documents.component').then(m => m.StaffDocumentsComponent);
+const straining = () => import('./features/staff/pages/staff-training.component').then(m => m.StaffTrainingComponent);
+const shist = () => import('./features/staff/pages/staff-history.component').then(m => m.StaffHistoryComponent);
+const sai = () => import('./features/staff/pages/staff-ai.component').then(m => m.StaffAiComponent);
+const sset = () => import('./features/staff/pages/staff-settings.component').then(m => m.StaffSettingsComponent);
+const sla = () => import('./features/staff/pages/staff-leave-approval.component').then(m => m.StaffLeaveApprovalComponent);
+const spw = () => import('./features/staff/pages/staff-payroll-workspace.component').then(m => m.StaffPayrollWorkspaceComponent);
+
+const io = () => import('./features/inventory/pages/inventory-overview.component').then(m => m.InventoryOverviewComponent);
+const itx = () => import('./features/inventory/pages/inventory-transactions.component').then(m => m.InventoryTransactionsComponent);
+const isl = () => import('./features/inventory/pages/inventory-stock-ledger.component').then(m => m.InventoryStockLedgerComponent);
+const ian = () => import('./features/inventory/pages/inventory-analytics.component').then(m => m.InventoryAnalyticsComponent);
+const iwh = () => import('./features/inventory/pages/inventory-warehouses.component').then(m => m.InventoryWarehousesComponent);
+const isup = () => import('./features/inventory/pages/inventory-suppliers.component').then(m => m.InventorySuppliersComponent);
+const ipo = () => import('./features/inventory/pages/inventory-purchase-orders.component').then(m => m.InventoryPurchaseOrdersComponent);
+const ibat = () => import('./features/inventory/pages/inventory-batches.component').then(m => m.InventoryBatchesComponent);
+const iscnt = () => import('./features/inventory/pages/inventory-stock-counts.component').then(m => m.InventoryStockCountsComponent);
+const iset = () => import('./features/inventory/pages/inventory-settings.component').then(m => m.InventorySettingsComponent);
+const ihst = () => import('./features/inventory/pages/inventory-history.component').then(m => m.InventoryHistoryComponent);
+const iai = () => import('./features/inventory/pages/inventory-ai.component').then(m => m.InventoryAiComponent);
+
 const appModuleRoutes: Routes = [
   { path: 'home', loadComponent: () => import('./features/module-shell.component').then(m => m.ModuleShellComponent), data: { title: 'home' } },
   { path: 'clients', loadComponent: () => import('./features/clients/clients.component').then(m => m.ClientsComponent) },
   { path: 'clients/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Client', description: 'Add a new client to the salon', icon: '👤', todo: 'Replace with enterprise-page-header and full client creation form.', parentRoute: '/app/clients', parentLabel: 'Clients' } },
-  {
+   {
     path: 'clients/:id',
     loadComponent: () => import('./features/clients/client-detail.component').then(m => m.ClientDetailComponent),
     children: [
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
-      { path: 'overview', loadComponent: fp, data: section('Client Overview', '360° summary of the client profile and recent activity.', '📋', 'clients') },
-      { path: 'profile', loadComponent: fp, data: section('Client Profile', 'Personal details, contact and preferences.', '👤', 'clients') },
-      { path: 'appointments', loadComponent: fp, data: section('Appointments', 'Past and upcoming appointments for this client.', '📅', 'clients') },
-      { path: 'services', loadComponent: fp, data: section('Services', 'Services this client has received.', '💇', 'clients') },
-      { path: 'products', loadComponent: fp, data: section('Products', 'Products purchased by this client.', '🛍️', 'clients') },
-      { path: 'payments', loadComponent: fp, data: section('Payments', 'Payment history for this client.', '💰', 'clients') },
-      { path: 'invoices', loadComponent: fp, data: section('Invoices', 'Invoices raised for this client.', '🧾', 'clients') },
-      { path: 'memberships', loadComponent: fp, data: section('Memberships', 'Active and expired memberships.', '🪪', 'clients') },
-      { path: 'packages', loadComponent: fp, data: section('Packages', 'Purchased service packages.', '📦', 'clients') },
-      { path: 'loyalty', loadComponent: fp, data: section('Loyalty', 'Loyalty points and rewards.', '⭐', 'clients') },
-      { path: 'wallet', loadComponent: fp, data: section('Wallet', 'Wallet balance and transactions.', '👛', 'clients') },
-      { path: 'photos', loadComponent: fp, data: section('Photos', 'Client photos and galleries.', '🖼️', 'clients') },
-      { path: 'files', loadComponent: fp, data: section('Files', 'Documents attached to this client.', '📁', 'clients') },
-      { path: 'forms', loadComponent: fp, data: section('Forms', 'Intake and consent forms.', '📋', 'clients') },
-      { path: 'preferences', loadComponent: fp, data: section('Preferences', 'Communication and marketing preferences.', '⚙️', 'clients') },
-      { path: 'allergies', loadComponent: fp, data: section('Allergies', 'Recorded allergies and alerts.', '⚠️', 'clients') },
-      { path: 'feedback', loadComponent: fp, data: section('Feedback', 'Client feedback and ratings.', '💬', 'clients') },
-      { path: 'communications', loadComponent: fp, data: section('Communications', 'SMS, email and WhatsApp history.', '✉️', 'clients') },
-      { path: 'history', loadComponent: fp, data: section('History', 'Full activity timeline.', '🕘', 'clients') },
-      { path: 'ai', loadComponent: fp, data: section('Client AI', 'AI insights for this client.', '✨', 'clients') },
-      { path: 'settings', loadComponent: fp, data: section('Client Settings', 'Client-level configuration.', '🔧', 'clients') },
+      { path: 'overview', loadComponent: () => import('./features/clients/client-overview.component').then(m => m.ClientOverviewComponent) },
+      { path: 'profile', loadComponent: () => import('./features/clients/client-profile.component').then(m => m.ClientProfileComponent) },
+      { path: 'appointments', loadComponent: () => import('./features/clients/client-appointments.component').then(m => m.ClientAppointmentsComponent) },
+      { path: 'services', loadComponent: () => import('./features/clients/client-services.component').then(m => m.ClientServicesComponent) },
+      { path: 'products', loadComponent: () => import('./features/clients/client-products.component').then(m => m.ClientProductsComponent) },
+      { path: 'payments', loadComponent: () => import('./features/clients/client-payments.component').then(m => m.ClientPaymentsComponent) },
+      { path: 'invoices', loadComponent: () => import('./features/clients/client-invoices.component').then(m => m.ClientInvoicesComponent) },
+      { path: 'memberships', loadComponent: () => import('./features/clients/client-memberships.component').then(m => m.ClientMembershipsComponent) },
+      { path: 'packages', loadComponent: () => import('./features/clients/client-packages.component').then(m => m.ClientPackagesComponent) },
+      { path: 'loyalty', loadComponent: () => import('./features/clients/client-loyalty.component').then(m => m.ClientLoyaltyComponent) },
+      { path: 'wallet', loadComponent: () => import('./features/clients/client-wallet.component').then(m => m.ClientWalletComponent) },
+      { path: 'photos', loadComponent: () => import('./features/clients/client-photos.component').then(m => m.ClientPhotosComponent) },
+      { path: 'files', loadComponent: () => import('./features/clients/client-files.component').then(m => m.ClientFilesComponent) },
+      { path: 'forms', loadComponent: () => import('./features/clients/client-forms.component').then(m => m.ClientFormsComponent) },
+      { path: 'preferences', loadComponent: () => import('./features/clients/client-preferences.component').then(m => m.ClientPreferencesComponent) },
+      { path: 'allergies', loadComponent: () => import('./features/clients/client-allergies.component').then(m => m.ClientAllergiesComponent) },
+      { path: 'feedback', loadComponent: () => import('./features/clients/client-feedback.component').then(m => m.ClientFeedbackComponent) },
+      { path: 'communications', loadComponent: () => import('./features/clients/client-communications.component').then(m => m.ClientCommunicationsComponent) },
+      { path: 'history', loadComponent: () => import('./features/clients/client-history.component').then(m => m.ClientHistoryComponent) },
+      { path: 'ai', loadComponent: () => import('./features/clients/client-ai.component').then(m => m.ClientAiComponent) },
+      { path: 'settings', loadComponent: () => import('./features/clients/client-settings.component').then(m => m.ClientSettingsComponent) },
     ]
   },
   { path: 'ai-command-center', loadComponent: () => import('./features/ai-command-center/ai-command-center.component').then(m => m.AiCommandCenterComponent) },
@@ -61,37 +97,63 @@ const appModuleRoutes: Routes = [
     loadComponent: () => import('./features/staff/staff-detail.component').then(m => m.StaffDetailComponent),
     children: [
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
-      { path: 'overview', loadComponent: fp, data: section('Staff Overview', 'Summary of performance, schedule and status.', '📋', 'staff') },
-      { path: 'profile', loadComponent: fp, data: section('Staff Profile', 'Personal and contact details.', '👤', 'staff') },
-      { path: 'calendar', loadComponent: fp, data: section('Staff Calendar', 'Personal working calendar.', '📅', 'staff') },
-      { path: 'appointments', loadComponent: fp, data: section('Appointments', 'Appointments assigned to this staff member.', '🗓️', 'staff') },
-      { path: 'availability', loadComponent: fp, data: section('Availability', 'Available time slots.', '🟢', 'staff') },
-      { path: 'working-hours', loadComponent: fp, data: section('Working Hours', 'Scheduled working hours.', '🕒', 'staff') },
-      { path: 'attendance', loadComponent: fp, data: section('Attendance', 'Attendance records.', '📍', 'staff') },
-      { path: 'leaves', loadComponent: fp, data: section('Leaves', 'Leave requests and balances (integration ready).', '🏖️', 'staff') },
-      { path: 'services', loadComponent: fp, data: section('Services', 'Services this staff member provides.', '💇', 'staff') },
-      { path: 'skills', loadComponent: fp, data: section('Skills', 'Skills and specialties.', '🎯', 'staff') },
-      { path: 'performance', loadComponent: fp, data: section('Performance', 'Performance metrics and KPIs.', '📈', 'staff') },
-      { path: 'targets', loadComponent: fp, data: section('Targets', 'Assigned targets.', '🎯', 'staff') },
-      { path: 'commission', loadComponent: fp, data: section('Commission', 'Commission calculations.', '💸', 'staff') },
-      { path: 'payroll', loadComponent: fp, data: section('Payroll', 'Payroll records.', '🧮', 'staff') },
-      { path: 'tips', loadComponent: fp, data: section('Tips', 'Tips received.', '💡', 'staff') },
-      { path: 'documents', loadComponent: fp, data: section('Documents', 'Staff documents and contracts.', '📄', 'staff') },
-      { path: 'training', loadComponent: fp, data: section('Training', 'Training and certifications.', '🎓', 'staff') },
-      { path: 'history', loadComponent: fp, data: section('History', 'Full activity timeline.', '🕘', 'staff') },
-      { path: 'ai', loadComponent: fp, data: section('Staff AI', 'AI insights for this staff member.', '✨', 'staff') },
-      { path: 'settings', loadComponent: fp, data: section('Staff Settings', 'Staff-level configuration.', '🔧', 'staff') },
+      { path: 'overview', loadComponent: so },
+      { path: 'profile', loadComponent: sp },
+      { path: 'calendar', loadComponent: sc },
+      { path: 'appointments', loadComponent: sapt },
+      { path: 'availability', loadComponent: savail },
+      { path: 'working-hours', loadComponent: swh },
+      { path: 'attendance', loadComponent: satt },
+      { path: 'leaves', loadComponent: sleave },
+      { path: 'services', loadComponent: ssvc },
+      { path: 'skills', loadComponent: sskill },
+      { path: 'performance', loadComponent: sperf },
+      { path: 'targets', loadComponent: starg },
+      { path: 'commission', loadComponent: scomm },
+      { path: 'payroll', loadComponent: spay },
+      { path: 'tips', loadComponent: stip },
+      { path: 'documents', loadComponent: sdoc },
+      { path: 'training', loadComponent: straining },
+      { path: 'history', loadComponent: shist },
+      { path: 'ai', loadComponent: sai },
+      { path: 'settings', loadComponent: sset },
     ]
   },
+  { path: 'staff/attendance', redirectTo: 'attendance', pathMatch: 'full' },
+  { path: 'staff/shifts', redirectTo: 'shifts', pathMatch: 'full' },
+  { path: 'staff/leaves', loadComponent: sla },
+  { path: 'staff/payroll', loadComponent: spw },
+  { path: 'staff/commissions', redirectTo: 'commissions', pathMatch: 'full' },
   { path: 'services', loadComponent: () => import('./features/services/services.component').then(m => m.ServicesComponent) },
   { path: 'pos', loadComponent: () => import('./features/pos/pos.component').then(m => m.PosComponent) },
   { path: 'pos/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New POS Sale', description: 'Create a new point of sale transaction', icon: '🛒', todo: 'Replace with enterprise-page-header and full POS sale form.', parentRoute: '/app/pos', parentLabel: 'POS' } },
   { path: 'inventory', loadComponent: () => import('./features/inventory/inventory.component').then(m => m.InventoryComponent) },
-  { path: 'inventory/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Inventory Item', description: 'Add a new product to inventory', icon: '📦', todo: 'Replace with enterprise-page-header and full inventory creation form.', parentRoute: '/app/inventory', parentLabel: 'Inventory' } },
-  { path: 'inventory/:id', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Inventory Detail', description: 'View and edit inventory item', icon: '📦', todo: 'Replace with enterprise-page-header and full item detail view.', parentRoute: '/app/inventory', parentLabel: 'Inventory' } },
+  { path: 'inventory/new', loadComponent: () => import('./features/inventory/inventory-form.component').then(m => m.InventoryFormComponent) },
+  {
+    path: 'inventory/:id',
+    loadComponent: () => import('./features/inventory/inventory-detail.component').then(m => m.InventoryDetailComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', loadComponent: io },
+      { path: 'transactions', loadComponent: itx },
+      { path: 'stock-ledger', loadComponent: isl },
+      { path: 'analytics', loadComponent: ian },
+      { path: 'warehouses', loadComponent: iwh },
+      { path: 'suppliers', loadComponent: isup },
+      { path: 'purchase-orders', loadComponent: ipo },
+      { path: 'batches', loadComponent: ibat },
+      { path: 'stock-counts', loadComponent: iscnt },
+      { path: 'settings', loadComponent: iset },
+      { path: 'history', loadComponent: ihst },
+      { path: 'ai', loadComponent: iai },
+    ]
+  },
   { path: 'reports', loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent) },
   { path: 'reports/:type', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Report Detail', description: 'View detailed report', icon: '📊', todo: 'Replace with enterprise-page-header and full report view.', parentRoute: '/app/reports', parentLabel: 'Reports' } },
   { path: 'calendar', loadComponent: () => import('./features/calendar/calendar-shell.component').then(m => m.CalendarShellComponent) },
+  { path: 'calendar/settings', loadComponent: () => import('./features/calendar/calendar-settings-page.component').then(m => m.CalendarSettingsPageComponent) },
+  { path: 'calendar/analytics', loadComponent: () => import('./features/calendar/calendar-analytics-page.component').then(m => m.CalendarAnalyticsPageComponent) },
+  { path: 'calendar/conflicts', loadComponent: () => import('./features/calendar/calendar-conflicts-page.component').then(m => m.CalendarConflictsPageComponent) },
   {
     path: 'bookings',
     loadComponent: () => import('./features/bookings/bookings-shell.component').then(m => m.BookingsShellComponent),
@@ -103,23 +165,23 @@ const appModuleRoutes: Routes = [
         loadComponent: () => import('./features/bookings/booking-detail.component').then(m => m.BookingDetailComponent),
         children: [
           { path: '', redirectTo: 'overview', pathMatch: 'full' },
-          { path: 'overview', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'client', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'services', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'staff', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'resources', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'schedule', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'payments', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'invoice', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'notes', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'photos', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'files', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'forms', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'reminders', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'history', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'conflicts', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'ai', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
-          { path: 'settings', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'overview', loadComponent: () => import('./features/bookings/booking-overview.component').then(m => m.BookingOverviewComponent) },
+          { path: 'client', loadComponent: () => import('./features/bookings/booking-client-section.component').then(m => m.BookingClientSectionComponent) },
+          { path: 'services', loadComponent: () => import('./features/bookings/booking-services-section.component').then(m => m.BookingServicesSectionComponent) },
+          { path: 'staff', loadComponent: () => import('./features/bookings/booking-staff-section.component').then(m => m.BookingStaffSectionComponent) },
+          { path: 'resources', loadComponent: () => import('./features/bookings/booking-resources-section.component').then(m => m.BookingResourcesSectionComponent) },
+          { path: 'schedule', loadComponent: () => import('./features/bookings/booking-schedule-section.component').then(m => m.BookingScheduleSectionComponent) },
+          { path: 'payments', loadComponent: () => import('./features/bookings/booking-payments-section.component').then(m => m.BookingPaymentsSectionComponent) },
+          { path: 'invoice', loadComponent: () => import('./features/bookings/booking-invoice-section.component').then(m => m.BookingInvoiceSectionComponent) },
+          { path: 'notes', loadComponent: () => import('./features/bookings/booking-notes-section.component').then(m => m.BookingNotesSectionComponent) },
+          { path: 'photos', loadComponent: () => import('./features/bookings/booking-photos-section.component').then(m => m.BookingPhotosSectionComponent) },
+          { path: 'files', loadComponent: () => import('./features/bookings/booking-files-section.component').then(m => m.BookingFilesSectionComponent) },
+          { path: 'forms', loadComponent: () => import('./features/bookings/booking-forms-section.component').then(m => m.BookingFormsSectionComponent) },
+          { path: 'reminders', loadComponent: () => import('./features/bookings/booking-reminders-section.component').then(m => m.BookingRemindersSectionComponent) },
+          { path: 'history', loadComponent: () => import('./features/bookings/booking-history-section.component').then(m => m.BookingHistorySectionComponent) },
+          { path: 'conflicts', loadComponent: () => import('./features/bookings/booking-conflicts-section.component').then(m => m.BookingConflictsSectionComponent) },
+          { path: 'ai', loadComponent: () => import('./features/bookings/booking-ai-section.component').then(m => m.BookingAiSectionComponent) },
+          { path: 'settings', loadComponent: () => import('./features/bookings/booking-settings-section.component').then(m => m.BookingSettingsSectionComponent) },
         ]
       },
     ]

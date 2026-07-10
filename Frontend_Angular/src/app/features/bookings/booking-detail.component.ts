@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, RouterOutlet } from '@angular/router';
 import { EnterpriseFeaturePageComponent } from '../../shared/components/enterprise-feature-page/enterprise-feature-page.component';
 import { RouteTab } from '../../shared/components/route-tabs/route-tabs.component';
 import { Breadcrumb } from '../../shared/theme/module-theme.config';
+import { BookingDetailStateService } from './booking-detail-state.service';
 
 @Component({
   selector: 'app-booking-detail',
@@ -18,21 +19,33 @@ import { Breadcrumb } from '../../shared/theme/module-theme.config';
       [breadcrumbs]="breadcrumbs"
       backLink="/app/bookings"
       [tabs]="tabs"
-      [basePath]="basePath">
+      [basePath]="basePath"
+      [loading]="state.loading()"
+      [error]="!!state.error()"
+      [errorTitle]="'Failed to load booking'"
+      [errorMessage]="state.error() || ''"
+      [errorActionLabel]="'Go back to bookings'">
     </app-enterprise-feature-page>
-    <router-outlet></router-outlet>
+    <router-outlet *ngIf="!state.loading() && !state.error()"></router-outlet>
   `,
 })
-export class BookingDetailComponent {
+export class BookingDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private stateService = inject(BookingDetailStateService);
+  state = this.stateService;
   bookingId = this.route.snapshot.paramMap.get('id') || '';
 
   get title(): string {
-    return 'Booking #' + this.bookingId;
+    const b = this.state.booking();
+    if (!b) return 'Booking #' + this.bookingId;
+    return b.client?.fullName || 'Booking #' + this.bookingId;
   }
 
   get subtitle(): string {
-    return 'Full booking workspace — overview, client, services, payments and history.';
+    const b = this.state.booking();
+    if (!b) return 'Full booking workspace.';
+    const sd = b.startTime ? new Date(b.startTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+    return `${b.status} · ${sd} · ${b.services?.length || 0} service(s) · ${b.branch?.name || ''}`;
   }
 
   get basePath(): string {
@@ -60,4 +73,10 @@ export class BookingDetailComponent {
     { path: 'ai', label: 'AI', icon: '✨' },
     { path: 'settings', label: 'Settings', icon: '⚙️' },
   ];
+
+  ngOnInit(): void {
+    if (this.bookingId) {
+      this.stateService.load(this.bookingId);
+    }
+  }
 }

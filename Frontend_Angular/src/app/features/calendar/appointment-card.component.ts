@@ -47,7 +47,7 @@ import { getDurationMinutes } from './calendar.utils';
 
       <div class="apt-color-strip" [style.background]="data.staffColor || getStatusColor()" aria-hidden="true"></div>
 
-      <div class="apt-body">
+      <div class="apt-body" [class.apt-compact]="compact">
         <div class="apt-header">
           <span class="apt-service-name">{{ data.serviceName || data.title }}</span>
           <span class="apt-duration">{{ getDuration() }}m</span>
@@ -59,6 +59,13 @@ import { getDurationMinutes } from './calendar.utils';
           </div>
           <span class="apt-client-name">{{ data.clientName }}</span>
           <span class="apt-service-count" *ngIf="data.serviceCount > 1" title="{{ data.serviceCount }} services">+{{ data.serviceCount - 1 }}</span>
+          <span class="apt-source-badge" *ngIf="data.isOnline" title="Online booking">&#127760;</span>
+          <span class="apt-source-badge apt-walkin" *ngIf="data.isWalkIn" title="Walk-in">&#128694;</span>
+        </div>
+
+        <div class="apt-meta-row" *ngIf="!compact && (data.resourceName || data.waitingMinutes > 0)">
+          <span class="apt-resource" *ngIf="data.hasResource" title="Resource: {{ data.resourceName }}">&#128204; {{ data.resourceName }}</span>
+          <span class="apt-waiting" *ngIf="data.isLate" title="Waiting long">&#9201; {{ data.waitingMinutes }}m</span>
         </div>
 
         <div class="apt-footer">
@@ -76,9 +83,11 @@ import { getDurationMinutes } from './calendar.utils';
             <span class="apt-indicator apt-conflict-badge" *ngIf="conflictState?.hasConflict" [title]="conflictState.tooltip" aria-label="Schedule conflict">&#9888;</span>
             <span class="apt-indicator apt-note" *ngIf="data.notes" aria-label="Has notes" title="Has notes">&#128221;</span>
             <span class="apt-indicator apt-package" *ngIf="data.hasPackage" aria-label="Package booking" title="Package">&#128230;</span>
+            <span class="apt-indicator apt-resource-icon" *ngIf="data.hasResource && compact" aria-label="Has resource" title="Resource: {{ data.resourceName }}">&#128204;</span>
             <span class="apt-indicator apt-payment" *ngIf="data.amount > 0" aria-label="Amount: {{ data.amount | currency }}">
               {{ data.amount | currency:'INR':'symbol':'1.0-0' }}
             </span>
+            <span class="apt-indicator apt-pending-payment" *ngIf="data.paymentStatus === 'PENDING' && !compact" title="Payment pending">&#128176;</span>
             <button class="apt-overflow-btn" aria-label="More actions" title="More actions">&#8942;</button>
           </span>
         </div>
@@ -213,6 +222,20 @@ import { getDurationMinutes } from './calendar.utils';
       flex-shrink: 0;
       line-height: 16px;
     }
+    .apt-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--muted, #6b7280);
+      padding: 1px 0;
+    }
+    .apt-resource, .apt-waiting { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .apt-waiting { color: #f59e0b; font-weight: 600; }
+    .apt-source-badge { font-size: 10px; line-height: 1; margin-left: auto; }
+    .apt-walkin { font-size: 11px; }
+    .apt-compact .apt-meta-row, .apt-compact .apt-client-name { display: none; }
+    .apt-pending-payment { color: #f59e0b; }
     .apt-footer {
       display: flex;
       align-items: center;
@@ -302,6 +325,7 @@ export class AppointmentCardComponent {
   @Input() width = 'auto';
   @Input() dragging = false;
   @Input() resizingEdge: 'top' | 'bottom' | null = null;
+  @Input() compact = false;
   @Output() cardClick = new EventEmitter<string>();
   @Output() dragStart = new EventEmitter<{ appointmentId: string; clientX: number; clientY: number }>();
   @Output() resizeStartEvent = new EventEmitter<{ appointmentId: string; edge: 'top' | 'bottom'; clientX: number; clientY: number }>();

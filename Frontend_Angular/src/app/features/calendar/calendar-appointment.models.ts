@@ -38,7 +38,16 @@ export interface AppointmentCardData {
   isVIP: boolean;
   hasPackage: boolean;
   hasMembership: boolean;
+  hasResource: boolean;
+  resourceName: string;
+  source: string;
+  waitingMinutes: number;
+  reminderState: string;
+  paymentStatus: string;
   colorStrip: string;
+  isLate: boolean;
+  isOnline: boolean;
+  isWalkIn: boolean;
 }
 
 export interface AppointmentPaymentView {
@@ -95,6 +104,7 @@ export interface UpdateAppointmentPayload {
 
 export function toAppointmentCardData(booking: CalendarBooking, staffColor: string): AppointmentCardData {
   const service = (booking.services ?? [])[0];
+  const b = booking as any;
   return {
     id: booking.id,
     title: booking.title,
@@ -115,7 +125,16 @@ export function toAppointmentCardData(booking: CalendarBooking, staffColor: stri
     isVIP: (booking.totalAmount ?? 0) >= 200,
     hasPackage: (booking.services ?? []).length > 2,
     hasMembership: false,
+    hasResource: !!(b.resource || b.resourceId),
+    resourceName: b.resource?.name || b.resourceId || '',
+    source: b.source || b.bookingSource || '',
+    waitingMinutes: b.waitingMinutes || 0,
+    reminderState: b.reminderState || '',
+    paymentStatus: b.paymentStatus || '',
     colorStrip: booking.status,
+    isLate: b.status === 'WAITING' && b.waitingMinutes > 15,
+    isOnline: (b.source || b.bookingSource) === 'online',
+    isWalkIn: (b.source || b.bookingSource) === 'walk-in',
   };
 }
 

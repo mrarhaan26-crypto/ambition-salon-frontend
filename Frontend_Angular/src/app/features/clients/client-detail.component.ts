@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, RouterOutlet } from '@angular/router';
 import { EnterpriseFeaturePageComponent } from '../../shared/components/enterprise-feature-page/enterprise-feature-page.component';
 import { RouteTab } from '../../shared/components/route-tabs/route-tabs.component';
 import { Breadcrumb } from '../../shared/theme/module-theme.config';
+import { Client360StateService } from './client-360-state.service';
 
 @Component({
   selector: 'app-client-detail',
@@ -12,8 +13,8 @@ import { Breadcrumb } from '../../shared/theme/module-theme.config';
   template: `
     <app-enterprise-feature-page
       themeKey="clients"
-      [title]="title"
-      [subtitle]="subtitle"
+      [title]="title()"
+      [subtitle]="subtitle()"
       icon="👤"
       [breadcrumbs]="breadcrumbs"
       backLink="/app/clients"
@@ -23,17 +24,25 @@ import { Breadcrumb } from '../../shared/theme/module-theme.config';
     <router-outlet></router-outlet>
   `,
 })
-export class ClientDetailComponent {
+export class ClientDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private state = inject(Client360StateService);
   clientId = this.route.snapshot.paramMap.get('id') || '';
 
-  get title(): string {
-    return 'Client #' + this.clientId;
-  }
+  readonly title = computed(() => {
+    const name = this.state.clientName();
+    return name !== 'Unknown Client' ? name : 'Client #' + this.clientId;
+  });
 
-  get subtitle(): string {
-    return '360° client profile, appointments, payments, loyalty and history.';
-  }
+  readonly subtitle = computed(() => {
+    const c = this.state.client();
+    if (!c) return '360° client profile, appointments, payments, loyalty and history.';
+    const parts: string[] = [];
+    if (c.city) parts.push(c.city);
+    if (c.totalVisits) parts.push(`${c.totalVisits} visits`);
+    if (c.totalSpend) parts.push(`₹${c.totalSpend} lifetime`);
+    return parts.join(' · ') || '360° client profile';
+  });
 
   get basePath(): string {
     return '/app/clients/' + this.clientId;
@@ -64,4 +73,10 @@ export class ClientDetailComponent {
     { path: 'ai', label: 'AI', icon: '✨' },
     { path: 'settings', label: 'Settings', icon: '🔧' },
   ];
+
+  ngOnInit(): void {
+    if (this.clientId) {
+      this.state.load(this.clientId);
+    }
+  }
 }

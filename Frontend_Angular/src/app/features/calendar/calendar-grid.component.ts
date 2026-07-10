@@ -5,6 +5,7 @@ import { CalendarDayViewComponent } from './calendar-day-view.component';
 import { CalendarWeekViewComponent } from './calendar-week-view.component';
 import { CalendarMonthViewComponent } from './calendar-month-view.component';
 import type { CalendarBooking } from './calendar.models';
+import type { SidebarStaff } from './calendar-sidebar.component';
 
 @Component({
   selector: 'app-calendar-grid',
@@ -39,8 +40,10 @@ import type { CalendarBooking } from './calendar.models';
           [currentDate]="currentDate"
           [appointments]="appointments"
           [staffColorMap]="staffColorMap"
+          [staffList]="staffList"
           (appointmentClick)="appointmentClick.emit($event)"
-          (slotClick)="slotClick.emit($event)"
+          (slotClick)="onDaySlotClick($event)"
+          (addStaff)="addStaff.emit()"
         ></app-calendar-day-view>
         <app-calendar-week-view
           *ngIf="view === 'week'"
@@ -58,10 +61,19 @@ import type { CalendarBooking } from './calendar.models';
           (daySelect)="daySelect.emit($event)"
         ></app-calendar-month-view>
       </div>
+
+      <div class="calendar-legend" *ngIf="legendItems.length > 0">
+        <div class="legend-scroll">
+          <div class="legend-item" *ngFor="let item of legendItems">
+            <span class="legend-dot" [style.background]="item.color"></span>
+            <span class="legend-label">{{ item.label }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
-    .calendar-grid { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 16px; border: 1px solid var(--border, #e5e7eb); margin: 0; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
+    .calendar-grid { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 10px; border: 1px solid var(--border, #e5e7eb); margin: 0; box-shadow: 0 1px 4px rgba(15,23,42,.03); }
     .view-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     app-calendar-day-view, app-calendar-week-view, app-calendar-month-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .loading-skeleton { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
@@ -78,6 +90,39 @@ import type { CalendarBooking } from './calendar.models';
     .empty-icon { font-size: 48px; opacity: 0.3; }
     .empty-title { font-size: 18px; font-weight: 700; margin: 0; color: var(--text, #111); }
     .empty-desc { font-size: 14px; color: var(--muted, #6b7280); max-width: 360px; margin: 0; line-height: 1.5; }
+
+    /* Compact legend footer */
+    .calendar-legend {
+      flex-shrink: 0;
+      border-top: 1px solid var(--border, #e5e7eb);
+      background: #fafbfc;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .legend-scroll {
+      display: flex;
+      gap: 16px;
+      padding: 6px 16px;
+      white-space: nowrap;
+      min-width: min-content;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-label {
+      color: var(--text, #111);
+      font-weight: 500;
+    }
   `]
 })
 export class CalendarGridComponent {
@@ -87,8 +132,15 @@ export class CalendarGridComponent {
   @Input() empty = true;
   @Input() appointments: CalendarBooking[] = [];
   @Input() staffColorMap: Record<string, string> = {};
+  @Input() staffList: SidebarStaff[] = [];
+  @Input() legendItems: { label: string; color: string }[] = [];
   @Output() appointmentClick = new EventEmitter<string>();
   @Output() slotClick = new EventEmitter<{ date: Date; hour: number }>();
   @Output() daySelect = new EventEmitter<Date>();
   @Output() dayClick = new EventEmitter<Date>();
+  @Output() addStaff = new EventEmitter<void>();
+
+  onDaySlotClick(event: { date: Date; hour: number; staffId: string }): void {
+    this.slotClick.emit({ date: event.date, hour: event.hour });
+  }
 }

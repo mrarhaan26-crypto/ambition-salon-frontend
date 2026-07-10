@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { InventoryProduct, InventoryTransaction } from './inventory.models';
+import { Observable, of } from 'rxjs';
+import { InventoryProduct, InventoryTransaction, StockLedgerEntry, Warehouse, Supplier, PurchaseOrder, BatchInfo, StockCount } from './inventory.models';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -35,5 +35,33 @@ export class InventoryService {
 
   adjustStock(id: string, body: any): Observable<InventoryProduct> {
     return this.http.post<InventoryProduct>(`${this.baseUrl}/${id}/adjust-stock`, body);
+  }
+
+  getTransactions(productId: string): Observable<InventoryTransaction[]> {
+    return this.http.get<InventoryTransaction[]>(`${this.baseUrl}/${productId}/transactions`);
+  }
+
+  getStockLedger(productId: string): Observable<StockLedgerEntry[]> {
+    return this.http.get<StockLedgerEntry[]>(`${this.baseUrl}/${productId}/ledger`);
+  }
+
+  getWarehouses(): Observable<Warehouse[]> {
+    return this.http.get<Warehouse[]>(`${environment.apiUrl}/warehouses`);
+  }
+
+  getSuppliers(): Observable<Supplier[]> {
+    return this.http.get<Supplier[]>(`${environment.apiUrl}/suppliers`);
+  }
+
+  getPurchaseOrders(query?: any): Observable<PurchaseOrder[]> {
+    return this.http.get<PurchaseOrder[]>(`${environment.apiUrl}/purchase-orders`, { params: query });
+  }
+
+  getBatches(productId: string): Observable<BatchInfo[]> {
+    return this.http.get<BatchInfo[]>(`${this.baseUrl}/${productId}/batches`);
+  }
+
+  getStockCounts(query?: any): Observable<StockCount[]> {
+    return this.http.get<StockCount[]>(`${environment.apiUrl}/stock-counts`, { params: query });
   }
 }

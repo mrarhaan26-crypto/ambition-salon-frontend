@@ -44,4 +44,30 @@ export class StaffService {
   getBookings(id: string, query?: any): Observable<any> {
     return this.http.get(`${this.baseUrl}/${id}/bookings`, { params: query });
   }
+
+  getWorkspace(id: string): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/staff-workspace?id=${id}`);
+  }
+
+  getWorkspaceToday(id: string): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/staff-workspace/today`, { params: { staffId: id } });
+  }
+
+  getWorkspaceBookings(staffId: string, date?: string): Observable<any> {
+    const params: any = { staffId };
+    if (date) params.date = date;
+    return this.http.get(`${environment.apiUrl}/staff-workspace/bookings`, { params });
+  }
+
+  getWorkspaceTasks(staffId: string): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/staff-workspace/tasks`, { params: { staffId } });
+  }
+
+  getWorkspaceCommission(staffId: string): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/staff-workspace/commission`, { params: { staffId } });
+  }
+
+  getWorkspaceAttendance(staffId: string): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/staff-workspace/attendance`, { params: { staffId } });
+  }
 }

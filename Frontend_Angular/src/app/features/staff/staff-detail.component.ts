@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, RouterOutlet } from '@angular/router';
 import { EnterpriseFeaturePageComponent } from '../../shared/components/enterprise-feature-page/enterprise-feature-page.component';
 import { RouteTab } from '../../shared/components/route-tabs/route-tabs.component';
 import { Breadcrumb } from '../../shared/theme/module-theme.config';
+import { StaffDetailStateService } from './staff-detail-state.service';
 
 @Component({
   selector: 'app-staff-detail',
@@ -12,8 +13,8 @@ import { Breadcrumb } from '../../shared/theme/module-theme.config';
   template: `
     <app-enterprise-feature-page
       themeKey="staff"
-      [title]="title"
-      [subtitle]="subtitle"
+      [title]="title()"
+      [subtitle]="subtitle()"
       icon="🧑‍💼"
       [breadcrumbs]="breadcrumbs"
       backLink="/app/staff"
@@ -23,17 +24,25 @@ import { Breadcrumb } from '../../shared/theme/module-theme.config';
     <router-outlet></router-outlet>
   `,
 })
-export class StaffDetailComponent {
+export class StaffDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private state = inject(StaffDetailStateService);
   staffId = this.route.snapshot.paramMap.get('id') || '';
 
-  get title(): string {
-    return 'Staff #' + this.staffId;
-  }
+  readonly title = computed(() => {
+    const name = this.state.staffName();
+    return name !== 'Unknown Staff' ? name : 'Staff #' + this.staffId;
+  });
 
-  get subtitle(): string {
-    return 'Staff profile, schedule, performance, payroll and history.';
-  }
+  readonly subtitle = computed(() => {
+    const s = this.state.staff();
+    if (!s) return 'Staff profile, schedule, performance, payroll and history.';
+    const parts: string[] = [];
+    if (s.specialization) parts.push(s.specialization);
+    if (s.branchName) parts.push(s.branchName);
+    if (s.role) parts.push(s.role);
+    return parts.join(' · ') || 'Staff profile and management.';
+  });
 
   get basePath(): string {
     return '/app/staff/' + this.staffId;
@@ -63,4 +72,10 @@ export class StaffDetailComponent {
     { path: 'ai', label: 'AI', icon: '✨' },
     { path: 'settings', label: 'Settings', icon: '🔧' },
   ];
+
+  ngOnInit(): void {
+    if (this.staffId) {
+      this.state.load(this.staffId);
+    }
+  }
 }

@@ -1,1256 +1,615 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PosService } from './pos.service';
-import { ClientsService } from '../clients/clients.service';
+import { PosStore } from './pos-store.service';
+import { PosLeftPanelComponent } from './pos-left-panel.component';
+import { PosCartPanelComponent } from './pos-cart-panel.component';
+import { PosPaymentPanelComponent } from './pos-payment-panel.component';
 import { ServicesService } from '../services/services.service';
 import { InventoryService } from '../inventory/inventory.service';
-import { InventoryProduct } from '../inventory/inventory.models';
 import { StaffService } from '../staff/staff.service';
-import { Staff } from '../staff/staff.models';
 
 @Component({
   selector: 'app-pos',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PosLeftPanelComponent, PosCartPanelComponent, PosPaymentPanelComponent],
   template: `
-    <section class="page">
-      <div class="head">
-        <div>
-          <h1>POS / Billing</h1>
-          <p>Fast salon checkout with client, services, discount, tax, receipt, and recent sales.</p>
+    <div class="pos-enterprise">
+      <header class="pos-topbar">
+        <div class="topbar-left">
+          <h1>Enterprise POS</h1>
+          <div class="topbar-stats">
+            <span class="stat">Sales: {{ dashboard().summary?.totalSales || 0 }}</span>
+            <span class="stat">Revenue: {{ (dashboard().summary?.completedRevenue || 0) | currency:'USD':'symbol':'1.2-2' }}</span>
+          </div>
         </div>
-        <button class="refresh-btn" (click)="load()">Refresh</button>
-      </div>
+        <div class="topbar-right">
+          <div class="topbar-search">
+            <input [(ngModel)]="globalSearch" (keydown.enter)="handleGlobalSearch()" placeholder="Search sale / scan barcode..." class="global-search-input">
+          </div>
+          <button class="topbar-btn" (click)="loadDashboard()" title="Refresh">&#8635;</button>
+          <button class="topbar-btn" (click)="toggleCashDrawer()" title="Cash Drawer">&#128184;</button>
+          <button class="topbar-btn" (click)="toggleReports()" title="Reports">&#128202;</button>
+          <button class="topbar-btn" (click)="toggleHistory()">{{ showHistory() ? 'Close' : 'History' }}</button>
+          <span class="shift-badge">{{ shiftLabel() }}</span>
+        </div>
+      </header>
 
-      <div class="loading" *ngIf="loading">
+      <div class="pos-loading" *ngIf="store.loading()">
         <div class="spinner"></div>
         <span>Loading POS...</span>
       </div>
 
-      <div class="error" *ngIf="error">
+      <div class="pos-error" *ngIf="store.error() && !store.loading()">
         <strong>Failed to load POS data.</strong>
-        <p>{{ error }}</p>
-        <button (click)="load()">Retry</button>
+        <p>{{ store.error() }}</p>
+        <button (click)="loadDashboard()">Retry</button>
       </div>
 
-      <ng-container *ngIf="!loading && !error">
-        <div class="kpis" *ngIf="dashboard">
-          <div class="kpi-card">
-            <span>Total Sales</span>
-            <strong>{{ dashboard.summary.totalSales }}</strong>
-          </div>
-          <div class="kpi-card">
-            <span>Revenue</span>
-            <strong>{{ dashboard.summary.completedRevenue | currency:'USD':'symbol':'1.0-0' }}</strong>
-          </div>
-          <div class="kpi-card">
-            <span>Cart Items</span>
-            <strong>{{ cart.length }}</strong>
-          </div>
-          <div class="kpi-card">
-            <span>Grand Total</span>
-            <strong>{{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</strong>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="panel checkout-panel">
-            <div class="panel-title">
-              <div>
-                <h2>New Checkout</h2>
-                <p>Select client and add services/items to cart.</p>
-              </div>
-              <span class="mode-chip">{{ checkoutForm.clientId ? 'Client sale' : 'Walk-in sale' }}</span>
-            </div>
-
-            <div class="checkout-form">
-              <label class="client-picker">
-                <span>Client</span>
-                <input class="search-input" [(ngModel)]="clientSearch" placeholder="Search loaded clients...">
-                <select [(ngModel)]="checkoutForm.clientId">
-                  <option value="">Walk-in customer</option>
-                  <option *ngFor="let client of filteredClients()" [value]="client.id">{{ client.fullName }}</option>
-                </select>
-                <small class="picker-count" *ngIf="clientSearch">Showing {{ filteredClients().length }} of {{ clients.length }} clients</small>
-              </label>
-
-              <label class="staff-picker">
-                <span>Staff / Cashier</span>
-                <input class="search-input" [(ngModel)]="staffSearch" placeholder="Search active staff...">
-                <select [(ngModel)]="checkoutForm.staffId" [disabled]="staffLoading || staffMembers.length === 0">
-                  <option value="">No staff selected</option>
-                  <option *ngFor="let staff of filteredStaff()" [value]="staff.id">{{ staff.fullName }} - {{ staff.role }}</option>
-                </select>
-                <small class="picker-count" *ngIf="!staffLoading && staffMembers.length > 0">{{ filteredStaff().length }} active staff available</small>
-                <small class="product-hint" *ngIf="!staffLoading && staffMembers.length === 0">No active staff available for POS selection.</small>
-              </label>
-
-              <div class="checkout-error" *ngIf="staffError">{{ staffError }}</div>
-
-              <label>
-                <span>Add service</span>
-                <div class="service-add">
-                  <select [(ngModel)]="selectedServiceId">
-                    <option value="">Choose service</option>
-                    <option *ngFor="let service of services" [value]="service.id">
-                      {{ service.name }} - {{ service.price | currency:'USD':'symbol':'1.0-0' }}
-                    </option>
-                  </select>
-                  <button type="button" (click)="addSelectedService()" [disabled]="!selectedServiceId">Add</button>
-                </div>
-              </label>
-
-              <label class="product-picker">
-                <span>Add product</span>
-                <div class="picker-tools" *ngIf="products.length > 0">
-                  <input class="search-input" [(ngModel)]="productSearch" (keydown.enter)="addExactProductFromSearch($event)" placeholder="Search or scan SKU/barcode...">
-                  <small class="picker-count">{{ filteredProducts().length }} of {{ products.length }} active products</small>
-                </div>
-                <div class="service-add">
-                  <select [(ngModel)]="selectedProductId" [disabled]="productsLoading || filteredProducts().length === 0">
-                    <option value="">{{ productsLoading ? 'Loading products...' : 'Choose product' }}</option>
-                    <option *ngFor="let product of filteredProducts()" [value]="product.id">
-                      {{ product.name }} - {{ product.price | currency:'USD':'symbol':'1.0-0' }}{{ productStockLabel(product) }}
-                    </option>
-                  </select>
-                  <button type="button" (click)="addSelectedProduct()" [disabled]="!selectedProductId">Add</button>
-                </div>
-                <div class="product-flags" *ngIf="!productsLoading && products.length > 0">
-                  <small class="product-hint">Products are added as POS line items. Stock is deducted at checkout.</small>
-                  <span class="stock-chip" *ngIf="lowStockProducts().length > 0">{{ lowStockProducts().length }} low stock</span>
-                </div>
-                <div class="empty product-empty" *ngIf="!productsLoading && products.length === 0">
-                  <p>No active products available. Add or activate products in Inventory to sell retail items here.</p>
-                </div>
-                <div class="empty product-empty" *ngIf="!productsLoading && products.length > 0 && filteredProducts().length === 0">
-                  <p>No products match the current search.</p>
-                </div>
-              </label>
-
-              <div class="checkout-error" *ngIf="productsError">{{ productsError }}</div>
-
-              <div class="cart-box">
-                <div class="cart-head">
-                  <strong>Cart</strong>
-                  <div class="cart-actions">
-                    <button type="button" class="add-btn" (click)="addCartItem()">+ Manual item</button>
-                    <button type="button" class="ghost-btn" (click)="holdSale()" [disabled]="cart.length === 0">Hold Sale</button>
-                    <button type="button" class="ghost-btn" (click)="restoreHeldSale()" [disabled]="!heldSaleExists">Restore Held</button>
-                    <button type="button" class="ghost-btn" (click)="clearHeldSale()" [disabled]="!heldSaleExists">Clear Held</button>
-                    <button type="button" class="danger-outline" (click)="clearCart()" [disabled]="cart.length === 0">Clear Cart</button>
-                  </div>
-                </div>
-
-                <div class="empty" *ngIf="cart.length === 0">
-                  <p>No items added yet. Add a service, product, manual item, or restore a held sale.</p>
-                </div>
-
-                <div class="cart-items" *ngIf="cart.length > 0">
-                  <div class="cart-row" *ngFor="let item of cart; let i = index">
-                    <input [(ngModel)]="item.name" placeholder="Item name" class="item-name">
-                    <div class="qty-control">
-                      <button type="button" (click)="decreaseQuantity(item)">-</button>
-                      <input [ngModel]="item.quantity" (ngModelChange)="setCartQuantity(item, $event)" type="number" min="1" placeholder="Qty" class="qty">
-                      <button type="button" (click)="increaseQuantity(item)">+</button>
-                    </div>
-                    <input [(ngModel)]="item.unitPrice" type="number" min="0" step="0.01" placeholder="Price" class="price">
-                    <strong class="line-total">{{ lineTotal(item) | currency:'USD':'symbol':'1.0-0' }}</strong>
-                    <button class="remove-btn" (click)="removeCartItem(i)">x</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="totals-grid">
-                <label>
-                  <span>Discount amount</span>
-                  <input [(ngModel)]="checkoutForm.discountAmount" type="number" min="0" step="0.01" placeholder="0">
-                </label>
-                <label>
-                  <span>Tax rate %</span>
-                  <input [(ngModel)]="checkoutForm.taxRate" type="number" min="0" step="0.01" placeholder="0">
-                </label>
-              </div>
-
-              <div class="summary-box">
-                <div><span>Subtotal</span><strong>{{ cartTotal() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
-                <div><span>Discount</span><strong>-{{ discountAmount() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
-                <div><span>Tax</span><strong>{{ taxAmount() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
-                <div><span>Payment</span><strong>{{ checkoutForm.paymentMethod }}</strong></div>
-                <div class="grand"><span>Total</span><strong>{{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</strong></div>
-              </div>
-
-              <label>
-                <span>Payment method</span>
-                <select [(ngModel)]="checkoutForm.paymentMethod">
-                  <option *ngFor="let method of paymentMethods" [value]="method.id">{{ method.name }}</option>
-                </select>
-              </label>
-
-              <div class="split-box">
-                <div class="split-head">
-                  <strong>Split payment draft</strong>
-                  <span>{{ splitPaymentTotal() | currency:'USD':'symbol':'1.0-0' }} / {{ grandTotal() | currency:'USD':'symbol':'1.0-0' }}</span>
-                </div>
-                <div class="split-grid">
-                  <label><span>Cash</span><input [(ngModel)]="splitPayments.cash" type="number" min="0" step="0.01" placeholder="0"></label>
-                  <label><span>Card</span><input [(ngModel)]="splitPayments.card" type="number" min="0" step="0.01" placeholder="0"></label>
-                  <label><span>UPI</span><input [(ngModel)]="splitPayments.upi" type="number" min="0" step="0.01" placeholder="0"></label>
-                  <label><span>Wallet</span><input [(ngModel)]="splitPayments.wallet" type="number" min="0" step="0.01" placeholder="0"></label>
-                </div>
-                <small class="product-hint">Split payment record is UI-only until backend payment split is enabled. Checkout still submits the primary payment method.</small>
-                <div class="split-warning" *ngIf="hasSplitPayment() && !splitPaymentMatchesTotal()">
-                  Split total must equal the current grand total before checkout.
-                </div>
-              </div>
-
-              <div class="wallet-hook" *ngIf="checkoutForm.paymentMethod === 'WALLET' || splitAmount('wallet') > 0">
-                <strong>Wallet payment hook</strong>
-                <span>Wallet debit API exists, but POS wallet deduction is disabled until checkout and wallet debit can run transactionally together.</span>
-                <button type="button" disabled>Wallet debit coming soon</button>
-              </div>
-
-              <label>
-                <span>Checkout note</span>
-                <textarea [(ngModel)]="checkoutNote" placeholder="UI-only note for held sale handoff"></textarea>
-                <small class="product-hint">Notes are kept with held sales in this browser only until POS sale note persistence is enabled.</small>
-              </label>
-
-              <div class="checkout-error" *ngIf="checkoutError">{{ checkoutError }}</div>
-              <div class="success-msg" *ngIf="checkoutSuccess">Checkout completed successfully!</div>
-
-              <button class="checkout-btn" (click)="doCheckout()" [disabled]="!canCheckout()">
-                {{ checkoutBusy ? 'Processing...' : 'Complete Checkout' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-title">
-              <div>
-                <h2>Recent Sales</h2>
-                <p>Latest completed POS transactions.</p>
-              </div>
-            </div>
-
-            <div class="empty" *ngIf="(!dashboard?.recentSales || dashboard.recentSales.length === 0)">
-              <p>No sales yet.</p>
-            </div>
-
-            <div class="sale-row" *ngFor="let sale of dashboard?.recentSales">
-              <div class="sale-info">
-                <strong>{{ sale.client?.fullName || 'Walk-in' }}</strong>
-                <span>{{ sale.createdAt | date:'MMM dd, yyyy h:mm a' }}</span>
-              </div>
-              <div class="sale-right">
-                <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
-                <span class="sale-method">{{ paymentLabel(sale) }}</span>
-                <span class="sale-method" *ngIf="paymentStatus(sale) && paymentStatus(sale) !== sale.status">{{ paymentStatus(sale) }}</span>
-                <span class="sale-method" *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</span>
-                <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
-                <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel closing-panel" *ngIf="closingSummary() as summary">
-          <div class="panel-title">
-            <div>
-              <h2>Daily Closing Summary</h2>
-              <p>Based on currently loaded sales history.</p>
-            </div>
-          </div>
-
-          <div class="closing-grid">
-            <div class="closing-stat">
-              <span>Total Completed</span>
-              <strong>{{ summary.completedAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
-            </div>
-            <div class="closing-stat">
-              <span>Total Refunded</span>
-              <strong>{{ summary.refundedAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
-            </div>
-            <div class="closing-stat net">
-              <span>Net Sales</span>
-              <strong>{{ summary.netSales | currency:'USD':'symbol':'1.0-0' }}</strong>
-            </div>
-            <div class="closing-stat">
-              <span>Completed Count</span>
-              <strong>{{ summary.completedCount }}</strong>
-            </div>
-            <div class="closing-stat">
-              <span>Refunded Count</span>
-              <strong>{{ summary.refundedCount }}</strong>
-            </div>
-          </div>
-
-          <div class="payment-summary">
-            <div class="payment-total" *ngFor="let method of closingPaymentMethods">
-              <span>{{ method.name }}</span>
-              <strong>{{ paymentTotal(summary, method.id) | currency:'USD':'symbol':'1.0-0' }}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel sales-history-panel">
-          <div class="panel-title">
-            <div>
-              <h2>Sales History</h2>
-              <p>Filter all POS sales by date, status, and payment method.</p>
-              <span class="history-meta">{{ salesHistory.length }} loaded - {{ salesFilterLabel() }}</span>
-            </div>
-            <div class="panel-actions">
-              <button class="refresh-btn" (click)="loadSalesHistory()">Load Sales</button>
-              <button class="export-btn" (click)="exportSalesCsv()" [disabled]="salesHistory.length === 0">Export CSV</button>
-            </div>
-          </div>
-
-          <div class="history-filters">
-            <label>
-              <span>From</span>
-              <input type="date" [(ngModel)]="salesFilters.from">
-            </label>
-            <label>
-              <span>To</span>
-              <input type="date" [(ngModel)]="salesFilters.to">
-            </label>
-            <label>
-              <span>Status</span>
-              <select [(ngModel)]="salesFilters.status">
-                <option value="">All</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="REFUNDED">Refunded</option>
-              </select>
-            </label>
-            <label>
-              <span>Payment</span>
-              <select [(ngModel)]="salesFilters.paymentMethod">
-                <option value="">All</option>
-                <option value="CASH">Cash</option>
-                <option value="CARD">Card</option>
-                <option value="UPI">UPI</option>
-                <option value="WALLET">Wallet</option>
-              </select>
-            </label>
-            <button class="checkout-btn" (click)="loadSalesHistory()">Apply</button>
-            <button class="add-btn" (click)="clearSalesFilters()">Clear</button>
-          </div>
-
-          <div class="loading mini-loading" *ngIf="salesLoading">
-            <div class="spinner"></div>
-            <span>Loading sales history...</span>
-          </div>
-
-          <div class="checkout-error" *ngIf="salesError">{{ salesError }}</div>
-
-          <div class="empty" *ngIf="!salesLoading && salesHistory.length === 0">
-            <p>No sales found for {{ salesFilterLabel() }}.</p>
-          </div>
-
-          <div class="history-list" *ngIf="!salesLoading && salesHistory.length > 0">
-            <div class="history-row" *ngFor="let sale of salesHistory">
-              <div>
-                <strong>{{ sale.client?.fullName || 'Walk-in' }}</strong>
-                <span>{{ sale.createdAt | date:'MMM dd, yyyy h:mm a' }}</span>
-              </div>
-              <div>
-                <b>{{ sale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</b>
-                <small>{{ paymentLabel(sale) }}</small>
-                <small *ngIf="paymentStatus(sale) && paymentStatus(sale) !== sale.status">{{ paymentStatus(sale) }}</small>
-                <small *ngIf="staffLabel(sale)">{{ staffLabel(sale) }}</small>
-              </div>
-              <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
-              <button class="receipt-link" (click)="viewReceipt(sale)">Receipt</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="drawer-backdrop" *ngIf="selectedSale" (click)="closeReceipt()"></div>
-
-        <aside class="receipt-drawer" *ngIf="selectedSale">
-          <div class="drawer-head">
-            <div>
-              <h2>Receipt</h2>
-              <p>{{ receiptNumber(selectedSale) }}</p>
-            </div>
-            <button class="icon-btn" (click)="closeReceipt()">x</button>
-          </div>
-
-          <div class="receipt-loading" *ngIf="saleDetailLoading">
-            <div class="spinner"></div>
-            <span>Loading receipt...</span>
-          </div>
-
-          <div class="checkout-error" *ngIf="saleDetailError">{{ saleDetailError }}</div>
-
-          <div class="receipt-card" id="pos-receipt" *ngIf="!saleDetailLoading">
-            <div class="receipt-brand">
-              <h3>Ambition Unisex Salon</h3>
-              <span>Receipt #{{ receiptNumber(selectedSale) }}</span>
-            </div>
-
-            <div class="receipt-meta">
-              <div><span>Receipt #</span><strong>{{ receiptNumber(selectedSale) }}</strong></div>
-              <div><span>Client</span><strong>{{ selectedSale.client?.fullName || 'Walk-in' }}</strong></div>
-              <div><span>Date</span><strong>{{ selectedSale.createdAt | date:'MMM dd, yyyy h:mm a' }}</strong></div>
-              <div><span>Payment</span><strong>{{ paymentLabel(selectedSale) }}</strong></div>
-              <div *ngIf="paymentStatus(selectedSale)"><span>Payment status</span><strong>{{ paymentStatus(selectedSale) }}</strong></div>
-              <div><span>Status</span><strong>{{ selectedSale.status }}</strong></div>
-              <div><span>Items</span><strong>{{ receiptItemCount(selectedSale) }}</strong></div>
-              <div *ngIf="staffLabel(selectedSale)"><span>Cashier</span><strong>{{ staffLabel(selectedSale) }}</strong></div>
-            </div>
-
-            <div class="receipt-items">
-              <div class="receipt-item head-row">
-                <span>Item</span><span>Qty</span><span>Price</span><span>Total</span>
-              </div>
-              <div class="receipt-item" *ngFor="let item of selectedSale.items || []">
-                <span>{{ item.name }}</span>
-                <span>{{ item.quantity }}</span>
-                <span>{{ item.unitPrice | currency:'USD':'symbol':'1.0-0' }}</span>
-                <strong>{{ item.totalPrice | currency:'USD':'symbol':'1.0-0' }}</strong>
-              </div>
-            </div>
-
-            <div class="receipt-total">
-              <span>Total Paid</span>
-              <strong>{{ selectedSale.totalAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
-            </div>
-
-            <p class="thankyou">Thank you for visiting.</p>
-          </div>
-
-          <p class="refund-note" *ngIf="selectedSale.status === 'REFUNDED'">This sale has already been refunded.</p>
-
-          <div class="drawer-actions">
-            <button class="print-btn" (click)="printReceipt()">Print Receipt</button>
-            <button class="refund-btn" (click)="refundSale()" [disabled]="selectedSale.status === 'REFUNDED' || refundBusy">
-              {{ refundBusy ? 'Refunding...' : selectedSale.status === 'REFUNDED' ? 'Already Refunded' : 'Refund Sale' }}
-            </button>
-            <button class="return-btn" type="button" disabled title="Return and exchange workflow requires a backend returns endpoint.">Return / Exchange Soon</button>
-          </div>
+      <div class="pos-body" *ngIf="!store.loading() && !store.error()">
+        <aside class="pos-left">
+          <app-pos-left-panel></app-pos-left-panel>
         </aside>
-      </ng-container>
-    </section>
+        <main class="pos-center">
+          <app-pos-cart-panel></app-pos-cart-panel>
+        </main>
+        <aside class="pos-right">
+          <app-pos-payment-panel (onCheckout)="doCheckout()"></app-pos-payment-panel>
+        </aside>
+      </div>
+
+      <div class="receipt-overlay" *ngIf="selectedSale()" (click)="closeReceipt()"></div>
+      <aside class="receipt-drawer" *ngIf="selectedSale()">
+        <div class="drawer-head">
+          <div>
+            <h2>Receipt</h2>
+            <p>{{ receiptNumber(selectedSale()) }}</p>
+          </div>
+          <button class="icon-btn" (click)="closeReceipt()">x</button>
+        </div>
+        <div class="receipt-card" id="pos-receipt">
+          <div class="receipt-brand">
+            <h3>Ambition Unisex Salon</h3>
+            <span>Receipt #{{ receiptNumber(selectedSale()) }}</span>
+          </div>
+          <div class="receipt-meta">
+            <div><span>Receipt #</span><strong>{{ receiptNumber(selectedSale()) }}</strong></div>
+            <div><span>Client</span><strong>{{ selectedSale()?.client?.fullName || 'Walk-in' }}</strong></div>
+            <div><span>Date</span><strong>{{ (selectedSale()?.createdAt | date:'MMM dd, yyyy h:mm a') || '' }}</strong></div>
+            <div><span>Payment</span><strong>{{ selectedSale()?.payment?.method || selectedSale()?.paymentMethod || 'CASH' }}</strong></div>
+            <div><span>Status</span><strong>{{ selectedSale()?.status }}</strong></div>
+            <div><span>Items</span><strong>{{ receiptItemCount(selectedSale()) }}</strong></div>
+          </div>
+          <div class="receipt-items">
+            <div class="receipt-item head-row">
+              <span>Item</span><span>Qty</span><span>Price</span><span>Total</span>
+            </div>
+            <div class="receipt-item" *ngFor="let item of (selectedSale()?.items || [])">
+              <span>{{ item.name }}</span>
+              <span>{{ item.quantity }}</span>
+              <span>{{ (item.unitPrice || 0) | currency:'USD':'symbol':'1.2-2' }}</span>
+              <strong>{{ (item.totalPrice || 0) | currency:'USD':'symbol':'1.2-2' }}</strong>
+            </div>
+          </div>
+          <div class="receipt-total">
+            <span>Total Paid</span>
+            <strong>{{ (selectedSale()?.totalAmount || 0) | currency:'USD':'symbol':'1.2-2' }}</strong>
+          </div>
+          <p class="thankyou">Thank you for visiting.</p>
+        </div>
+        <div class="drawer-actions">
+          <button class="print-btn" (click)="printReceipt()">Print Receipt</button>
+          <button class="whatsapp-btn" (click)="shareWhatsApp()" *ngIf="selectedSale()?.client?.phone">WhatsApp</button>
+          <button class="refund-btn" (click)="refundSale()" [disabled]="selectedSale()?.status === 'REFUNDED' || refundBusy()">
+            {{ refundBusy() ? 'Refunding...' : selectedSale()?.status === 'REFUNDED' ? 'Already Refunded' : 'Refund Sale' }}
+          </button>
+        </div>
+      </aside>
+
+      <div class="history-overlay" *ngIf="showHistory()" (click)="toggleHistory()"></div>
+      <aside class="history-drawer" *ngIf="showHistory()">
+        <div class="drawer-head">
+          <h2>Sales History</h2>
+          <button class="icon-btn" (click)="toggleHistory()">x</button>
+        </div>
+        <div class="history-filters">
+          <input type="date" [(ngModel)]="historyFilters.from" placeholder="From">
+          <input type="date" [(ngModel)]="historyFilters.to" placeholder="To">
+          <select [(ngModel)]="historyFilters.status">
+            <option value="">All</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="REFUNDED">Refunded</option>
+          </select>
+          <button class="filter-btn" (click)="loadSalesHistory()">Apply</button>
+        </div>
+        <div class="history-list">
+          <div class="history-item" *ngFor="let sale of store.salesHistory()" (click)="viewReceipt(sale)">
+            <div class="history-info">
+              <strong>{{ sale.client?.fullName || 'Walk-in' }}</strong>
+              <span>{{ sale.createdAt | date:'MMM dd, h:mm a' }}</span>
+            </div>
+            <div class="history-right">
+              <b>{{ (sale.totalAmount || 0) | currency:'USD':'symbol':'1.2-2' }}</b>
+              <span class="sale-status" [class.refunded]="sale.status === 'REFUNDED'">{{ sale.status }}</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="drawer-overlay" *ngIf="showCashDrawer()" (click)="toggleCashDrawer()"></div>
+      <aside class="cash-drawer-panel" *ngIf="showCashDrawer()">
+        <div class="drawer-head">
+          <h2>Cash Drawer</h2>
+          <button class="icon-btn" (click)="toggleCashDrawer()">x</button>
+        </div>
+        <div class="cash-drawer-status" *ngIf="cashDrawerSession()">
+          <div class="status-badge open">SESSION OPEN</div>
+          <div class="cd-field"><span>Opened At</span><strong>{{ cashDrawerSession()?.openedAt | date:'MMM dd, h:mm a' }}</strong></div>
+          <div class="cd-field"><span>Opening Balance</span><strong>{{ cashDrawerSession()?.openingBalance | currency:'USD':'symbol':'1.2-2' }}</strong></div>
+          <div class="cd-field"><span>Cash In</span><strong>{{ cashDrawerSession()?.cashIn | currency:'USD':'symbol':'1.2-2' }}</strong></div>
+          <div class="cd-field"><span>Cash Out</span><strong>{{ cashDrawerSession()?.cashOut | currency:'USD':'symbol':'1.2-2' }}</strong></div>
+          <div class="cd-actions">
+            <input [(ngModel)]="cashMoveAmount" type="number" min="0" step="0.01" placeholder="Amount" class="cd-input">
+            <button class="cd-btn in" (click)="cashIn()" [disabled]="!cashMoveAmount()">Cash In</button>
+            <button class="cd-btn out" (click)="cashOut()" [disabled]="!cashMoveAmount()">Cash Out</button>
+          </div>
+          <button class="cd-btn close-session" (click)="closeCashDrawer()">Close Session</button>
+        </div>
+        <div class="cash-drawer-status" *ngIf="!cashDrawerSession()">
+          <div class="status-badge closed">NO OPEN SESSION</div>
+          <p class="cd-hint">Cash drawer backend API required. This UI is integration-ready and will display live data when the backend endpoint is available.</p>
+          <div class="cd-open-form">
+            <label>Opening Balance</label>
+            <input [(ngModel)]="openingBalance" type="number" min="0" step="0.01" placeholder="0.00" class="cd-input">
+            <button class="cd-btn open-session" (click)="openCashDrawer()" [disabled]="!openingBalance()">Open Register</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="reports-overlay" *ngIf="showReports()" (click)="toggleReports()"></div>
+      <aside class="reports-panel" *ngIf="showReports()">
+        <div class="drawer-head">
+          <h2>Daily Summary</h2>
+          <button class="icon-btn" (click)="toggleReports()">x</button>
+        </div>
+        <div class="report-summary">
+          <div class="report-card green"><span>Completed</span><strong>{{ dailySummary().completedCount }}</strong><b>{{ dailySummary().completedAmount | currency:'USD':'symbol':'1.2-2' }}</b></div>
+          <div class="report-card red"><span>Refunded</span><strong>{{ dailySummary().refundedCount }}</strong><b>{{ dailySummary().refundedAmount | currency:'USD':'symbol':'1.2-2' }}</b></div>
+          <div class="report-card blue"><span>Net Sales</span><strong>-</strong><b>{{ dailySummary().netSales | currency:'USD':'symbol':'1.2-2' }}</b></div>
+        </div>
+        <h3 class="report-section-title">Payment Methods</h3>
+        <div class="report-payments">
+          <div class="pay-row" *ngFor="let pm of paymentMethodKeys">
+            <span>{{ pm }}</span>
+            <strong>{{ dailySummary().paymentTotals[pm] | currency:'USD':'symbol':'1.2-2' }}</strong>
+          </div>
+        </div>
+        <div class="report-footer">
+          <span>Cash Variance</span>
+          <strong [class.neg]="dailySummary().cashDrawerVariance && dailySummary().cashDrawerVariance! < 0">
+            {{ dailySummary().cashDrawerVariance !== null ? (dailySummary().cashDrawerVariance! | currency:'USD':'symbol':'1.2-2') : 'N/A' }}
+          </strong>
+        </div>
+      </aside>
+
+      <div class="success-toast" *ngIf="successMessage()">{{ successMessage() }}</div>
+    </div>
   `,
   styles: [`
-    .page{display:grid;gap:24px}
-    .head{display:flex;justify-content:space-between;align-items:center;gap:16px}
-    h1{font-size:34px;margin:0}
-    p{color:#6b7280;margin:6px 0 0}
-    .refresh-btn{border:1px solid #e5e7eb;background:white;border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer}
-    .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
-    
-    
-    .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
-    .error strong{color:#991b1b}.error p{color:#7f1d1d}
-    .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .kpi-card{background:white;border:1px solid #e5e7eb;border-radius:22px;padding:20px;box-shadow:0 12px 35px rgba(15,23,42,.06)}
-    .kpi-card span{display:block;color:#6b7280;font-size:13px;margin-bottom:8px}
-    .kpi-card strong{font-size:26px}
-    .grid-2{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
-    .panel{background:white;border:1px solid #e5e7eb;border-radius:24px;padding:24px;box-shadow:0 12px 35px rgba(15,23,42,.06)}
-    .panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
-    .panel h2{margin:0;font-size:20px}
-    .panel-title p{font-size:13px}
-    .mode-chip{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800;color:#374151;white-space:nowrap}
-    .history-meta{display:block;margin-top:4px;color:#6b7280;font-size:12px;font-weight:700}
-    .checkout-form{display:grid;gap:14px}
-    label{display:grid;gap:7px}
-    label span{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}
-    input,select{padding:13px 14px;border:1px solid #e5e7eb;border-radius:14px;background:white;min-width:0}
-    .service-add{display:grid;grid-template-columns:1fr auto;gap:10px}
-    .service-add button{border:0;border-radius:14px;padding:0 18px;background:#0b0b0b;color:white;font-weight:900;cursor:pointer}
-    .service-add button:disabled{opacity:.45}
-    .search-input{height:auto;padding:11px 12px;border-radius:12px;font-size:13px}
-    .picker-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
-    .picker-count{font-size:12px;color:#6b7280;font-weight:700;white-space:nowrap}
-    .product-flags{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .product-hint{font-size:12px;color:#6b7280;line-height:1.4}
-    .stock-chip{display:inline-flex;align-items:center;border-radius:999px;background:#fef2f2;color:#991b1b;padding:4px 9px;font-size:11px;font-weight:900}
-    .product-empty{padding:14px;text-align:left;border-radius:14px}
-    .product-empty p{margin:0;font-size:13px}
-    .cart-box{border:1px solid #eef2f7;border-radius:18px;padding:14px;background:#fbfdff}
-    .cart-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
-    .cart-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .cart-items{display:grid;gap:8px}
-    .cart-row{display:grid;grid-template-columns:1fr 122px 100px 90px 34px;gap:8px;align-items:center}
-    .cart-row input{padding:10px;border-radius:10px}
-    .qty-control{display:grid;grid-template-columns:32px 1fr 32px;gap:5px;align-items:center}
-    .qty-control button{border:1px solid #e5e7eb;background:white;border-radius:9px;height:34px;font-weight:900;cursor:pointer}
-    .qty-control input{text-align:center;padding:8px 4px}
-    .line-total{text-align:right;font-size:13px}
-    .remove-btn{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;width:32px;height:32px;font-weight:900;cursor:pointer}
-    .add-btn,.ghost-btn,.danger-outline{border:1px dashed #d1d5db;border-radius:12px;padding:9px 12px;background:white;cursor:pointer;font-weight:800}
-    .ghost-btn{border-style:solid;color:#374151}
-    .danger-outline{border-style:solid;border-color:#fecaca;color:#991b1b;background:#fff7f7}
-    .ghost-btn:disabled,.danger-outline:disabled{opacity:.45;cursor:not-allowed}
-    .totals-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .summary-box{display:grid;gap:8px;background:#0b0b0b;color:white;border-radius:18px;padding:16px}
-    .summary-box div{display:flex;justify-content:space-between;align-items:center}
-    .summary-box span{color:#d1d5db;font-size:13px}
-    .summary-box .grand{border-top:1px solid rgba(255,255,255,.16);padding-top:10px;margin-top:4px}
-    .summary-box .grand strong{font-size:22px}
-    .split-box,.wallet-hook{display:grid;gap:10px;background:#fbfdff;border:1px solid #eef2f7;border-radius:16px;padding:14px}
-    .split-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
-    .split-head span{font-weight:900;color:#374151}
-    .split-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    .split-warning{padding:10px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800}
-    .wallet-hook strong{font-size:13px}.wallet-hook span{font-size:12px;color:#6b7280}.wallet-hook button{border:0;border-radius:12px;padding:10px;background:#e5e7eb;color:#6b7280;font-weight:900;cursor:not-allowed}
-    textarea{padding:13px 14px;border:1px solid #e5e7eb;border-radius:14px;background:white;min-width:0;min-height:82px;font:inherit}
-    .checkout-btn{border:0;border-radius:14px;padding:15px;background:#0b0b0b;color:white;font-weight:900;cursor:pointer}
-    .checkout-btn:disabled{opacity:.5}
-    .checkout-error{padding:12px;background:#fef2f2;color:#991b1b;border-radius:12px;font-weight:700}
-    .success-msg{padding:14px;background:#f0fdf4;border-radius:12px;color:#16a34a;font-weight:700;text-align:center}
-    .sale-row{display:flex;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid #f1f5f9}
-    .sale-row:last-child{border-bottom:0}
-    .sale-info strong{display:block;font-size:14px}
-    .sale-info span{font-size:12px;color:#6b7280}
-    .sale-right{text-align:right;display:grid;justify-items:end;gap:3px}
-    .sale-right b{display:block;font-size:16px}
-    .sale-method{font-size:11px;color:#6b7280;display:block}
-    .sale-status{font-size:11px;font-weight:800;color:#16a34a}
-    .sale-status.refunded{color:#dc2626}
-    .receipt-link{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer}
-    .empty{padding:22px;text-align:center;color:#6b7280;background:#f8fafc;border-radius:16px}
-    .panel-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-
-    .export-btn{border:1px solid #0b0b0b;background:#0b0b0b;color:white;border-radius:12px;padding:10px 16px;font-weight:900;cursor:pointer}
-    .export-btn:disabled{opacity:.45;cursor:not-allowed}
-    .closing-panel,.sales-history-panel{margin-top:18px}
-    .closing-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-    .closing-stat{display:grid;gap:8px;background:#fbfdff;border:1px solid #eef2f7;border-radius:16px;padding:14px;min-width:0}
-    .closing-stat span,.payment-total span{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}
-    .closing-stat strong{font-size:20px;line-height:1.1;word-break:break-word}
-    .closing-stat.net{background:#0b0b0b;border-color:#0b0b0b;color:white}
-    .closing-stat.net span{color:#d1d5db}
-    .payment-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
-    .payment-total{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f8fafc;border:1px dashed #d1d5db;border-radius:14px;padding:12px 14px;min-width:0}
-    .payment-total strong{font-size:15px;text-align:right;word-break:break-word}
-    .history-filters{display:grid;grid-template-columns:repeat(4,1fr) auto auto;gap:10px;align-items:end;margin-bottom:16px}
-    .mini-loading{padding:18px}
-    .history-list{display:grid;gap:10px}
-    .history-row{display:grid;grid-template-columns:1fr 120px 95px 80px;gap:12px;align-items:center;padding:13px;border:1px solid #eef2f7;border-radius:16px;background:#fbfdff}
-    .history-row strong{display:block;font-size:14px}
-    .history-row span{font-size:12px;color:#6b7280}
-    .history-row b{display:block;text-align:right}
-    .history-row small{display:block;text-align:right;color:#6b7280;font-size:11px}
-    .drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.32);z-index:50}
-    .receipt-drawer{position:fixed;top:0;right:0;width:min(460px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:22px;overflow:auto;display:grid;gap:16px;align-content:start}
+    .pos-enterprise{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden;background:#f3f4f6}
+    .pos-topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:white;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+    .topbar-left{display:flex;align-items:center;gap:20px}
+    .topbar-left h1{margin:0;font-size:22px}
+    .topbar-stats{display:flex;gap:12px}
+    .stat{font-size:12px;color:#6b7280;font-weight:700}
+    .topbar-right{display:flex;align-items:center;gap:8px}
+    .global-search-input{padding:8px 14px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;width:200px}
+    .topbar-btn{border:1px solid #e5e7eb;background:white;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:12px;white-space:nowrap}
+    .shift-badge{background:#fef3c7;color:#92400e;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800}
+    .pos-loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
+    .pos-error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;margin:24px;text-align:center}
+    .pos-error strong{color:#991b1b}.pos-error p{color:#7f1d1d}
+    .pos-error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
+    .pos-body{display:grid;grid-template-columns:280px 1fr 340px;gap:0;flex:1;overflow:hidden;height:100%}
+    .pos-left{background:#f9fafb;border-right:1px solid #e5e7eb;overflow-y:auto}
+    .pos-center{background:white;overflow-y:auto}
+    .pos-right{background:#f9fafb;border-left:1px solid #e5e7eb;overflow-y:auto}
+    .receipt-overlay,.history-overlay,.drawer-overlay,.reports-overlay{position:fixed;inset:0;background:rgba(15,23,42,.32);z-index:50}
+    .receipt-drawer{position:fixed;top:0;right:0;width:min(420px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:20px;overflow:auto;display:flex;flex-direction:column;gap:12px}
     .drawer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-    .drawer-head h2{margin:0;font-size:26px}.drawer-head p{font-size:12px;word-break:break-all}
-    .icon-btn{border:0;background:#111827;color:white;width:34px;height:34px;border-radius:10px;font-weight:900;cursor:pointer}
-    .receipt-loading{display:flex;align-items:center;gap:12px;justify-content:center;padding:32px;color:#6b7280}
-    .receipt-card{background:white;border:1px solid #e5e7eb;border-radius:22px;padding:22px;box-shadow:0 12px 30px rgba(15,23,42,.06)}
-    .receipt-brand{text-align:center;border-bottom:1px dashed #d1d5db;padding-bottom:14px;margin-bottom:14px}
-    .receipt-brand h3{margin:0;font-size:22px}.receipt-brand span{font-size:12px;color:#6b7280}
-    .receipt-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-    .receipt-meta div{background:#f8fafc;border-radius:12px;padding:10px}
-    .receipt-meta span{display:block;font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:800}
-    .receipt-meta strong{font-size:13px;word-break:break-word}
-    .receipt-items{display:grid;gap:10px}
-    .receipt-item{display:grid;grid-template-columns:1fr 42px 70px 75px;gap:8px;align-items:center;font-size:13px}
-    .head-row{font-weight:900;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:8px}
-    .receipt-total{display:flex;justify-content:space-between;align-items:center;border-top:1px dashed #d1d5db;margin-top:16px;padding-top:16px}
-    .receipt-total span{font-weight:900}.receipt-total strong{font-size:26px}
-    .thankyou{text-align:center;font-size:12px}
-    .refund-note{margin:0;padding:12px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px;font-weight:800;text-align:center}
-    .drawer-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    .print-btn,.refund-btn,.return-btn{border:0;border-radius:14px;padding:13px;font-weight:900;cursor:pointer}
-    .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}.return-btn{background:#e5e7eb;color:#6b7280;cursor:not-allowed}
+    .drawer-head h2{margin:0;font-size:22px}.drawer-head p{font-size:12px;color:#6b7280}
+    .icon-btn{border:0;background:#111827;color:white;width:32px;height:32px;border-radius:8px;font-weight:900;cursor:pointer}
+    .receipt-card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:20px}
+    .receipt-brand{text-align:center;border-bottom:1px dashed #d1d5db;padding-bottom:12px;margin-bottom:12px}
+    .receipt-brand h3{margin:0;font-size:18px}.receipt-brand span{font-size:11px;color:#6b7280}
+    .receipt-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .receipt-meta div{background:#f8fafc;border-radius:10px;padding:8px}
+    .receipt-meta span{display:block;font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:800}
+    .receipt-meta strong{font-size:12px;word-break:break-word}
+    .receipt-items{display:grid;gap:8px}
+    .receipt-item{display:grid;grid-template-columns:1fr 36px 60px 65px;gap:6px;align-items:center;font-size:12px}
+    .head-row{font-weight:900;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:6px}
+    .receipt-total{display:flex;justify-content:space-between;align-items:center;border-top:1px dashed #d1d5db;margin-top:12px;padding-top:12px}
+    .receipt-total span{font-weight:900}.receipt-total strong{font-size:22px}
+    .thankyou{text-align:center;font-size:11px;color:#6b7280}
+    .drawer-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .print-btn,.refund-btn,.whatsapp-btn{border:0;border-radius:12px;padding:12px;font-weight:900;cursor:pointer}
+    .print-btn{background:#0b0b0b;color:white}.refund-btn{background:#fee2e2;color:#991b1b}
+    .whatsapp-btn{background:#25D366;color:white}
     .refund-btn:disabled{opacity:.55;cursor:not-allowed}
+    .history-drawer{position:fixed;top:0;right:0;width:min(380px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:20px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+    .history-filters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px}
+    .history-filters input,.history-filters select{padding:6px 8px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px}
+    .filter-btn{border:0;background:#0b0b0b;color:white;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:12px}
+    .history-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+    .history-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:white;border:1px solid #eef2f7;border-radius:10px;cursor:pointer}
+    .history-item:hover{border-color:#d1d5db}
+    .history-info strong{display:block;font-size:13px}.history-info span{font-size:11px;color:#6b7280}
+    .history-right{text-align:right}.history-right b{display:block;font-size:14px}
+    .sale-status{font-size:10px;font-weight:800;color:#16a34a}
+    .sale-status.refunded{color:#dc2626}
+    .cash-drawer-panel{position:fixed;top:0;right:0;width:min(380px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:20px;overflow:auto;display:flex;flex-direction:column;gap:16px}
+    .cash-drawer-status{display:flex;flex-direction:column;gap:12px}
+    .status-badge{text-align:center;padding:8px;border-radius:8px;font-weight:900;font-size:12px;letter-spacing:.08em}
+    .status-badge.open{background:#d1fae5;color:#065f46}
+    .status-badge.closed{background:#fef3c7;color:#92400e}
+    .cd-field{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
+    .cd-field span{color:#6b7280;font-weight:700}
+    .cd-field strong{font-weight:800}
+    .cd-actions{display:flex;gap:6px;flex-wrap:wrap}
+    .cd-input{flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;min-width:80px}
+    .cd-btn{border:0;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px}
+    .cd-btn.in{background:#d1fae5;color:#065f46}
+    .cd-btn.out{background:#fee2e2;color:#991b1b}
+    .cd-btn.close-session{background:#0b0b0b;color:white;width:100%;padding:12px}
+    .cd-btn.open-session{background:#059669;color:white;width:100%;padding:12px}
+    .cd-btn:disabled{opacity:.5;cursor:not-allowed}
+    .cd-hint{font-size:12px;color:#6b7280;text-align:center;padding:12px;background:#fef3c7;border-radius:8px}
+    .cd-open-form{display:flex;flex-direction:column;gap:8px;padding:12px;background:white;border:1px solid #e5e7eb;border-radius:12px}
+    .cd-open-form label{font-size:12px;font-weight:800;color:#6b7280}
+    .reports-panel{position:fixed;top:0;right:0;width:min(380px,100vw);height:100vh;background:#f8fafc;z-index:60;box-shadow:-20px 0 40px rgba(15,23,42,.2);padding:20px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+    .report-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .report-card{background:white;border-radius:12px;padding:12px;text-align:center;border:1px solid #eef2f7}
+    .report-card span{display:block;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase}
+    .report-card strong{display:block;font-size:20px;font-weight:900;margin:4px 0}
+    .report-card b{display:block;font-size:13px}
+    .report-card.green strong{color:#059669}.report-card.red strong{color:#dc2626}.report-card.blue strong{color:#2563eb}
+    .report-section-title{font-size:12px;font-weight:900;text-transform:uppercase;color:#6b7280;margin:8px 0 4px}
+    .report-payments{display:flex;flex-direction:column;gap:6px}
+    .pay-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:white;border-radius:8px;font-size:13px;font-weight:800}
+    .pay-row span{color:#6b7280}
+    .report-footer{display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:12px;font-size:14px;font-weight:900;border:1px solid #e5e7eb}
+    .report-footer .neg{color:#dc2626}
+    .success-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#059669;color:white;padding:12px 24px;border-radius:12px;font-weight:800;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+    @media(max-width:1200px){.pos-body{grid-template-columns:240px 1fr 300px}}
+    @media(max-width:1024px){.pos-body{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;overflow-y:auto}
+      .pos-left{max-height:40vh;border-right:0;border-bottom:1px solid #e5e7eb}
+      .pos-center{max-height:60vh}
+      .pos-right{border-left:0;border-top:1px solid #e5e7eb;padding-bottom:env(safe-area-inset-bottom,80px)}
+      .topbar-stats{display:none}}
+    @media(max-width:640px){.pos-topbar{padding:8px 12px;flex-wrap:wrap;gap:6px}
+      .topbar-left h1{font-size:16px}
+      .global-search-input{width:140px;font-size:12px}
+      .topbar-btn{font-size:11px;padding:4px 8px}}
     @media print{
       @page{size:80mm 297mm;margin:0}
-      ::ng-deep app-layout .sidebar,
-      ::ng-deep app-layout .topbar,
-      ::ng-deep app-layout .mobile-toggle{display:none!important}
-      ::ng-deep app-layout .app-shell,
-      ::ng-deep app-layout .main,
-      ::ng-deep app-layout .content{display:block!important;min-height:0!important;margin:0!important;padding:0!important;background:white!important;overflow:visible!important}
-      :host{display:block!important;background:white!important;color:#000!important;width:80mm!important;margin:0!important;padding:0!important}
-      .page{display:block!important;width:80mm!important;margin:0!important;padding:0!important;background:white!important;color:#000!important}
-      .head,
-      .loading,
-      .error,
-      .kpis,
-      .grid-2,
-      .closing-panel,
-      .sales-history-panel,
-      .drawer-backdrop,
-      .drawer-head,
-      .drawer-actions,
-      .refund-note,
-      .receipt-loading,
-      .checkout-error,
-      .success-msg{display:none!important}
-      .receipt-drawer{position:static!important;display:block!important;width:80mm!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important;background:white!important;box-shadow:none!important;overflow:visible!important;z-index:auto!important}
-      .receipt-card{display:block!important;width:80mm!important;max-width:80mm!important;margin:0!important;padding:5mm!important;box-sizing:border-box!important;background:white!important;color:#000!important;border:0!important;border-radius:0!important;box-shadow:none!important;font-family:'Courier New',Courier,monospace!important;font-size:10px!important;line-height:1.35!important}
-      .receipt-brand{border-bottom:1px dashed #000!important;padding:0 0 3mm!important;margin:0 0 3mm!important;text-align:center!important}
-      .receipt-brand h3{margin:0 0 1mm!important;font-size:14px!important;line-height:1.2!important;color:#000!important;text-transform:uppercase!important}
-      .receipt-brand span{display:block!important;font-size:9px!important;color:#000!important;letter-spacing:0!important}
-      .receipt-meta{display:grid!important;grid-template-columns:1fr 1fr!important;gap:1.5mm 3mm!important;margin:0 0 3mm!important;padding-bottom:3mm!important;border-bottom:1px dashed #000!important}
-      .receipt-meta div{background:white!important;border-radius:0!important;padding:0!important;color:#000!important}
-      .receipt-meta span{display:block!important;font-size:8px!important;color:#000!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:0!important}
-      .receipt-meta strong{display:block!important;font-size:9px!important;color:#000!important;font-weight:700!important;word-break:break-word!important}
-      .receipt-items{display:grid!important;gap:1.5mm!important;margin:0!important;padding:0 0 3mm!important;border-bottom:1px dashed #000!important}
-      .receipt-item{display:grid!important;grid-template-columns:1fr 9mm 16mm 18mm!important;gap:1.5mm!important;align-items:start!important;font-size:9px!important;color:#000!important;break-inside:avoid!important}
-      .receipt-item span:first-child{word-break:break-word!important}
-      .receipt-item span:not(:first-child),
-      .receipt-item strong{text-align:right!important;color:#000!important;font-size:9px!important;font-weight:700!important}
-      .head-row{border-bottom:1px dashed #000!important;padding:0 0 1.5mm!important;color:#000!important;font-size:8px!important;font-weight:700!important;text-transform:uppercase!important}
-      .receipt-total{display:flex!important;justify-content:space-between!important;align-items:flex-end!important;margin:3mm 0 0!important;padding:3mm 0 0!important;border-top:1px dashed #000!important;color:#000!important}
-      .receipt-total span{font-size:11px!important;font-weight:900!important;text-transform:uppercase!important;color:#000!important}
-      .receipt-total strong{font-size:16px!important;font-weight:900!important;color:#000!important}
-      .thankyou{margin:4mm 0 0!important;text-align:center!important;font-size:9px!important;color:#000!important}
+      .pos-topbar,.pos-left,.pos-center,.pos-right,.receipt-overlay,.drawer-head,.drawer-actions,.thankyou,.history-overlay,.history-drawer,.cash-drawer-panel,.reports-panel,.success-toast{display:none!important}
+      .receipt-drawer{position:static!important;display:block!important;width:80mm!important;height:auto!important;padding:0!important;background:white!important;box-shadow:none!important;overflow:visible!important}
+      .receipt-card{width:80mm!important;padding:5mm!important;border:0!important;border-radius:0!important;box-shadow:none!important;font-family:'Courier New',monospace!important}
     }
-    @media(max-width:1050px){.grid-2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.closing-grid{grid-template-columns:repeat(2,1fr)}.payment-summary{grid-template-columns:repeat(2,1fr)}.split-grid{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:900px){.history-filters{grid-template-columns:1fr 1fr}.history-row{grid-template-columns:1fr 100px}.history-row .receipt-link{justify-self:start}.cart-head{flex-direction:column}.cart-actions{justify-content:flex-start}.picker-tools{grid-template-columns:1fr}}
-    @media(max-width:640px){.head{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:1fr}.cart-row{grid-template-columns:1fr 1fr 34px}.cart-row .item-name{grid-column:1/4}.qty-control{grid-column:1}.price{grid-column:2}.line-total{grid-column:1/3;text-align:left}.remove-btn{grid-column:3;grid-row:2/4}.cart-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.cart-actions button{min-height:40px}.service-add{grid-template-columns:1fr}.service-add button{height:44px}.receipt-drawer{width:100vw;padding:16px}.receipt-meta{grid-template-columns:1fr}.receipt-item{grid-template-columns:1fr 36px 58px 64px}.drawer-actions{grid-template-columns:1fr}.history-filters,.history-row{grid-template-columns:1fr}.history-row b,.history-row small{text-align:left}.totals-grid,.closing-grid,.payment-summary,.split-grid{grid-template-columns:1fr}.split-head{align-items:flex-start;flex-direction:column}.panel-actions{justify-content:stretch}.panel-actions button{flex:1}}
   `]
 })
 export class PosComponent {
   private api = inject(PosService);
-  private clientsApi = inject(ClientsService);
   private servicesApi = inject(ServicesService);
   private inventoryApi = inject(InventoryService);
   private staffApi = inject(StaffService);
+  store = inject(PosStore);
 
-  dashboard: any = null;
-  clients: any[] = [];
-  services: any[] = [];
-  products: InventoryProduct[] = [];
-  staffMembers: Staff[] = [];
-  paymentMethods: any[] = [
-    { id: 'CASH', name: 'Cash' },
-    { id: 'CARD', name: 'Card' },
-    { id: 'UPI', name: 'UPI' },
-    { id: 'WALLET', name: 'Wallet' },
-  ];
-  closingPaymentMethods: any[] = [
-    { id: 'CASH', name: 'Cash' },
-    { id: 'CARD', name: 'Card' },
-    { id: 'UPI', name: 'UPI' },
-    { id: 'WALLET', name: 'Wallet' },
-  ];
+  dashboard = signal<any>({ summary: { totalSales: 0, completedRevenue: 0 }, recentSales: [] });
+  selectedSale = signal<any>(null);
+  refundBusy = signal(false);
+  showHistory = signal(false);
+  showCashDrawer = signal(false);
+  showReports = signal(false);
+  successMessage = signal('');
+  globalSearch = '';
+  historyFilters = { from: '', to: '', status: '' };
+  cashDrawerSession = signal<any>(null);
+  openingBalance = signal(0);
+  cashMoveAmount = signal(0);
+  paymentMethodKeys = ['CASH', 'CARD', 'UPI', 'WALLET', 'GIFT_CARD', 'LOYALTY'];
 
-  loading = true;
-  error = '';
+  shiftLabel = computed(() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Morning Shift';
+    if (h < 17) return 'Afternoon Shift';
+    return 'Evening Shift';
+  });
 
-  cart: any[] = [];
-  selectedServiceId = '';
-  selectedProductId = '';
-  clientSearch = '';
-  staffSearch = '';
-  productSearch = '';
-  checkoutForm: any = this.defaultCheckoutForm();
-  checkoutBusy = false;
-  checkoutSuccess = false;
-  checkoutError = '';
-  productsLoading = false;
-  productsError = '';
-  staffLoading = false;
-  staffError = '';
-  heldSaleExists = false;
-  splitPayments: any = { cash: 0, card: 0, upi: 0, wallet: 0 };
-  checkoutNote = '';
-
-  salesHistory: any[] = [];
-  salesLoading = false;
-  salesError = '';
-  salesFilters: any = { from: '', to: '', status: '', paymentMethod: '' };
-
-  selectedSale: any = null;
-  saleDetailLoading = false;
-  saleDetailError = '';
-  refundBusy = false;
-  private readonly heldSaleKey = 'ambition-pos-held-sale';
+  dailySummary = computed(() => this.store.dailySummary());
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboardShortcuts(event: KeyboardEvent) {
-    if (event.defaultPrevented) return;
-
-    if (event.key === 'Escape' && this.selectedSale) {
-      event.preventDefault();
-      this.closeReceipt();
-      return;
+    if (event.key === 'Escape') {
+      if (this.selectedSale()) { this.closeReceipt(); event.preventDefault(); return; }
+      if (this.showHistory()) { this.toggleHistory(); event.preventDefault(); return; }
+      if (this.showCashDrawer()) { this.toggleCashDrawer(); event.preventDefault(); return; }
+      if (this.showReports()) { this.toggleReports(); event.preventDefault(); return; }
     }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && this.canCheckout()) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
       this.doCheckout();
     }
   }
 
   ngOnInit() {
-    this.refreshHeldSaleState();
-    this.load();
+    this.store.loading.set(true);
+    this.loadDashboard();
   }
 
-  load() {
-    this.loading = true;
-    this.error = '';
-    this.checkoutError = '';
-
+  loadDashboard() {
+    this.store.loading.set(true);
+    this.store.error.set('');
     this.api.getDashboard().subscribe({
-      next: (d) => { this.dashboard = d; this.loading = false; },
+      next: (d) => {
+        this.dashboard.set(d);
+        this.store.recentSales.set(d?.recentSales || []);
+        this.loadAuxiliaryData();
+      },
       error: (err) => {
-        this.error = err?.status === 401 ? 'Your session has expired. Please log in again.' : 'POS data unavailable.';
-        this.loading = false;
+        this.store.error.set(err?.status === 401 ? 'Session expired. Please log in again.' : 'POS data unavailable.');
+        this.store.loading.set(false);
       },
     });
+  }
 
-    this.clientsApi.getClients({ limit: 100, sortBy: 'fullName', sortOrder: 'asc' }).subscribe({
-      next: (res) => { this.clients = res.items || []; },
-      error: () => { this.clients = []; },
-    });
-
+  private loadAuxiliaryData() {
     this.servicesApi.getAll({ isActive: true }).subscribe({
-      next: (services) => { this.services = services || []; },
-      error: () => { this.services = []; },
+      next: (services) => this.store.services.set(services || []),
+      error: () => this.store.services.set([]),
     });
-
-    this.loadStaff();
-    this.loadProducts();
-
+    this.inventoryApi.getAll({ isActive: true }).subscribe({
+      next: (products) => this.store.products.set(products || []),
+      error: () => this.store.products.set([]),
+    });
     this.api.getPaymentMethods().subscribe({
-      next: (methods) => { this.paymentMethods = methods?.length ? methods : this.paymentMethods; },
+      next: (methods) => this.store.paymentMethods.set(methods || []),
+      error: () => this.store.paymentMethods.set([]),
+    });
+    this.staffApi.getAll({ isActive: true }).subscribe({
+      next: (staff) => this.store.staffList.set(staff || []),
+      error: () => this.store.staffList.set([]),
+    });
+    this.store.loading.set(false);
+  }
+
+  loadSalesHistory() {
+    const query: any = {};
+    if (this.historyFilters.from) query.from = this.historyFilters.from;
+    if (this.historyFilters.to) query.to = this.historyFilters.to;
+    if (this.historyFilters.status) query.status = this.historyFilters.status;
+    this.api.getSales(query).subscribe({
+      next: (sales) => this.store.salesHistory.set(sales || []),
       error: () => {},
     });
   }
 
-  private defaultCheckoutForm(): any {
-    return { clientId: '', staffId: '', paymentMethod: 'CASH', discountAmount: 0, taxRate: 0 };
-  }
-
-  loadStaff() {
-    this.staffLoading = true;
-    this.staffError = '';
-
-    this.staffApi.getAll({ isActive: true }).subscribe({
-      next: (staff) => {
-        this.staffMembers = staff || [];
-        this.staffLoading = false;
-      },
-      error: () => {
-        this.staffMembers = [];
-        this.staffError = 'Staff could not be loaded for POS.';
-        this.staffLoading = false;
-      },
-    });
-  }
-
-  loadProducts() {
-    this.productsLoading = true;
-    this.productsError = '';
-
-    this.inventoryApi.getAll({ isActive: true }).subscribe({
-      next: (products) => {
-        this.products = products || [];
-        this.productsLoading = false;
-      },
-      error: () => {
-        this.products = [];
-        this.productsError = 'Products could not be loaded for POS.';
-        this.productsLoading = false;
-      },
-    });
-  }
-
-  filteredClients(): any[] {
-    const term = this.clientSearch.trim().toLowerCase();
-    if (!term) return this.clients;
-    return this.clients.filter((client) => String(client.fullName || '').toLowerCase().includes(term));
-  }
-
-  filteredStaff(): Staff[] {
-    const term = this.staffSearch.trim().toLowerCase();
-    if (!term) return this.staffMembers;
-    return this.staffMembers.filter((staff) => [staff.fullName, staff.email, staff.role]
-      .some((value) => String(value || '').toLowerCase().includes(term)));
-  }
-
-  filteredProducts(): InventoryProduct[] {
-    const term = this.productSearch.trim().toLowerCase();
-    if (!term) return this.products;
-    return this.products.filter((product) => [product.name, product.sku, product.category, (product as any).barcode]
-      .some((value) => String(value || '').toLowerCase().includes(term)));
-  }
-
-  lowStockProducts(): InventoryProduct[] {
-    return this.products.filter((product) => Number(product.quantity) <= Number(product.minStockLevel));
-  }
-
-  productStockLabel(product: InventoryProduct): string {
-    if (product.quantity === undefined || product.quantity === null) return '';
-    const stock = ` - ${product.quantity} ${product.unit || 'in stock'}`;
-    return Number(product.quantity) <= Number(product.minStockLevel) ? `${stock} - LOW` : stock;
-  }
-
-  addExactProductFromSearch(event: Event) {
-    event.preventDefault();
-    const term = this.productSearch.trim().toLowerCase();
-    if (!term) return;
-
-    const exactMatches = this.products.filter((product) => [product.sku, (product as any).barcode, product.name]
-      .some((value) => String(value || '').toLowerCase() === term));
-
-    if (exactMatches.length === 1) {
-      this.selectedProductId = exactMatches[0].id;
-      this.addSelectedProduct();
-      this.productSearch = '';
-    }
-  }
-
-  addSelectedService() {
-    const service = this.services.find((item) => item.id === this.selectedServiceId);
-    if (!service) return;
-
-    this.cart.push({
-      serviceId: service.id,
-      name: service.name,
-      quantity: 1,
-      unitPrice: Number(service.price) || 0,
-    });
-
-    this.selectedServiceId = '';
-  }
-
-  addSelectedProduct() {
-    const product = this.products.find((item) => item.id === this.selectedProductId);
-    if (!product) return;
-
-    this.cart.push({
-      serviceId: null,
-      productId: product.id,
-      name: product.sku ? `${product.name} (SKU: ${product.sku})` : product.name,
-      quantity: 1,
-      unitPrice: Number(product.price) || 0,
-    });
-
-    this.selectedProductId = '';
-  }
-
-  addCartItem() {
-    this.cart.push({ serviceId: null, name: '', quantity: 1, unitPrice: 0 });
-  }
-
-  removeCartItem(i: number) {
-    this.cart.splice(i, 1);
-  }
-
-  increaseQuantity(item: any) {
-    item.quantity = this.safeQuantity(item.quantity) + 1;
-  }
-
-  decreaseQuantity(item: any) {
-    item.quantity = Math.max(1, this.safeQuantity(item.quantity) - 1);
-  }
-
-  setCartQuantity(item: any, value: any) {
-    item.quantity = this.safeQuantity(value);
-  }
-
-  clearCart() {
-    if (this.cart.length === 0) return;
-    if (!confirm('Clear all cart items? Client and payment method will stay selected.')) return;
-    this.cart = [];
-    this.selectedServiceId = '';
-    this.selectedProductId = '';
-    this.checkoutForm.discountAmount = 0;
-    this.checkoutForm.taxRate = 0;
-  }
-
-  holdSale() {
-    if (this.cart.length === 0) return;
-    if (!confirm('Hold this sale and clear the checkout? Client, payment, discount, and tax will be saved.')) return;
-
-    try {
-      const heldSale = {
-        cart: this.cart.map((item) => ({ ...item, quantity: this.safeQuantity(item.quantity) })),
-        checkoutForm: { ...this.checkoutForm },
-        splitPayments: { ...this.splitPayments },
-        checkoutNote: this.checkoutNote,
-        savedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(this.heldSaleKey, JSON.stringify(heldSale));
-      this.heldSaleExists = true;
-      this.cart = [];
-      this.selectedServiceId = '';
-      this.selectedProductId = '';
-      this.checkoutForm = this.defaultCheckoutForm();
-      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
-      this.checkoutNote = '';
-    } catch {
-      this.checkoutError = 'Held sale could not be saved in this browser.';
-    }
-  }
-
-  restoreHeldSale() {
-    const raw = localStorage.getItem(this.heldSaleKey);
-    if (!raw) {
-      this.refreshHeldSaleState();
+  handleGlobalSearch() {
+    if (!this.globalSearch.trim()) return;
+    const q = this.globalSearch.trim();
+    if (q.length >= 3) {
+      this.store.setBarcodeInput(q);
+      this.globalSearch = '';
       return;
     }
-
-    if (this.cart.length > 0 && !confirm('Replace the current cart with the held sale?')) return;
-
-    try {
-      const heldSale = JSON.parse(raw);
-      this.cart = (heldSale.cart || []).map((item: any) => ({ ...item, quantity: this.safeQuantity(item.quantity) }));
-      this.checkoutForm = { ...this.defaultCheckoutForm(), ...(heldSale.checkoutForm || {}) };
-      this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0, ...(heldSale.splitPayments || {}) };
-      this.checkoutNote = heldSale.checkoutNote || '';
-      this.selectedServiceId = '';
-      this.selectedProductId = '';
-    } catch {
-      this.checkoutError = 'Held sale could not be restored.';
-    }
-  }
-
-  clearHeldSale() {
-    if (!this.heldSaleExists) return;
-    if (!confirm('Clear the held sale from this browser?')) return;
-    localStorage.removeItem(this.heldSaleKey);
-    this.refreshHeldSaleState();
-  }
-
-  private refreshHeldSaleState() {
-    this.heldSaleExists = !!localStorage.getItem(this.heldSaleKey);
-  }
-
-  private safeQuantity(value: any): number {
-    const quantity = Math.floor(Number(value));
-    return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-  }
-
-  splitAmount(method: string): number {
-    return Math.max(0, Number(this.splitPayments?.[method]) || 0);
-  }
-
-  splitPaymentTotal(): number {
-    return this.splitAmount('cash') + this.splitAmount('card') + this.splitAmount('upi') + this.splitAmount('wallet');
-  }
-
-  hasSplitPayment(): boolean {
-    return this.splitPaymentTotal() > 0;
-  }
-
-  splitPaymentMatchesTotal(): boolean {
-    if (!this.hasSplitPayment()) return true;
-    return Math.abs(this.splitPaymentTotal() - this.grandTotal()) < 0.01;
-  }
-
-  lineTotal(item: any): number {
-    return this.safeQuantity(item.quantity) * (Number(item.unitPrice) || 0);
-  }
-
-  cartTotal(): number {
-    return this.cart.reduce((sum, item) => sum + this.lineTotal(item), 0);
-  }
-
-  discountAmount(): number {
-    const discount = Number(this.checkoutForm.discountAmount) || 0;
-    return Math.max(0, Math.min(discount, this.cartTotal()));
-  }
-
-  taxableAmount(): number {
-    return Math.max(0, this.cartTotal() - this.discountAmount());
-  }
-
-  taxAmount(): number {
-    const rate = Number(this.checkoutForm.taxRate) || 0;
-    return this.taxableAmount() * Math.max(0, rate) / 100;
-  }
-
-  grandTotal(): number {
-    return this.taxableAmount() + this.taxAmount();
-  }
-
-  loadSalesHistory() {
-    this.salesLoading = true;
-    this.salesError = '';
-
-    const query: any = {};
-    if (this.salesFilters.from) query.from = this.salesFilters.from;
-    if (this.salesFilters.to) query.to = this.salesFilters.to;
-    if (this.salesFilters.status) query.status = this.salesFilters.status;
-
-    this.api.getSales(query).subscribe({
+    this.api.getSales({ search: q }).subscribe({
       next: (sales) => {
-        const payment = this.salesFilters.paymentMethod;
-        this.salesHistory = payment ? (sales || []).filter((sale: any) => this.paymentLabel(sale).toUpperCase() === payment) : (sales || []);
-        this.salesLoading = false;
+        if (sales?.length === 1) {
+          this.viewReceipt(sales[0]);
+        } else {
+          this.store.salesHistory.set(sales || []);
+          this.showHistory.set(true);
+        }
+        this.globalSearch = '';
       },
-      error: (err) => {
-        this.salesError = err?.error?.message || 'Sales history could not be loaded.';
-        this.salesLoading = false;
-      },
+      error: () => {},
     });
   }
 
-  clearSalesFilters() {
-    this.salesFilters = { from: '', to: '', status: '', paymentMethod: '' };
-    this.loadSalesHistory();
-  }
+  doCheckout() {
+    if (!this.store.canCheckout()) return;
+    if (this.store.checkoutBusy()) return;
+    this.store.checkoutBusy.set(true);
+    this.store.error.set('');
 
-  salesFilterLabel(): string {
-    const parts: string[] = [];
-    if (this.salesFilters.from || this.salesFilters.to) {
-      parts.push(`${this.salesFilters.from || 'start'} to ${this.salesFilters.to || 'today'}`);
+    const items = this.store.getCartItemsForCheckout();
+    const discount = this.store.cartDiscountAmount();
+    const tax = this.store.taxAmount();
+    const tip = this.store.tip();
+    const note = this.store.note();
+
+    if (discount > 0) {
+      items.push({ serviceId: null, productId: null, name: 'Discount', quantity: 1, unitPrice: -discount });
     }
-    if (this.salesFilters.status) parts.push(this.salesFilters.status.toLowerCase());
-    if (this.salesFilters.paymentMethod) parts.push(this.salesFilters.paymentMethod);
-    return parts.length ? parts.join(' - ') : 'all loaded sales';
-  }
-
-  closingSummary(): any {
-    const paymentTotals: Record<string, number> = { CASH: 0, CARD: 0, UPI: 0, WALLET: 0 };
-    const summary = {
-      completedAmount: 0,
-      refundedAmount: 0,
-      netSales: 0,
-      completedCount: 0,
-      refundedCount: 0,
-      paymentTotals,
-    };
-
-    for (const sale of this.salesHistory || []) {
-      const amount = Number(sale.totalAmount) || 0;
-      const status = String(sale.status || '').toUpperCase();
-
-      if (status === 'COMPLETED') {
-        summary.completedAmount += amount;
-        summary.completedCount += 1;
-
-        const paymentMethod = this.paymentLabel(sale).toUpperCase();
-        if (paymentMethod in paymentTotals) paymentTotals[paymentMethod] += amount;
-      }
-
-      if (status === 'REFUNDED') {
-        summary.refundedAmount += amount;
-        summary.refundedCount += 1;
-      }
+    if (tax > 0) {
+      items.push({ serviceId: null, productId: null, name: 'Tax', quantity: 1, unitPrice: tax });
     }
 
-    summary.netSales = summary.completedAmount - summary.refundedAmount;
-    return summary;
-  }
+    const client = this.store.client();
+    const splitPayments = this.store.splitPayments();
+    const paymentMethod = splitPayments.cash > 0 && splitPayments.card === 0 && splitPayments.upi === 0 && splitPayments.wallet === 0 ? 'CASH' :
+      splitPayments.card > 0 && splitPayments.cash === 0 && splitPayments.upi === 0 && splitPayments.wallet === 0 ? 'CARD' :
+      splitPayments.upi > 0 && splitPayments.cash === 0 && splitPayments.card === 0 && splitPayments.wallet === 0 ? 'UPI' :
+      splitPayments.wallet > 0 && splitPayments.cash === 0 && splitPayments.card === 0 && splitPayments.upi === 0 ? 'WALLET' :
+      'SPLIT';
 
-  paymentTotal(summary: any, method: string): number {
-    return Number(summary?.paymentTotals?.[method]) || 0;
-  }
-
-  exportSalesCsv() {
-    if (!this.salesHistory.length) return;
-
-    const summary = this.closingSummary();
-    const rows: any[][] = [
-      ['Sale ID', 'Receipt number', 'Date', 'Client name', 'Payment method', 'Payment status', 'Staff/cashier', 'Status', 'Total amount', 'Item names'],
-      ...this.salesHistory.map((sale) => [
-        sale.id,
-        this.receiptNumber(sale),
-        this.formatCsvDate(sale.createdAt),
-        sale.client?.fullName || 'Walk-in',
-        this.paymentLabel(sale),
-        this.paymentStatus(sale),
-        this.staffLabel(sale),
-        sale.status || '',
-        (Number(sale.totalAmount) || 0).toFixed(2),
-        this.saleItemNames(sale),
-      ]),
-      [],
-      ['', '', '', '', '', '', '', 'Completed total', summary.completedAmount.toFixed(2), ''],
-      ['', '', '', '', '', '', '', 'Refunded total', summary.refundedAmount.toFixed(2), ''],
-      ['', '', '', '', '', '', '', 'Net sales', summary.netSales.toFixed(2), ''],
-    ];
-
-    const csv = rows.map((row) => row.map((value) => this.csvValue(value)).join(',')).join('\r\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = `pos-sales-${this.fileDate(new Date())}.csv`;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  }
-
-  private saleItemNames(sale: any): string {
-    return (sale.items || [])
-      .map((item: any) => String(item.name || '').trim())
-      .filter(Boolean)
-      .join(', ');
-  }
-
-  private csvValue(value: any): string {
-    const text = value === null || value === undefined ? '' : String(value);
-    const escaped = text.replace(/"/g, '""');
-    return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
-  }
-
-  private formatCsvDate(value: any): string {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value || '');
-    return `${this.fileDate(date)} ${this.pad(date.getHours())}:${this.pad(date.getMinutes())}`;
-  }
-
-  private fileDate(date: Date): string {
-    return `${date.getFullYear()}-${this.pad(date.getMonth() + 1)}-${this.pad(date.getDate())}`;
-  }
-
-  private pad(value: number): string {
-    return String(value).padStart(2, '0');
-  }
-
-  receiptNumber(sale: any): string {
-    const receiptNo = sale?.receipt?.receiptNumber || sale?.receiptNumber;
-    if (receiptNo) return String(receiptNo);
-
-    const id = String(sale?.id || '');
-    return id ? id.slice(-8).toUpperCase() : 'PENDING';
-  }
-
-  paymentLabel(sale: any): string {
-    return String(sale?.payment?.method || sale?.paymentMethod || 'CASH').toUpperCase();
-  }
-
-  paymentStatus(sale: any): string {
-    const status = sale?.payment?.status || sale?.paymentStatus || '';
-    return status ? String(status).toUpperCase() : '';
-  }
-  staffLabel(sale: any): string {
-    if (sale?.staff?.fullName) return sale.staff.fullName;
-    const staffId = sale?.staffId || (sale?.id === this.selectedSale?.id ? this.selectedSale?.staffId : '');
-    if (!staffId) return '';
-    return this.staffMembers.find((staff) => staff.id === staffId)?.fullName || '';
-  }
-
-  receiptItemCount(sale: any): number {
-    return (sale?.items || [])
-      .filter((item: any) => !['discount', 'tax'].includes(String(item.name || '').trim().toLowerCase()))
-      .reduce((sum: number, item: any) => sum + this.safeQuantity(item.quantity), 0);
+    this.api.checkout({
+      clientId: client?.id || null,
+      staffId: this.store.staffId() || null,
+      items,
+      paymentMethod,
+      totalAmount: this.store.grandTotal(),
+    }).subscribe({
+      next: (sale) => {
+        this.store.checkoutBusy.set(false);
+        this.store.clearCart();
+        this.loadDashboard();
+        this.loadSalesHistory();
+        this.viewReceipt(sale);
+        this.successMessage.set('Checkout completed!');
+        setTimeout(() => this.successMessage.set(''), 3000);
+      },
+      error: (err) => {
+        this.store.checkoutBusy.set(false);
+        this.store.error.set(err?.error?.message || 'Checkout failed.');
+      },
+    });
   }
 
   viewReceipt(sale: any) {
-    this.selectedSale = sale;
-    this.saleDetailLoading = true;
-    this.saleDetailError = '';
-
     this.api.getSale(sale.id).subscribe({
-      next: (detail) => {
-        this.selectedSale = detail;
-        this.saleDetailLoading = false;
-      },
-      error: (err) => {
-        this.saleDetailError = err?.error?.message || 'Receipt could not be loaded.';
-        this.saleDetailLoading = false;
-      },
+      next: (detail) => { this.selectedSale.set(detail); },
+      error: () => { this.selectedSale.set(sale); },
     });
   }
 
   closeReceipt() {
-    this.selectedSale = null;
-    this.saleDetailError = '';
-    this.saleDetailLoading = false;
-    this.refundBusy = false;
+    this.selectedSale.set(null);
+    this.refundBusy.set(false);
   }
 
   printReceipt() {
     window.print();
   }
 
+  shareWhatsApp() {
+    const sale = this.selectedSale();
+    if (!sale?.client?.phone) return;
+    const number = sale.client.phone.replace(/[^0-9]/g, '');
+    const msg = encodeURIComponent(
+      `Ambition Unisex Salon - Receipt ${this.receiptNumber(sale)}\nAmount: $${(sale.totalAmount || 0).toFixed(2)}\nStatus: ${sale.status}\nThank you for visiting!`
+    );
+    window.open(`https://wa.me/${number}?text=${msg}`, '_blank');
+  }
+
   refundSale() {
-    if (!this.selectedSale || this.selectedSale.status === 'REFUNDED') return;
-    const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(this.selectedSale.totalAmount) || 0);
-    if (!confirm(`Refund sale ${this.selectedSale.id} for ${amount}? This will mark the sale as refunded.`)) return;
-
-    this.refundBusy = true;
-    this.saleDetailError = '';
-
-    this.api.refund(this.selectedSale.id, {}).subscribe({
-      next: (sale) => {
-        this.selectedSale = sale;
-        this.refundBusy = false;
-        this.load();
+    const sale = this.selectedSale();
+    if (!sale || sale.status === 'REFUNDED') return;
+    const amount = (sale.totalAmount || 0).toFixed(2);
+    if (!confirm(`Refund sale for $${amount}?`)) return;
+    this.refundBusy.set(true);
+    this.api.refund(sale.id).subscribe({
+      next: (result) => {
+        this.selectedSale.set(result);
+        this.refundBusy.set(false);
+        this.loadDashboard();
         this.loadSalesHistory();
       },
       error: (err) => {
-        this.refundBusy = false;
-        this.saleDetailError = err?.error?.message || 'Refund failed. Please try again.';
+        this.refundBusy.set(false);
+        this.store.error.set(err?.error?.message || 'Refund failed.');
       },
     });
   }
 
-  canCheckout(): boolean {
-    return this.cart.length > 0 && !this.checkoutBusy && this.splitPaymentMatchesTotal();
+  toggleHistory() {
+    this.showHistory.update(v => !v);
+    if (this.showCashDrawer()) this.showCashDrawer.set(false);
+    if (this.showReports()) this.showReports.set(false);
+    if (this.showHistory()) this.loadSalesHistory();
   }
 
-  doCheckout() {
-    this.checkoutError = '';
-    this.checkoutSuccess = false;
+  toggleCashDrawer() {
+    this.showCashDrawer.update(v => !v);
+    if (this.showHistory()) this.showHistory.set(false);
+    if (this.showReports()) this.showReports.set(false);
+    if (this.showCashDrawer()) this.refreshCashDrawer();
+  }
 
-    if (this.cart.length === 0) {
-      this.checkoutError = 'Add at least one item to checkout.';
-      return;
-    }
+  toggleReports() {
+    this.showReports.update(v => !v);
+    if (this.showHistory()) this.showHistory.set(false);
+    if (this.showCashDrawer()) this.showCashDrawer.set(false);
+    if (this.showReports()) this.loadSalesHistory();
+  }
 
-    const invalidItem = this.cart.find((item) => !String(item.name || '').trim());
-    if (invalidItem) {
-      this.checkoutError = 'Every cart item needs a name.';
-      return;
-    }
+  private refreshCashDrawer() {
+    this.api.getCashDrawerOpen().subscribe({
+      next: (session) => this.cashDrawerSession.set(session),
+      error: () => this.cashDrawerSession.set(null),
+    });
+  }
 
-    this.checkoutBusy = true;
-
-    const items = this.cart.map((item) => ({
-      serviceId: item.serviceId || null,
-      productId: item.productId || null,
-      name: String(item.name || 'Item').trim(),
-      quantity: this.safeQuantity(item.quantity),
-      unitPrice: Number(item.unitPrice) || 0,
-    }));
-
-    const discount = this.discountAmount();
-    const tax = this.taxAmount();
-
-    if (discount > 0) {
-      items.push({ serviceId: null, productId: null, name: 'Discount', quantity: 1, unitPrice: -discount });
-    }
-
-    if (tax > 0) {
-      items.push({ serviceId: null, productId: null, name: 'Tax', quantity: 1, unitPrice: tax });
-    }
-
-    this.api.checkout({
-      clientId: this.checkoutForm.clientId || null,
-      items,
-      staffId: this.checkoutForm.staffId || null,
-      paymentMethod: this.checkoutForm.paymentMethod || 'CASH',
-    }).subscribe({
-      next: (sale) => {
-        this.checkoutBusy = false;
-        this.checkoutSuccess = true;
-        this.cart = [];
-        this.selectedServiceId = '';
-        this.selectedProductId = '';
-        this.checkoutForm = this.defaultCheckoutForm();
-        this.splitPayments = { cash: 0, card: 0, upi: 0, wallet: 0 };
-        this.checkoutNote = '';
-        this.load();
-        this.loadSalesHistory();
-        this.viewReceipt(sale);
-        setTimeout(() => this.checkoutSuccess = false, 3000);
+  openCashDrawer() {
+    const amount = Number(this.openingBalance()) || 0;
+    if (amount <= 0) return;
+    this.api.openCashDrawer({ openingBalance: amount }).subscribe({
+      next: (session) => {
+        this.cashDrawerSession.set(session);
+        this.openingBalance.set(0);
+        this.successMessage.set('Cash drawer opened');
+        setTimeout(() => this.successMessage.set(''), 3000);
       },
-      error: (err) => {
-        this.checkoutBusy = false;
-        this.checkoutError = err?.error?.message || 'Checkout failed. Please try again.';
+      error: () => {
+        this.store.error.set('Cash drawer API unavailable. This is an integration-ready UI - backend endpoint required.');
       },
     });
+  }
+
+  closeCashDrawer() {
+    const session = this.cashDrawerSession();
+    if (!session?.id) return;
+    if (!confirm('Close cash drawer session?')) return;
+    this.api.closeCashDrawer(session.id, { closingBalance: Number(this.openingBalance()) || 0 }).subscribe({
+      next: () => {
+        this.cashDrawerSession.set(null);
+        this.successMessage.set('Cash drawer closed');
+        setTimeout(() => this.successMessage.set(''), 3000);
+      },
+      error: () => {
+        this.store.error.set('Close session API unavailable.');
+      },
+    });
+  }
+
+  cashIn() {
+    const amount = Number(this.cashMoveAmount()) || 0;
+    const session = this.cashDrawerSession();
+    if (amount <= 0 || !session?.id) return;
+    this.api.cashInOut(session.id, { type: 'IN', amount }).subscribe({
+      next: (updated) => {
+        this.cashDrawerSession.set(updated);
+        this.cashMoveAmount.set(0);
+      },
+      error: () => {
+        this.store.error.set('Cash in API unavailable.');
+      },
+    });
+  }
+
+  cashOut() {
+    const amount = Number(this.cashMoveAmount()) || 0;
+    const session = this.cashDrawerSession();
+    if (amount <= 0 || !session?.id) return;
+    this.api.cashInOut(session.id, { type: 'OUT', amount }).subscribe({
+      next: (updated) => {
+        this.cashDrawerSession.set(updated);
+        this.cashMoveAmount.set(0);
+      },
+      error: () => {
+        this.store.error.set('Cash out API unavailable.');
+      },
+    });
+  }
+
+  receiptNumber(sale: any): string {
+    return sale?.receipt?.receiptNumber || `POS-${(sale?.id || '').slice(-8).toUpperCase()}`;
+  }
+
+  receiptItemCount(sale: any): number {
+    return (sale?.items || []).filter((i: any) => !['discount', 'tax'].includes(String(i.name || '').toLowerCase()))
+      .reduce((s: number, i: any) => s + (i.quantity || 0), 0);
   }
 }
-

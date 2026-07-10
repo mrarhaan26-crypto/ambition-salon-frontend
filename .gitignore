@@ -10,3 +10,8 @@ coverage/
 .env.*
 prisma/dev.db
 uploads/
+
+# Database backups (never commit dumps)
+backups/
+*.dump
+*.sql
