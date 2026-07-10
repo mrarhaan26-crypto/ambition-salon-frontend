@@ -123,7 +123,7 @@ import { ClientsService } from '../clients/clients.service';
     .note-error{background:#fef2f2;color:#991b1b;padding:8px 12px;border-radius:10px;font-size:12px;margin-bottom:8px;text-align:center}
     .notes-loading,.tl-loading{display:flex;align-items:center;gap:10px;padding:16px;color:#6b7280;font-size:13px;justify-content:center}
     .mini-spinner{width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .tl-error{background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px;text-align:center;font-size:13px;color:#991b1b}
     .tl-error button{margin-top:8px;background:#0b0b0b;color:white;border:0;border-radius:8px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px}
     .notes-list{display:grid;gap:6px}

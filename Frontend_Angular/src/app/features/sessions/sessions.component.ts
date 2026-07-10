@@ -57,7 +57,7 @@ import { SessionsService } from './sessions.service';
     .revoke-btn:hover{background:#fee2e2;color:#dc2626}
     .loading,.error,.empty{text-align:center;padding:48px;color:var(--muted)}
     .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--black);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-right:12px;vertical-align:middle}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px}
     .error strong{color:#991b1b}.error p{color:#7f1d1d;margin:8px 0}
     .error button{background:var(--black);color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}

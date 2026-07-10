@@ -126,7 +126,7 @@ import { AttendanceService } from './attendance.service';
     .clock-error{background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:12px;font-size:13px;width:100%}
     .clock-success{background:#f0fdf4;color:#16a34a;padding:10px 14px;border-radius:12px;font-size:13px;width:100%}
     .spinner{width:20px;height:20px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error strong{color:#991b1b}.error p{color:#7f1d1d}

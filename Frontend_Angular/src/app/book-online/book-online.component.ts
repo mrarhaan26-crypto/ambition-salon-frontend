@@ -102,8 +102,8 @@ import { BookOnlineService } from './book-online.service';
     .header h1{font-size:34px;margin:0}
     .header p{color:#6b7280}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
-    .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
+    
     .steps{display:flex;gap:12px;overflow-x:auto}
     .step{display:flex;gap:10px;align-items:center;padding:12px 16px;background:#f3f4f6;border-radius:14px;flex:1;min-width:140px}
     .step.active{background:#0b0b0b;color:white}

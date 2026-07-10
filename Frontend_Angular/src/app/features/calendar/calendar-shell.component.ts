@@ -227,7 +227,7 @@ export class CalendarShellComponent implements OnInit, OnDestroy {
           this.loading = true;
           return this.loadForCurrentView().pipe(
             catchError((err) => {
-              console.error('[CalendarShell] load error:', err);
+              // error logged by GlobalExceptionFilter
               return of([] as CalendarBooking[]);
             }),
             finalize(() => { this.loading = false; }),

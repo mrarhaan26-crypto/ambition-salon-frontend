@@ -115,7 +115,7 @@ import { GlobalSearchResult } from './global-search.models';
     .clear-btn{position:absolute;right:12px;background:none;border:0;font-size:24px;color:#6b7280;cursor:pointer;padding:4px 8px;line-height:1}
     .loading{display:flex;align-items:center;gap:14px;padding:32px;justify-content:center;color:#6b7280}
     .spinner{width:22px;height:22px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error strong{color:#991b1b}.error p{color:#7f1d1d}
     .results{display:grid;gap:24px}

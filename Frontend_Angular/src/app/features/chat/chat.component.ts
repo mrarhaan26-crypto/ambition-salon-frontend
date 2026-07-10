@@ -66,7 +66,7 @@ import { ChatConversation, ChatMessage } from './chat.models';
     .conv-header{padding:18px 20px;font-weight:800;font-size:15px;border-bottom:1px solid #e5e7eb;background:#fafafa}
     .loading-sm{padding:24px;display:flex;justify-content:center}
     .spinner{width:20px;height:20px;border:2px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .conv-list{overflow-y:auto}
     .conv-item{padding:14px 20px;border-bottom:1px solid #f3f4f6;cursor:pointer;display:grid;gap:4px}
     .conv-item:hover{background:#f8fafc}

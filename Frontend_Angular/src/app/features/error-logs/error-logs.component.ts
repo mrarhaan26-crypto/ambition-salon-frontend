@@ -88,7 +88,7 @@ import { ErrorLogsService } from './error-logs.service';
     .resolve-btn{padding:6px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:600}
     .loading,.error,.empty{text-align:center;padding:48px;color:var(--muted)}
     .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--black);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;margin-right:12px;vertical-align:middle}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .error-state{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error-state strong{color:#991b1b}.error-state p{color:#7f1d1d;margin:8px 0}
     .error-state button{background:var(--black);color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}

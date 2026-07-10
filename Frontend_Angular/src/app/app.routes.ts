@@ -1,107 +1,177 @@
 import { Routes } from '@angular/router';
 import { WebsiteLayoutComponent } from './core/layouts/website-layout.component';
 import { AppLayoutComponent } from './core/layouts/app-layout.component';
-import { HomeComponent } from './website/home/home.component';
-import { PageComponent } from './website/page/page.component';
-import { LoginComponent } from './core/auth/login.component';
-import { RegisterComponent } from './core/auth/register.component';
-import { ForgotPasswordComponent } from './core/auth/forgot-password.component';
-import { ModuleShellComponent } from './features/module-shell.component';
-import { ClientsComponent } from './features/clients/clients.component';
-import { AiCommandCenterComponent } from './features/ai-command-center/ai-command-center.component';
-import { NotificationsComponent } from './features/notifications/notifications.component';
-import { GlobalSearchComponent } from './features/global-search/global-search.component';
-import { AiInsightsComponent } from './features/ai-insights/ai-insights.component';
-import { DashboardAnalyticsComponent } from './features/dashboard-analytics/dashboard-analytics.component';
-import { StaffComponent } from './features/staff/staff.component';
-import { ServicesComponent } from './features/services/services.component';
-import { PosComponent } from './features/pos/pos.component';
-import { InventoryComponent } from './features/inventory/inventory.component';
-import { ReportsComponent } from './features/reports/reports.component';
-import { CalendarShellComponent } from './features/calendar/calendar-shell.component';
-import { BookingsComponent } from './features/bookings/bookings.component';
-import { MarketingComponent } from './features/marketing/marketing.component';
-import { SettingsComponent } from './features/settings/settings.component';
-import { MembershipsComponent } from './features/memberships/memberships.component';
-import { PackagesComponent } from './features/packages/packages.component';
-import { WalletComponent } from './features/wallet/wallet.component';
-import { GiftCardsComponent } from './features/gift-cards/gift-cards.component';
-import { LoyaltyComponent } from './features/loyalty/loyalty.component';
-import { FormsComponent } from './features/forms/forms.component';
-import { ClientTimelineComponent } from './features/client-timeline/client-timeline.component';
-import { OnlineProfileComponent } from './features/online-profile/online-profile.component';
-import { CustomerPortalComponent } from './features/customer-portal/customer-portal.component';
-import { PaymentsComponent } from './features/payments/payments.component';
-import { InvoicesComponent } from './features/invoices/invoices.component';
-import { BillingRulesComponent } from './features/billing-rules/billing-rules.component';
-import { AdjustmentsComponent } from './features/adjustments/adjustments.component';
-import { BookOnlineComponent } from './book-online/book-online.component';
-import { AutomationsComponent } from './features/automations/automations.component';
-import { MessageCenterComponent } from './features/message-center/message-center.component';
-import { NotificationTemplatesComponent } from './features/notification-templates/notification-templates.component';
-import { TasksComponent } from './features/tasks/tasks.component';
-import { AttendanceComponent } from './features/attendance/attendance.component';
-import { CommissionsComponent } from './features/commissions/commissions.component';
-import { AdvancedReportsComponent } from './features/advanced-reports/advanced-reports.component';
-import { BranchesComponent } from './features/branches/branches.component';
-import { AuditLogsComponent } from './features/audit-logs/audit-logs.component';
-import { DataExportComponent } from './features/data-export/data-export.component';
-import { StaffWorkspaceComponent } from './features/staff-workspace/staff-workspace.component';
-import { OwnerCommandCenterComponent } from './features/owner-command-center/owner-command-center.component';
-import { CrmIntelligenceComponent } from './features/crm-intelligence/crm-intelligence.component';
-import { ResourcesComponent } from './features/resources/resources.component';
-import { ReputationComponent } from './features/reputation/reputation.component';
-import { SurveysComponent } from './features/surveys/surveys.component';
-import { DeliverySettingsComponent } from './features/delivery-settings/delivery-settings.component';
 import { authGuard } from './core/auth/auth.guard';
 
+const fp = () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent);
+
+function section(title: string, description: string, icon: string, parentKey: string) {
+  const parentLabel = parentKey.charAt(0).toUpperCase() + parentKey.slice(1);
+  return {
+    title,
+    description,
+    icon,
+    todo: `Replace with enterprise-page-header and full ${title} implementation.`,
+    parentRoute: `/app/${parentKey}`,
+    parentLabel,
+  };
+}
+
 const appModuleRoutes: Routes = [
-  { path: 'home', component: ModuleShellComponent, data: { title: 'home' } },
-  { path: 'clients', component: ClientsComponent },
-  { path: 'ai-command-center', component: AiCommandCenterComponent },
-  { path: 'notifications', component: NotificationsComponent },
-  { path: 'global-search', component: GlobalSearchComponent },
-  { path: 'ai-insights', component: AiInsightsComponent },
-  { path: 'dashboard-analytics', component: DashboardAnalyticsComponent },
-  { path: 'staff', component: StaffComponent },
-  { path: 'services', component: ServicesComponent },
-  { path: 'pos', component: PosComponent },
-  { path: 'inventory', component: InventoryComponent },
-  { path: 'reports', component: ReportsComponent },
-  { path: 'calendar', component: CalendarShellComponent },
-  { path: 'bookings', component: BookingsComponent },
-  { path: 'marketing', component: MarketingComponent },
-  { path: 'settings', component: SettingsComponent },
-  { path: 'memberships', component: MembershipsComponent },
-  { path: 'packages', component: PackagesComponent },
-  { path: 'wallet', component: WalletComponent },
-  { path: 'gift-cards', component: GiftCardsComponent },
-  { path: 'loyalty', component: LoyaltyComponent },
-  { path: 'forms', component: FormsComponent },
-  { path: 'client-timeline', component: ClientTimelineComponent },
-  { path: 'online-profile', component: OnlineProfileComponent },
-  { path: 'customer-portal', component: CustomerPortalComponent },
-  { path: 'payments', component: PaymentsComponent },
-  { path: 'invoices', component: InvoicesComponent },
-  { path: 'billing-rules', component: BillingRulesComponent },
-  { path: 'adjustments', component: AdjustmentsComponent },
-  { path: 'automations', component: AutomationsComponent },
-  { path: 'message-center', component: MessageCenterComponent },
-  { path: 'notification-templates', component: NotificationTemplatesComponent },
-  { path: 'tasks', component: TasksComponent },
-  { path: 'attendance', component: AttendanceComponent },
-  { path: 'commissions', component: CommissionsComponent },
-  { path: 'advanced-reports', component: AdvancedReportsComponent },
-  { path: 'branches', component: BranchesComponent },
-  { path: 'audit-logs', component: AuditLogsComponent },
-  { path: 'data-export', component: DataExportComponent },
-  { path: 'staff-workspace', component: StaffWorkspaceComponent },
-  { path: 'owner-command-center', component: OwnerCommandCenterComponent },
-  { path: 'crm-intelligence', component: CrmIntelligenceComponent },
-  { path: 'resources', component: ResourcesComponent },
-  { path: 'reputation', component: ReputationComponent },
-  { path: 'surveys', component: SurveysComponent },
-  { path: 'delivery-settings', component: DeliverySettingsComponent },
+  { path: 'home', loadComponent: () => import('./features/module-shell.component').then(m => m.ModuleShellComponent), data: { title: 'home' } },
+  { path: 'clients', loadComponent: () => import('./features/clients/clients.component').then(m => m.ClientsComponent) },
+  { path: 'clients/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Client', description: 'Add a new client to the salon', icon: '👤', todo: 'Replace with enterprise-page-header and full client creation form.', parentRoute: '/app/clients', parentLabel: 'Clients' } },
+  {
+    path: 'clients/:id',
+    loadComponent: () => import('./features/clients/client-detail.component').then(m => m.ClientDetailComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', loadComponent: fp, data: section('Client Overview', '360° summary of the client profile and recent activity.', '📋', 'clients') },
+      { path: 'profile', loadComponent: fp, data: section('Client Profile', 'Personal details, contact and preferences.', '👤', 'clients') },
+      { path: 'appointments', loadComponent: fp, data: section('Appointments', 'Past and upcoming appointments for this client.', '📅', 'clients') },
+      { path: 'services', loadComponent: fp, data: section('Services', 'Services this client has received.', '💇', 'clients') },
+      { path: 'products', loadComponent: fp, data: section('Products', 'Products purchased by this client.', '🛍️', 'clients') },
+      { path: 'payments', loadComponent: fp, data: section('Payments', 'Payment history for this client.', '💰', 'clients') },
+      { path: 'invoices', loadComponent: fp, data: section('Invoices', 'Invoices raised for this client.', '🧾', 'clients') },
+      { path: 'memberships', loadComponent: fp, data: section('Memberships', 'Active and expired memberships.', '🪪', 'clients') },
+      { path: 'packages', loadComponent: fp, data: section('Packages', 'Purchased service packages.', '📦', 'clients') },
+      { path: 'loyalty', loadComponent: fp, data: section('Loyalty', 'Loyalty points and rewards.', '⭐', 'clients') },
+      { path: 'wallet', loadComponent: fp, data: section('Wallet', 'Wallet balance and transactions.', '👛', 'clients') },
+      { path: 'photos', loadComponent: fp, data: section('Photos', 'Client photos and galleries.', '🖼️', 'clients') },
+      { path: 'files', loadComponent: fp, data: section('Files', 'Documents attached to this client.', '📁', 'clients') },
+      { path: 'forms', loadComponent: fp, data: section('Forms', 'Intake and consent forms.', '📋', 'clients') },
+      { path: 'preferences', loadComponent: fp, data: section('Preferences', 'Communication and marketing preferences.', '⚙️', 'clients') },
+      { path: 'allergies', loadComponent: fp, data: section('Allergies', 'Recorded allergies and alerts.', '⚠️', 'clients') },
+      { path: 'feedback', loadComponent: fp, data: section('Feedback', 'Client feedback and ratings.', '💬', 'clients') },
+      { path: 'communications', loadComponent: fp, data: section('Communications', 'SMS, email and WhatsApp history.', '✉️', 'clients') },
+      { path: 'history', loadComponent: fp, data: section('History', 'Full activity timeline.', '🕘', 'clients') },
+      { path: 'ai', loadComponent: fp, data: section('Client AI', 'AI insights for this client.', '✨', 'clients') },
+      { path: 'settings', loadComponent: fp, data: section('Client Settings', 'Client-level configuration.', '🔧', 'clients') },
+    ]
+  },
+  { path: 'ai-command-center', loadComponent: () => import('./features/ai-command-center/ai-command-center.component').then(m => m.AiCommandCenterComponent) },
+  { path: 'notifications', loadComponent: () => import('./features/notifications/notifications.component').then(m => m.NotificationsComponent) },
+  { path: 'global-search', loadComponent: () => import('./features/global-search/global-search.component').then(m => m.GlobalSearchComponent) },
+  { path: 'ai-insights', loadComponent: () => import('./features/ai-insights/ai-insights.component').then(m => m.AiInsightsComponent) },
+  { path: 'dashboard-analytics', loadComponent: () => import('./features/dashboard-analytics/dashboard-analytics.component').then(m => m.DashboardAnalyticsComponent) },
+  { path: 'staff', loadComponent: () => import('./features/staff/staff.component').then(m => m.StaffComponent) },
+  { path: 'staff/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Staff', description: 'Add a new staff member', icon: '👥', todo: 'Replace with enterprise-page-header and full staff creation form.', parentRoute: '/app/staff', parentLabel: 'Staff' } },
+  {
+    path: 'staff/:id',
+    loadComponent: () => import('./features/staff/staff-detail.component').then(m => m.StaffDetailComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', loadComponent: fp, data: section('Staff Overview', 'Summary of performance, schedule and status.', '📋', 'staff') },
+      { path: 'profile', loadComponent: fp, data: section('Staff Profile', 'Personal and contact details.', '👤', 'staff') },
+      { path: 'calendar', loadComponent: fp, data: section('Staff Calendar', 'Personal working calendar.', '📅', 'staff') },
+      { path: 'appointments', loadComponent: fp, data: section('Appointments', 'Appointments assigned to this staff member.', '🗓️', 'staff') },
+      { path: 'availability', loadComponent: fp, data: section('Availability', 'Available time slots.', '🟢', 'staff') },
+      { path: 'working-hours', loadComponent: fp, data: section('Working Hours', 'Scheduled working hours.', '🕒', 'staff') },
+      { path: 'attendance', loadComponent: fp, data: section('Attendance', 'Attendance records.', '📍', 'staff') },
+      { path: 'leaves', loadComponent: fp, data: section('Leaves', 'Leave requests and balances (integration ready).', '🏖️', 'staff') },
+      { path: 'services', loadComponent: fp, data: section('Services', 'Services this staff member provides.', '💇', 'staff') },
+      { path: 'skills', loadComponent: fp, data: section('Skills', 'Skills and specialties.', '🎯', 'staff') },
+      { path: 'performance', loadComponent: fp, data: section('Performance', 'Performance metrics and KPIs.', '📈', 'staff') },
+      { path: 'targets', loadComponent: fp, data: section('Targets', 'Assigned targets.', '🎯', 'staff') },
+      { path: 'commission', loadComponent: fp, data: section('Commission', 'Commission calculations.', '💸', 'staff') },
+      { path: 'payroll', loadComponent: fp, data: section('Payroll', 'Payroll records.', '🧮', 'staff') },
+      { path: 'tips', loadComponent: fp, data: section('Tips', 'Tips received.', '💡', 'staff') },
+      { path: 'documents', loadComponent: fp, data: section('Documents', 'Staff documents and contracts.', '📄', 'staff') },
+      { path: 'training', loadComponent: fp, data: section('Training', 'Training and certifications.', '🎓', 'staff') },
+      { path: 'history', loadComponent: fp, data: section('History', 'Full activity timeline.', '🕘', 'staff') },
+      { path: 'ai', loadComponent: fp, data: section('Staff AI', 'AI insights for this staff member.', '✨', 'staff') },
+      { path: 'settings', loadComponent: fp, data: section('Staff Settings', 'Staff-level configuration.', '🔧', 'staff') },
+    ]
+  },
+  { path: 'services', loadComponent: () => import('./features/services/services.component').then(m => m.ServicesComponent) },
+  { path: 'pos', loadComponent: () => import('./features/pos/pos.component').then(m => m.PosComponent) },
+  { path: 'pos/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New POS Sale', description: 'Create a new point of sale transaction', icon: '🛒', todo: 'Replace with enterprise-page-header and full POS sale form.', parentRoute: '/app/pos', parentLabel: 'POS' } },
+  { path: 'inventory', loadComponent: () => import('./features/inventory/inventory.component').then(m => m.InventoryComponent) },
+  { path: 'inventory/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Inventory Item', description: 'Add a new product to inventory', icon: '📦', todo: 'Replace with enterprise-page-header and full inventory creation form.', parentRoute: '/app/inventory', parentLabel: 'Inventory' } },
+  { path: 'inventory/:id', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Inventory Detail', description: 'View and edit inventory item', icon: '📦', todo: 'Replace with enterprise-page-header and full item detail view.', parentRoute: '/app/inventory', parentLabel: 'Inventory' } },
+  { path: 'reports', loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent) },
+  { path: 'reports/:type', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Report Detail', description: 'View detailed report', icon: '📊', todo: 'Replace with enterprise-page-header and full report view.', parentRoute: '/app/reports', parentLabel: 'Reports' } },
+  { path: 'calendar', loadComponent: () => import('./features/calendar/calendar-shell.component').then(m => m.CalendarShellComponent) },
+  {
+    path: 'bookings',
+    loadComponent: () => import('./features/bookings/bookings-shell.component').then(m => m.BookingsShellComponent),
+    children: [
+      { path: '', loadComponent: () => import('./features/bookings/bookings.component').then(m => m.BookingsComponent) },
+      { path: 'new', loadComponent: () => import('./features/bookings/booking-new.component').then(m => m.BookingNewComponent) },
+      {
+        path: ':id',
+        loadComponent: () => import('./features/bookings/booking-detail.component').then(m => m.BookingDetailComponent),
+        children: [
+          { path: '', redirectTo: 'overview', pathMatch: 'full' },
+          { path: 'overview', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'client', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'services', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'staff', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'resources', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'schedule', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'payments', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'invoice', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'notes', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'photos', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'files', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'forms', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'reminders', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'history', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'conflicts', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'ai', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+          { path: 'settings', loadComponent: () => import('./features/bookings/booking-section-placeholder.component').then(m => m.BookingSectionPlaceholderComponent) },
+        ]
+      },
+    ]
+  },
+  { path: 'marketing', loadComponent: () => import('./features/marketing/marketing.component').then(m => m.MarketingComponent) },
+  { path: 'marketing/campaigns/new', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'New Campaign', description: 'Create a new marketing campaign', icon: '📢', todo: 'Replace with enterprise-page-header and full campaign creation form.', parentRoute: '/app/marketing', parentLabel: 'Marketing' } },
+  { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent) },
+  { path: 'settings/:section', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Settings Section', description: 'Manage settings', icon: '⚙️', todo: 'Replace with enterprise-page-header and full settings section view.', parentRoute: '/app/settings', parentLabel: 'Settings' } },
+  { path: 'finance', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Finance Dashboard', description: 'Overview of salon finances', icon: '💰', todo: 'Replace with enterprise-page-header and full finance dashboard with payments, invoices, billing rules, and adjustments.', parentRoute: '/app', parentLabel: 'Dashboard' } },
+  { path: 'finance/payments', redirectTo: '/app/payments', pathMatch: 'full' },
+  { path: 'finance/invoices', redirectTo: '/app/invoices', pathMatch: 'full' },
+  { path: 'finance/:id', loadComponent: () => import('./features/feature-page-placeholder.component').then(m => m.FeaturePagePlaceholderComponent), data: { title: 'Finance Detail', description: 'View finance details', icon: '💰', todo: 'Replace with enterprise-page-header and full finance detail view.', parentRoute: '/app/finance', parentLabel: 'Finance' } },
+  { path: 'memberships', loadComponent: () => import('./features/memberships/memberships.component').then(m => m.MembershipsComponent) },
+  { path: 'packages', loadComponent: () => import('./features/packages/packages.component').then(m => m.PackagesComponent) },
+  { path: 'wallet', loadComponent: () => import('./features/wallet/wallet.component').then(m => m.WalletComponent) },
+  { path: 'gift-cards', loadComponent: () => import('./features/gift-cards/gift-cards.component').then(m => m.GiftCardsComponent) },
+  { path: 'loyalty', loadComponent: () => import('./features/loyalty/loyalty.component').then(m => m.LoyaltyComponent) },
+  { path: 'forms', loadComponent: () => import('./features/forms/forms.component').then(m => m.FormsComponent) },
+  { path: 'client-timeline', loadComponent: () => import('./features/client-timeline/client-timeline.component').then(m => m.ClientTimelineComponent) },
+  { path: 'online-profile', loadComponent: () => import('./features/online-profile/online-profile.component').then(m => m.OnlineProfileComponent) },
+  { path: 'customer-portal', loadComponent: () => import('./features/customer-portal/customer-portal.component').then(m => m.CustomerPortalComponent) },
+  { path: 'payments', loadComponent: () => import('./features/payments/payments.component').then(m => m.PaymentsComponent) },
+  { path: 'invoices', loadComponent: () => import('./features/invoices/invoices.component').then(m => m.InvoicesComponent) },
+  { path: 'billing-rules', loadComponent: () => import('./features/billing-rules/billing-rules.component').then(m => m.BillingRulesComponent) },
+  { path: 'adjustments', loadComponent: () => import('./features/adjustments/adjustments.component').then(m => m.AdjustmentsComponent) },
+  { path: 'automations', loadComponent: () => import('./features/automations/automations.component').then(m => m.AutomationsComponent) },
+  { path: 'message-center', loadComponent: () => import('./features/message-center/message-center.component').then(m => m.MessageCenterComponent) },
+  { path: 'notification-templates', loadComponent: () => import('./features/notification-templates/notification-templates.component').then(m => m.NotificationTemplatesComponent) },
+  { path: 'tasks', loadComponent: () => import('./features/tasks/tasks.component').then(m => m.TasksComponent) },
+  { path: 'attendance', loadComponent: () => import('./features/attendance/attendance.component').then(m => m.AttendanceComponent) },
+  { path: 'commissions', loadComponent: () => import('./features/commissions/commissions.component').then(m => m.CommissionsComponent) },
+  { path: 'advanced-reports', loadComponent: () => import('./features/advanced-reports/advanced-reports.component').then(m => m.AdvancedReportsComponent) },
+  { path: 'branches', loadComponent: () => import('./features/branches/branches.component').then(m => m.BranchesComponent) },
+  { path: 'audit-logs', loadComponent: () => import('./features/audit-logs/audit-logs.component').then(m => m.AuditLogsComponent) },
+  { path: 'data-export', loadComponent: () => import('./features/data-export/data-export.component').then(m => m.DataExportComponent) },
+  { path: 'staff-workspace', loadComponent: () => import('./features/staff-workspace/staff-workspace.component').then(m => m.StaffWorkspaceComponent) },
+  { path: 'owner-command-center', loadComponent: () => import('./features/owner-command-center/owner-command-center.component').then(m => m.OwnerCommandCenterComponent) },
+  { path: 'crm-intelligence', loadComponent: () => import('./features/crm-intelligence/crm-intelligence.component').then(m => m.CrmIntelligenceComponent) },
+  { path: 'resources', loadComponent: () => import('./features/resources/resources.component').then(m => m.ResourcesComponent) },
+  { path: 'reputation', loadComponent: () => import('./features/reputation/reputation.component').then(m => m.ReputationComponent) },
+  { path: 'surveys', loadComponent: () => import('./features/surveys/surveys.component').then(m => m.SurveysComponent) },
+  { path: 'delivery-settings', loadComponent: () => import('./features/delivery-settings/delivery-settings.component').then(m => m.DeliverySettingsComponent) },
+  { path: 'shifts', loadComponent: () => import('./features/shifts/shifts.component').then(m => m.ShiftsComponent) },
+  { path: 'calendar-sync', loadComponent: () => import('./features/calendar-sync/calendar-sync.component').then(m => m.CalendarSyncComponent) },
+  { path: 'whatsapp', loadComponent: () => import('./features/whatsapp/whatsapp.component').then(m => m.WhatsAppComponent) },
+  { path: 'ai-dashboard', loadComponent: () => import('./features/ai-dashboard/ai-dashboard.component').then(m => m.AiDashboardComponent) },
+  { path: 'resource-map', loadComponent: () => import('./features/resource-map/resource-map.component').then(m => m.ResourceMapComponent) },
+  { path: 'voice-booking', loadComponent: () => import('./features/voice-booking/voice-booking.component').then(m => m.VoiceBookingComponent) },
+  { path: 'dashboard', redirectTo: 'dashboard-analytics', pathMatch: 'full' },
+  { path: 'command-center', redirectTo: 'owner-command-center', pathMatch: 'full' },
+  { path: 'multi-branch', redirectTo: 'branches', pathMatch: 'full' },
+  { path: 'ai', redirectTo: 'ai-insights', pathMatch: 'full' },
   { path: '', redirectTo: 'home', pathMatch: 'full' }
 ];
 
@@ -110,24 +180,24 @@ export const routes: Routes = [
     path: '',
     component: WebsiteLayoutComponent,
     children: [
-      { path: '', component: HomeComponent },
-      { path: 'features', component: PageComponent, data: { title: 'Features' } },
-      { path: 'pricing', component: PageComponent, data: { title: 'Pricing' } },
-      { path: 'product-tour', component: PageComponent, data: { title: 'Product Tour' } },
-      { path: 'contact', component: PageComponent, data: { title: 'Contact' } },
-      { path: 'book-demo', component: PageComponent, data: { title: 'Book Demo' } },
-      { path: 'blog', component: PageComponent, data: { title: 'Blog' } }
+      { path: '', loadComponent: () => import('./website/home/home.component').then(m => m.HomeComponent) },
+      { path: 'features', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Features' } },
+      { path: 'pricing', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Pricing' } },
+      { path: 'product-tour', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Product Tour' } },
+      { path: 'contact', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Contact' } },
+      { path: 'book-demo', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Book Demo' } },
+      { path: 'blog', loadComponent: () => import('./website/page/page.component').then(m => m.PageComponent), data: { title: 'Blog' } }
     ]
   },
-  { path: 'login', component: LoginComponent },
-  { path: 'register', component: RegisterComponent },
-  { path: 'forgot-password', component: ForgotPasswordComponent },
+  { path: 'login', loadComponent: () => import('./core/auth/login.component').then(m => m.LoginComponent) },
+  { path: 'register', loadComponent: () => import('./core/auth/register.component').then(m => m.RegisterComponent) },
+  { path: 'forgot-password', loadComponent: () => import('./core/auth/forgot-password.component').then(m => m.ForgotPasswordComponent) },
   {
     path: 'app',
     component: AppLayoutComponent,
     canActivate: [authGuard],
     children: appModuleRoutes
   },
-  { path: 'book-online', component: BookOnlineComponent },
+  { path: 'book-online', loadComponent: () => import('./book-online/book-online.component').then(m => m.BookOnlineComponent) },
   { path: '**', redirectTo: '' }
 ];

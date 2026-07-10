@@ -133,8 +133,8 @@ import { Staff } from './staff.models';
     .toolbar input{flex:1;min-width:200px;padding:14px;border:1px solid #e5e7eb;border-radius:14px}
     .toolbar select{padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:white}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
-    .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
+    
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:center;align-items:center;z-index:50}
     .drawer-panel{background:white;border-radius:24px;width:min(460px,90%);max-height:90vh;overflow-y:auto;padding:28px}

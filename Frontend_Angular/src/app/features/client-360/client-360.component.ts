@@ -220,7 +220,7 @@ type C360Tab = 'overview' | 'sales' | 'appointments' | 'packages' | 'memberships
     .c360-tab-content{display:grid;gap:16px}
     .c360-loading{display:flex;align-items:center;gap:12px;padding:32px;justify-content:center;color:#6b7280;font-size:14px}
     .spinner{width:20px;height:20px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .ov-profile-card{display:flex;align-items:center;gap:14px;padding:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px}
     .ov-avatar{width:48px;height:48px;border-radius:50%;background:#0b0b0b;color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex-shrink:0}
     .ov-info{flex:1;min-width:0;display:grid;gap:3px}

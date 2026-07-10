@@ -143,8 +143,8 @@ import { TasksService } from './tasks.service';
     .toolbar input{flex:1;min-width:180px;padding:14px;border:1px solid #e5e7eb;border-radius:14px}
     .toolbar select{padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:white}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}
-    .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
+    
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px;padding:24px;text-align:center}
     .error strong{color:#991b1b}.error p{color:#7f1d1d}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}

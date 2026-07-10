@@ -15,6 +15,26 @@ export interface HealthConfig {
   duePayments: number;
 }
 
+export interface BookingSummary {
+  staffId?: string;
+  staffName?: string;
+  staff?: { fullName?: string; name?: string };
+  status: string;
+  totalAmount?: number;
+  [key: string]: any;
+}
+
+export interface StaffMember {
+  id: string;
+  fullName?: string;
+  name?: string;
+  [key: string]: any;
+}
+
+export interface RecordWithDate {
+  [key: string]: any;
+}
+
 export function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -46,7 +66,7 @@ export function computeDailyTarget(yesterdayRevenue: number, defaultTarget = 500
   return Math.round(Math.max(yesterdayRevenue * 1.2, defaultTarget));
 }
 
-export function computeStaffBookingCount(bookingsToday: any[], staffMember: any): number {
+export function computeStaffBookingCount(bookingsToday: BookingSummary[], staffMember: StaffMember): number {
   const staffName = (staffMember.fullName || staffMember.name || '').toLowerCase();
   const staffId = staffMember.id;
   return bookingsToday.filter(b => {
@@ -56,7 +76,7 @@ export function computeStaffBookingCount(bookingsToday: any[], staffMember: any)
   }).length;
 }
 
-export function computeStaffCompletedCount(bookingsToday: any[], staffMember: any): number {
+export function computeStaffCompletedCount(bookingsToday: BookingSummary[], staffMember: StaffMember): number {
   const staffName = (staffMember.fullName || staffMember.name || '').toLowerCase();
   const staffId = staffMember.id;
   return bookingsToday.filter(b => {
@@ -66,7 +86,7 @@ export function computeStaffCompletedCount(bookingsToday: any[], staffMember: an
   }).length;
 }
 
-export function computeStaffRevenue(bookingsToday: any[], staffMember: any): number {
+export function computeStaffRevenue(bookingsToday: BookingSummary[], staffMember: StaffMember): number {
   const staffName = (staffMember.fullName || staffMember.name || '').toLowerCase();
   const staffId = staffMember.id;
   return bookingsToday.filter(b => {
@@ -76,9 +96,9 @@ export function computeStaffRevenue(bookingsToday: any[], staffMember: any): num
   }).reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 }
 
-export function filterByDate(records: any[], dateField: string, targetDate: Date): any[] {
+export function filterByDate<T extends Record<string, any>>(records: T[], dateField: string, targetDate: Date): T[] {
   const targetStr = toDateStr(targetDate);
-  return (records || []).filter((r: any) => {
+  return (records || []).filter((r) => {
     if (r[dateField]) return toDateStr(new Date(r[dateField])) === targetStr;
     return false;
   });

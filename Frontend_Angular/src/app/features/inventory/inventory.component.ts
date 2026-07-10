@@ -269,7 +269,7 @@ import { InventoryProduct } from './inventory.models';
     .stock-watch{display:flex;align-items:center;justify-content:space-between;gap:16px;background:white;border:1px solid #e5e7eb;border-radius:18px;padding:16px 18px}
     .stock-watch strong{font-size:15px}.stock-watch p{font-size:13px}.watch-chip{background:#fef2f2;color:#991b1b;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:900}.watch-chip.clean{background:#ecfdf5;color:#047857}
     .loading{display:flex;align-items:center;gap:14px;padding:48px;justify-content:center;color:#6b7280}.mini-loading{padding:24px}
-    .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    
     .error,.checkout-error{background:#fef2f2;border:1px solid #fecaca;border-radius:18px;padding:16px;color:#7f1d1d}.error{text-align:center;padding:24px}.error strong{color:#991b1b}.error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:900;cursor:pointer}
     .empty{display:grid;gap:8px;padding:42px;text-align:center;color:#6b7280;background:white;border-radius:22px;border:1px solid #e5e7eb}.empty strong{color:#111827}.empty button{justify-self:center}.empty.compact{padding:24px}
     .table-panel{background:white;border:1px solid #e5e7eb;border-radius:24px;padding:22px;box-shadow:0 12px 35px rgba(15,23,42,.06)}

@@ -70,7 +70,7 @@ import { DeliverySettingsService } from './delivery-settings.service';
     p{color:#6b7280;margin:6px 0 0}
     .loading,.error{text-align:center;padding:48px}
     .spinner{width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#0b0b0b;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:24px}
     .error button{margin-top:12px;background:#0b0b0b;color:white;border:0;border-radius:12px;padding:10px 18px;font-weight:800;cursor:pointer}
     .provider-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}

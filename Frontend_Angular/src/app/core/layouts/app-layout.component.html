@@ -1,0 +1,125 @@
+<div class="app-shell" [class.collapsed]="collapsed" [class.sidebar-open]="sidebarOpen" [attr.data-module]="moduleName">
+  <!-- Mobile overlay -->
+  <div class="mobile-backdrop" *ngIf="sidebarOpen" (click)="toggleSidebar()" aria-hidden="true"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" [attr.aria-label]="'Main navigation'">
+    <div class="sidebar-brand">
+      <div class="brand-mark">A</div>
+      <div class="brand-text" *ngIf="!collapsed">
+        <span class="brand-name">AMBITION</span>
+        <span class="brand-sub">Unisex Salon</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-scroll" aria-label="Primary">
+      <div class="nav-group" *ngFor="let grp of navGroups">
+        <div class="nav-group-title" *ngIf="!collapsed">{{ grp.group }}</div>
+        <a class="nav-item"
+           *ngFor="let item of grp.items"
+           [routerLink]="'/app/' + item.key"
+           routerLinkActive="active"
+           [routerLinkActiveOptions]="{ exact: true }"
+           (click)="sidebarOpen = false"
+           [title]="collapsed ? item.label : null"
+           [attr.aria-label]="item.label">
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
+          <span class="nav-tooltip" *ngIf="collapsed" role="tooltip">{{ item.label }}</span>
+        </a>
+      </div>
+    </nav>
+
+    <button class="collapse-btn" type="button" (click)="toggleCollapsed()" [attr.aria-label]="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" [title]="collapsed ? 'Expand' : 'Collapse'">
+      <span class="collapse-chevron">{{ collapsed ? '»' : '«' }}</span>
+      <span class="collapse-label" *ngIf="!collapsed">Collapse</span>
+    </button>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="topbar" role="banner">
+      <div class="topbar-left">
+        <button class="icon-btn mobile-only" type="button" (click)="toggleSidebar()" aria-label="Open menu">
+          <span>☰</span>
+        </button>
+        <div class="module-context">
+          <span class="module-icon">{{ moduleIcon }}</span>
+          <div class="module-text">
+            <nav class="module-crumb" aria-label="Breadcrumb">
+              <span>{{ breadcrumb }}</span>
+              <span class="crumb-sep">/</span>
+              <span class="crumb-current">{{ moduleName }}</span>
+            </nav>
+            <strong class="module-name">{{ moduleName }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="pill-btn" type="button" (click)="openSearch()" aria-label="Search">
+          <span class="pill-icon">🔍</span>
+          <span class="pill-label">Search…</span>
+          <kbd class="pill-kbd">⌘K</kbd>
+        </button>
+        <button class="icon-btn" type="button" (click)="openCommandPalette()" aria-label="Command palette" title="Command Palette (Ctrl+K)">
+          <span>⚡</span>
+        </button>
+        <button class="icon-btn" type="button" (click)="openQuickCreate()" aria-label="Quick create" title="Quick Create">
+          <span>＋</span>
+        </button>
+        <button class="icon-btn" type="button" (click)="openAiAssistant()" aria-label="AI assistant" title="AI Assistant">
+          <span>✨</span>
+        </button>
+        <button class="branch-chip" type="button" title="Branch selector" aria-label="Select branch">
+          <span class="branch-dot"></span>
+          <span class="branch-label">Main Branch</span>
+        </button>
+        <button class="icon-btn" type="button" (click)="openDrawer('notification','Notifications')" [attr.aria-label]="'Notifications' + (unreadCount > 0 ? ', ' + unreadCount + ' unread' : '')" title="Notifications">
+          <span>🔔</span>
+          <span class="badge" *ngIf="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </button>
+        <button class="icon-btn" type="button" (click)="toggleFullscreen()" aria-label="Toggle fullscreen" title="Fullscreen">
+          <span>⛶</span>
+        </button>
+        <button class="icon-btn" type="button" (click)="toggleTheme()" [attr.aria-label]="isDark ? 'Light mode' : 'Dark mode'" [title]="isDark ? 'Light mode' : 'Dark mode'">
+          <span>{{ isDark ? '☀️' : '🌙' }}</span>
+        </button>
+
+        <div class="user-menu">
+          <button class="user-chip" type="button" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen" aria-label="User menu">
+            <div class="avatar">{{ (user?.fullName || 'O')[0] }}</div>
+            <div class="user-meta" *ngIf="!collapsed">
+              <span class="user-name">{{ user?.fullName || 'Owner' }}</span>
+              <span class="user-role">{{ user?.role || 'Administrator' }}</span>
+            </div>
+            <span class="caret" *ngIf="!collapsed">▾</span>
+          </button>
+          <div class="profile-dropdown" *ngIf="profileOpen" (click)="closeProfile()" role="menu">
+            <div class="pd-header">
+              <div class="avatar lg">{{ (user?.fullName || 'O')[0] }}</div>
+              <div>
+                <div class="pd-name">{{ user?.fullName || 'Owner' }}</div>
+                <div class="pd-email">{{ user?.email || 'owner@ambition.salon' }}</div>
+              </div>
+            </div>
+            <a class="pd-item" routerLink="/app/settings" role="menuitem">⚙️ Settings</a>
+            <a class="pd-item" routerLink="/app/settings" role="menuitem">👤 My Profile</a>
+            <button class="pd-item danger" type="button" (click)="logout()" role="menuitem">⎋ Sign out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="content">
+      <router-outlet></router-outlet>
+    </section>
+  </main>
+
+  <!-- Right drawer outlet -->
+  <app-enterprise-drawer></app-enterprise-drawer>
+
+  <!-- Command palette + search overlay -->
+  <app-command-palette></app-command-palette>
+  <app-search-overlay></app-search-overlay>
+</div>

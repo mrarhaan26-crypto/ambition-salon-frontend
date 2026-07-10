@@ -5,7 +5,6 @@ import { HttpClient } from '@angular/common/http';
 import { forkJoin, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CalendarService } from './calendar.service';
-import { Client360Component } from '../client-360/client-360.component';
 import { StaffService } from '../staff/staff.service';
 import { Staff } from '../staff/staff.models';
 import { ResourcesService } from '../resources/resources.service';
@@ -13,9 +12,9 @@ import { ClientsService } from '../clients/clients.service';
 import { Client } from '../clients/client.model';
 import { ServicesService } from '../services/services.service';
 import { SalonService } from '../services/services.models';
-import { CalendarWaitlist } from './calendar-waitlist/calendar-waitlist';
-import { CalendarAiScheduler } from './calendar-ai-scheduler/calendar-ai-scheduler';
 import { AuthService } from '../../core/auth/auth.service';
+import { LeaveService } from './leave.service';
+import { StaffLeave, LEAVE_TYPE_LABELS, LEAVE_TYPE_COLORS, LEAVE_STATUS_COLORS, LeaveType, LeaveStatus } from './leave.models';
 import {
   CalendarBooking,
   CalendarSummaryResponse,
@@ -52,7 +51,7 @@ import {
 @Component({
   selector: 'app-calendar',
   standalone: true,
-  imports: [CommonModule, FormsModule, CalendarWaitlist, CalendarAiScheduler, Client360Component],
+  imports: [CommonModule, FormsModule],
   template: `\n    <section class=\"page\">
       <!-- Premium Calendar Header -->
       <div class="premium-header">
@@ -107,6 +106,7 @@ import {
             <button (click)="refresh()" class="btn action-btn" [disabled]="loading" aria-label="Refresh calendar"><span class="btn-icon">&#8635;</span> Refresh</button>
             <button (click)="openCreateBookingForDate(currentDate)" class="btn action-btn primary-btn" aria-label="New booking">+ New Booking</button>
             <button (click)="openWalkin()" class="btn action-btn secondary-btn" aria-label="Add walk-in">Walk-in</button>
+            <button (click)="openCreateLeave()" class="btn action-btn secondary-btn" aria-label="Create leave request">Leave</button>
             <button (click)="toggleWaitlist()" [class.active]="showWaitlist" class="btn action-btn secondary-btn" aria-label="Toggle waitlist">Waitlist</button>
             <button (click)="toggleAiPanel()" [class.active]="showAiPanel" class="btn action-btn secondary-btn" aria-label="Toggle AI suggestions">AI Suggestions</button>
           </div>
@@ -129,13 +129,29 @@ import {
           <button [class.active]="slotSize === 30" (click)="setSlotSize(30)" class="slot-btn">30m</button>
           <button [class.active]="slotSize === 60" (click)="setSlotSize(60)" class="slot-btn">60m</button>
         </div>
+        <span class="tabs-divider"></span>
+        <select [(ngModel)]="leaveFilterType" class="status-filter" aria-label="Leave type filter" style="min-width:120px">
+          <option value="">All Leave Types</option>
+          <option value="CASUAL">Casual</option>
+          <option value="SICK">Sick</option>
+          <option value="MEDICAL">Medical</option>
+          <option value="VACATION">Vacation</option>
+          <option value="EMERGENCY">Emergency</option>
+          <option value="HALF_DAY">Half Day</option>
+        </select>
+        <select [(ngModel)]="leaveFilterStatus" class="status-filter" aria-label="Leave status filter" style="min-width:110px">
+          <option value="">All Status</option>
+          <option value="PENDING">Pending</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
       </div>
 
-      <div class="loading" *ngIf="loading">
+      <div class="loading" *ngIf="loading" aria-live="polite">
         <div class="spinner"></div><span>Loading calendar...</span>
       </div>
 
-      <div class="error" *ngIf="error">
+      <div class="error" *ngIf="error" aria-live="assertive">
         <strong>Failed to load calendar.</strong><p>{{ error }}</p>
         <button (click)="load()">Retry</button>
       </div>
@@ -175,7 +191,14 @@ import {
             <div class="kpi-icon">💰</div>
             <div class="kpi-content">
               <span class="kpi-label">Revenue</span>
-              <span class="kpi-value">{{ (summary.kpis?.revenue || 0) | currency }}</span>
+              <span class="kpi-value">{{ summary.kpis?.revenue | currency:'':'symbol':'1.0-0' }}</span>
+            </div>
+          </div>
+          <div class="kpi-card leave-card" *ngIf="todayLeaves.length > 0">
+            <div class="kpi-icon">🏖️</div>
+            <div class="kpi-content">
+              <span class="kpi-label">On Leave</span>
+              <span class="kpi-value amber">{{ todayLeaves.length }}</span>
             </div>
           </div>
         </div>
@@ -197,7 +220,7 @@ import {
               <button class="staff-filter-pill" [class.active]="!selectedStaffFilter" (click)="selectedStaffFilter=''">
                 <span class="sf-avatar sf-avatar-all">All</span><span class="sf-name">All Staff</span>
               </button>
-              <button class="staff-filter-pill" *ngFor="let s of staffList" [class.active]="selectedStaffFilter===s.id" (click)="selectedStaffFilter=s.id">
+              <button class="staff-filter-pill" *ngFor="let s of staffList; trackBy: trackById" [class.active]="selectedStaffFilter===s.id" (click)="selectedStaffFilter=s.id">
                 <span class="sf-avatar" [class]="staffAccentClass(s)">{{ staffInitials(s) }}</span>
                 <span class="sf-name">{{ s.fullName }}</span>
                 <span class="sf-count" *ngIf="getStaffDayBookingCount(s.id) > 0">{{ getStaffDayBookingCount(s.id) }}</span>
@@ -234,7 +257,7 @@ import {
                     </div>
                     <div class="lsb-cal-grid">
                       <span class="lsb-cal-weekday" *ngFor="let wd of ['S','M','T','W','T','F','S']">{{ wd }}</span>
-                      <button *ngFor="let day of miniCalendarDays"
+                      <button *ngFor="let day of miniCalendarDays; trackBy: trackByDate"
                         class="lsb-cal-day"
                         [class.other-month]="day.otherMonth"
                         [class.today]="day.isToday"
@@ -280,7 +303,7 @@ import {
                       <span class="lsb-staff-total">{{ staffList.length }}</span>
                     </div>
                     <div class="lsb-staff-list">
-                      <button *ngFor="let s of staffList; let i = index"
+                      <button *ngFor="let s of staffList; let i = index; trackBy: trackById"
                         class="lsb-staff-item"
                         [class.active]="selectedStaffFilter === s.id"
                         (click)="selectedStaffFilter = selectedStaffFilter === s.id ? '' : s.id">
@@ -309,6 +332,36 @@ import {
                       </span>
                     </div>
                   </div>
+
+                  <!-- Today's Leaves -->
+                  <div class="lsb-card lsb-leave-card" *ngIf="todayLeaves.length > 0">
+                    <div class="lsb-card-header">
+                      <span class="lsb-card-title">Today's Leaves</span>
+                      <span class="lsb-leave-count">{{ todayLeaves.length }}</span>
+                    </div>
+                    <div class="lsb-leave-list">
+                      <div class="lsb-leave-item" *ngFor="let lv of todayLeaves" (click)="openLeaveDrawer(lv)">
+                        <span class="lsb-leave-dot" [style.background]="leaveTypeColors[lv.leaveType]"></span>
+                        <div class="lsb-leave-info">
+                          <span class="lsb-leave-name">{{ lv.staff?.fullName || 'Staff' }}</span>
+                          <span class="lsb-leave-type">{{ getLeaveTypeLabel(lv.leaveType) }}{{ lv.halfDay ? ' (Half)' : '' }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Leave Legend -->
+                  <div class="lsb-card lsb-leave-legend-card">
+                    <div class="lsb-card-header">
+                      <span class="lsb-card-title">Leave Types</span>
+                    </div>
+                    <div class="lsb-leave-legend-list">
+                      <span class="lsb-leave-legend-item" *ngFor="let type of ['CASUAL','SICK','VACATION','EMERGENCY','MEDICAL']">
+                        <span class="lsb-leave-legend-dot" [style.background]="leaveTypeColors[type]"></span>
+                        <span class="lsb-leave-legend-label">{{ leaveTypeLabels[type] }}</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </aside>
 
@@ -322,7 +375,7 @@ import {
                   </div>
                 </div>
                 <div class="dv-staff-scroll" [class.calendar-dragging]="dragBooking !== null">
-                  <div class="dv-staff-col" *ngFor="let staff of visibleStaffList; let si = index" [attr.data-staff-id]="staff.id">
+                  <div class="dv-staff-col" *ngFor="let staff of visibleStaffList; let si = index; trackBy: trackById" [attr.data-staff-id]="staff.id">
                     <div class="dv-staff-header">
                       <div class="staff-header-content">
                         <div class="staff-avatar" [class]="staffAccentClass(staff)">{{ staffInitials(staff) }}</div>
@@ -333,11 +386,17 @@ import {
                       </div>
                     </div>
                     <div class="dv-staff-body">
-                      <div class="dv-hour-row" *ngFor="let hour of dayHours; let hi = index"
+                      <div class="dv-hour-row" *ngFor="let hour of dayHours; let hi = index; trackBy: trackByIndex"
                         [class.dv-hour-row-alt]="hi % 2 === 1"
                         [class.dv-hour-busy]="isStaffBusyAtHour(staff.id, hour)"
                         (click)="openCreateBooking(staff, hour)"></div>
                       <div class="dv-bookings-layer">
+                        <div class="leave-block" *ngFor="let lv of getLeavesForStaff(staff.id)"
+                          [ngStyle]="getLeaveBlockStyle(lv)"
+                          (click)="openLeaveDrawer(lv); $event.stopPropagation()"
+                          [title]="getLeaveTypeLabel(lv.leaveType) + (lv.halfDay ? ' (Half Day)' : '') + ' — ' + (lv.reason || 'No reason')">
+                          {{ getLeaveTypeLabel(lv.leaveType) }}{{ lv.halfDay ? ' (Half)' : '' }}
+                        </div>
                         <div class="booking-chip" *ngFor="let b of getStaffBookings(staff.id)"
                           [class]="'status-' + (b.status || '').toLowerCase()"
                           [class.dragging-booking]="dragBooking === b"
@@ -395,7 +454,7 @@ import {
                   (removeEntry)="removeWaitlistEntry($event)">
                 </app-calendar-waitlist>
                 <div class="wl-actions" *ngIf="showWaitlist">
-                  <div class="wl-msg" *ngIf="waitlistMessage">{{ waitlistMessage }}</div>
+                  <div class="wl-msg" *ngIf="waitlistMessage" aria-live="polite">{{ waitlistMessage }}</div>
                   <button class="wl-suggest-btn" (click)="loadWaitlistSuggestions()" [disabled]="waitlistSuggestLoading">
                     {{ waitlistSuggestLoading ? 'Loading...' : 'Find Suggestions' }}
                   </button>
@@ -405,9 +464,9 @@ import {
                 </div>
                 <div class="wl-suggestions" *ngIf="showWaitlistSuggestions">
                   <div class="wl-suggest-header">Suggested Matches</div>
-                  <div class="wl-loading" *ngIf="waitlistSuggestLoading"><div class="spinner"></div></div>
-                  <div class="wl-error" *ngIf="waitlistSuggestError">{{ waitlistSuggestError }}</div>
-                  <div class="wl-suggestion-item" *ngFor="let ws of waitlistSuggestions">
+                  <div class="wl-loading" *ngIf="waitlistSuggestLoading" aria-live="polite"><div class="spinner"></div></div>
+                  <div class="wl-error" *ngIf="waitlistSuggestError" aria-live="assertive">{{ waitlistSuggestError }}</div>
+                  <div class="wl-suggestion-item" *ngFor="let ws of waitlistSuggestions; trackBy: trackById">
                     <span class="wl-s-name">{{ ws.entry?.client?.fullName || 'Client' }}</span>
                     <span class="wl-s-score">Match: {{ ws.matchScore }}%</span>
                     <button class="wl-s-fill" (click)="fillWaitlistEntry = ws.entry; showWaitlistSuggestions = false">Fill</button>
@@ -440,13 +499,13 @@ import {
               <div class="dv-container">
                 <div class="dv-time-col">
                   <div class="dv-header-gap"></div>
-                  <div class="dv-time-row" *ngFor="let hour of dayHours"
+                  <div class="dv-time-row" *ngFor="let hour of dayHours; trackBy: trackByIndex"
                     (click)="openCreateBookingUnassigned(hour)">
                     <span class="dv-time-label">{{ formatHourLabel(hour) }}</span>
                   </div>
                 </div>
                 <div class="dv-staff-scroll" [class.calendar-dragging]="dragBooking !== null">
-                  <div class="dv-staff-col" *ngFor="let resource of resourceList" [attr.data-resource-id]="resource.id">
+                  <div class="dv-staff-col" *ngFor="let resource of resourceList; trackBy: trackById" [attr.data-resource-id]="resource.id">
                     <div class="dv-staff-header">
                       {{ resource.name }}
                       <span class="res-type-badge res-type-{{ resource.type }}">{{ resource.type }}</span>
@@ -560,7 +619,7 @@ import {
 
         <div class="week-view view-transition" *ngIf="view === 'week'">
           <div class="week-header">
-            <div class="week-day-header" *ngFor="let day of weekDays"
+            <div class="week-day-header" *ngFor="let day of weekDays; trackBy: trackByDate"
               [class.today]="isDayToday(day.date)" (click)="goToDay(day.date)">
               <strong>{{ day.date | date:'EEE' }}</strong>
               <span class="week-day-date">{{ day.date | date:'MMM dd' }}</span>
@@ -568,9 +627,15 @@ import {
             </div>
           </div>
           <div class="week-body">
-            <div class="week-day-col" *ngFor="let day of weekDays"
+            <div class="week-day-col" *ngFor="let day of weekDays; trackBy: trackByDate"
               [class.today]="isDayToday(day.date)">
-              <ng-container *ngIf="getBookingsForDate(day.date).length > 0; else emptyDay">
+              <ng-container *ngIf="getBookingsForDate(day.date).length > 0 || getLeaveCountForDay(day.date) > 0; else emptyDay">
+                  <div class="week-leave-block" *ngFor="let lv of getStaffLeavesForDay(day.date)"
+                    [ngStyle]="getLeaveWeekBlockStyle(lv, day.date)"
+                    (click)="openLeaveDrawer(lv); $event.stopPropagation()"
+                    [title]="getLeaveTypeLabel(lv.leaveType) + ' — ' + (lv.staff?.fullName || 'Staff')">
+                    {{ (lv.staff?.fullName || 'S')[0] }}: {{ getLeaveTypeLabel(lv.leaveType) }}
+                  </div>
                   <div class="week-booking" *ngFor="let b of getBookingsForDate(day.date)"
                     [class]="'status-' + (b.status || '').toLowerCase()"
                     [class.has-conflict]="hasConflict(b)"
@@ -596,7 +661,7 @@ import {
         <div class="month-view view-transition" *ngIf="view === 'month'">
           <div class="month-grid">
             <div class="weekday-label" *ngFor="let day of ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']">{{ day }}</div>
-            <div class="month-day" *ngFor="let day of monthDays"
+            <div class="month-day" *ngFor="let day of monthDays; trackBy: trackByDate"
               [class.other-month]="day.otherMonth"
               [class.today]="day.isToday"
               [class.selected]="isSameDay(day.date, currentDate)"
@@ -613,6 +678,14 @@ import {
                   <span class="month-status-dot" [class]="'dot-' + sc.status"></span>
                   <span class="month-status-num" *ngIf="sc.count > 1">{{ sc.count }}</span>
                 </span>
+              </div>
+              <div class="month-leave-dots" *ngIf="getLeaveCountForDay(day.date) > 0">
+                <span class="month-leave-dot" *ngFor="let lv of getStaffLeavesForDay(day.date) | slice:0:3"
+                  [ngStyle]="getLeaveMonthDotStyle(lv)"
+                  [title]="(lv.staff?.fullName || 'Staff') + ': ' + getLeaveTypeLabel(lv.leaveType)"
+                  (click)="openLeaveDrawer(lv); $event.stopPropagation()"></span>
+                <span class="month-leave-more" *ngIf="getLeaveCountForDay(day.date) > 3"
+                  [title]="+ (getLeaveCountForDay(day.date) - 3) + ' more leaves'">+{{ getLeaveCountForDay(day.date) - 3 }}</span>
               </div>
               <div class="month-preview-list" *ngIf="getBookingsForDate(day.date).length > 0">
                   <div class="month-preview-chip" *ngFor="let b of getMonthPreviewBookings(day.date)"
@@ -651,7 +724,7 @@ import {
         </div>
       </ng-container>
 
-      <div class="drawer-overlay" *ngIf="drawerBooking" (click)="closeDrawer()">
+      <div class="drawer-overlay" *ngIf="drawerBooking" (click)="closeDrawer()" role="dialog" aria-modal="true" aria-label="Booking details">
         <div class="drawer-panel" (click)="$event.stopPropagation()">
           <div class="drawer-header">
             <div class="dh-left">
@@ -660,7 +733,7 @@ import {
             </div>
             <div class="dh-right">
               <div class="status-dropdown-wrapper" (click)="$event.stopPropagation()">
-                <button class="sd-trigger" [class]="'sd-' + (drawerBooking.status || '').toLowerCase()" (click)="toggleStatusDropdown()">
+                <button class="sd-trigger" [class]="'sd-' + (drawerBooking.status || '').toLowerCase()" (click)="toggleStatusDropdown()" aria-label="Change status">
                   <span class="sd-dot"></span>
                   <span class="sd-label">{{ getStatusLabel(drawerBooking.status) }}</span>
                   <span class="sd-arrow">&#x25BE;</span>
@@ -687,7 +760,7 @@ import {
                 </div>
               </div>
               <div class="action-menu-wrapper" (click)="$event.stopPropagation()">
-                <button class="action-menu-trigger" (click)="toggleActionMenu()">&#x22EE;</button>
+                <button class="action-menu-trigger" (click)="toggleActionMenu()" aria-label="Booking actions">&#x22EE;</button>
                 <div class="action-menu-dropdown" *ngIf="showActionMenu" (click)="$event.stopPropagation()">
                   <button (click)="closeActionMenu(); openEditForm(drawerBooking)"><span class="am-icon">&#x270E;</span> Edit Booking</button>
                   <button *ngIf="canReschedule(drawerBooking)" (click)="closeActionMenu(); showRescheduleForm(drawerBooking)"><span class="am-icon">&#x1F552;</span> Reschedule Booking</button>
@@ -700,7 +773,7 @@ import {
                   <button *ngIf="canCancel(drawerBooking)" (click)="closeActionMenu(); openCancelForm()" class="am-danger"><span class="am-icon">&#x1F6AB;</span> Cancel Booking</button>
                 </div>
               </div>
-              <button class="close-btn" (click)="closeDrawer()">&times;</button>
+              <button class="close-btn" (click)="closeDrawer()" aria-label="Close booking detail">&times;</button>
             </div>
           </div>
           <div class="drawer-body">
@@ -1107,21 +1180,21 @@ import {
               </div>
             </div>
 
-            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook"><div class="spinner"></div><span>Updating...</span></div>
-            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook">{{ drawerError }}</div>
+            <div class="drawer-loading" *ngIf="drawerBusy && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook" aria-live="polite"><div class="spinner"></div><span>Updating...</span></div>
+            <div class="drawer-error" *ngIf="drawerError && !showReschedule && !showCancelForm && !showEditForm && !showConfirmAction && !showAddPayment && !showAddTip && !showSmartRebook" aria-live="assertive">{{ drawerError }}</div>
           </div>
         </div>
       </div>
 
-      <div class="drawer-overlay drawer-centered" *ngIf="showCreate" (click)="closeCreate()">
+      <div class="drawer-overlay drawer-centered" *ngIf="showCreate" (click)="closeCreate()" role="dialog" aria-modal="true" aria-label="New booking">
         <div class="create-panel salonist-modal" (click)="$event.stopPropagation()">
           <div class="drawer-header">
             <h2>New Booking</h2>
-            <button class="close-btn" (click)="closeCreate()">&times;</button>
+            <button class="close-btn" (click)="closeCreate()" aria-label="Close new booking">&times;</button>
           </div>
           <div class="drawer-body">
-            <div class="nb-loading" *ngIf="createBusy"><div class="spinner"></div><span>Creating booking...</span></div>
-            <div class="nb-error" *ngIf="createError">{{ createError }}</div>
+            <div class="nb-loading" *ngIf="createBusy" aria-live="polite"><div class="spinner"></div><span>Creating booking...</span></div>
+            <div class="nb-error" *ngIf="createError" aria-live="assertive">{{ createError }}</div>
 
             <div class="nb-sections">
 
@@ -1132,7 +1205,7 @@ import {
                   <input [(ngModel)]="clientSearchQuery" (input)="onClientSearch()" placeholder="Search client by name or phone..." class="client-search-input" autocomplete="off">
                   <div class="client-search-results" *ngIf="clientSearchQuery && (clientLookupBusy || filteredClientList.length > 0 || clientLookupError)">
                     <div class="csr-status" *ngIf="clientLookupBusy">Searching clients...</div>
-                    <button class="csr-item" *ngFor="let c of filteredClientList" (click)="selectClient(c)" type="button">
+                    <button class="csr-item" *ngFor="let c of filteredClientList; trackBy: trackById" (click)="selectClient(c)" type="button">
                       <span class="csr-main">
                         <span class="csr-name">{{ c.fullName || c.name }}</span>
                         <span class="csr-email" *ngIf="c.email">{{ c.email }}</span>
@@ -1180,7 +1253,7 @@ import {
                   <input [(ngModel)]="serviceSearchQuery" (input)="onServiceSearch()" placeholder="Search service by name or category..." class="service-search-input" autocomplete="off">
                   <div class="service-search-results" *ngIf="serviceSearchQuery && (serviceLookupBusy || filteredServiceList.length > 0 || serviceLookupError)">
                     <div class="ssr-status" *ngIf="serviceLookupBusy">Searching services...</div>
-                    <button class="ssr-item" *ngFor="let svc of filteredServiceList" (click)="selectPrimaryService(svc)" type="button">
+                    <button class="ssr-item" *ngFor="let svc of filteredServiceList; trackBy: trackById" (click)="selectPrimaryService(svc)" type="button">
                       <span class="ssr-main">
                         <span class="ssr-name">{{ svc.name }}</span>
                         <span class="ssr-category" *ngIf="svc.category?.name">{{ svc.category?.name }}</span>
@@ -1347,11 +1420,11 @@ import {
         </div>
       </div>
 
-      <div class="drawer-overlay drawer-centered" *ngIf="showWalkin" (click)="closeWalkin()">
+      <div class="drawer-overlay drawer-centered" *ngIf="showWalkin" (click)="closeWalkin()" role="dialog" aria-modal="true" aria-label="Walk-in booking">
         <div class="create-panel" (click)="$event.stopPropagation()">
           <div class="drawer-header">
             <h2>Walk-in Booking</h2>
-            <button class="close-btn" (click)="closeWalkin()">&times;</button>
+            <button class="close-btn" (click)="closeWalkin()" aria-label="Close walk-in booking">&times;</button>
           </div>
           <div class="drawer-body">
             <div class="create-form">
@@ -1386,13 +1459,13 @@ import {
                 <button class="btn-primary" (click)="doWalkinBooking()" [disabled]="walkinBusy">{{ walkinBusy ? 'Booking...' : 'Book Walk-in' }}</button>
               </div>
             </div>
-            <div class="drawer-loading" *ngIf="walkinBusy"><div class="spinner"></div><span>Booking walk-in...</span></div>
-            <div class="drawer-error" *ngIf="walkinError">{{ walkinError }}</div>
+            <div class="drawer-loading" *ngIf="walkinBusy" aria-live="polite"><div class="spinner"></div><span>Booking walk-in...</span></div>
+            <div class="drawer-error" *ngIf="walkinError" aria-live="assertive">{{ walkinError }}</div>
           </div>
         </div>
       </div>
 
-      <div class="drop-overlay" *ngIf="showDropConfirm" (click)="cancelDropReschedule()">
+      <div class="drop-overlay" *ngIf="showDropConfirm" (click)="cancelDropReschedule()" role="dialog" aria-modal="true" aria-label="Reschedule booking">
         <div class="drop-dialog" (click)="$event.stopPropagation()">
           <div class="drop-dialog-header">
             <h3>Reschedule Booking</h3>
@@ -1415,8 +1488,8 @@ import {
             <button (click)="cancelDropReschedule()" [disabled]="dropConfirmBusy">Cancel</button>
             <button class="btn-primary" (click)="confirmDropReschedule()" [disabled]="dropConfirmBusy">{{ dropConfirmBusy ? 'Rescheduling...' : 'Confirm Reschedule' }}</button>
           </div>
-          <div class="drawer-loading" *ngIf="dropConfirmBusy"><div class="spinner"></div><span>Rescheduling...</span></div>
-          <div class="drawer-error" *ngIf="dropConfirmError">{{ dropConfirmError }}</div>
+          <div class="drawer-loading" *ngIf="dropConfirmBusy" aria-live="polite"><div class="spinner"></div><span>Rescheduling...</span></div>
+          <div class="drawer-error" *ngIf="dropConfirmError" aria-live="assertive">{{ dropConfirmError }}</div>
         </div>
       </div>
 
@@ -1426,11 +1499,149 @@ import {
       </div>
 
       <app-client-360 *ngIf="showClient360 && client360ClientId" [clientId]="client360ClientId" (close)="closeClient360()"></app-client-360>
+
+      <!-- ===== LEAVE DRAWER ===== -->
+      <div class="drawer-overlay" *ngIf="showLeaveDrawer && selectedLeave" (click)="closeLeaveDrawer()">
+        <div class="drawer" (click)="$event.stopPropagation()">
+          <div class="drawer-header">
+            <h2>Leave Details</h2>
+            <button class="close-btn" (click)="closeLeaveDrawer()" aria-label="Close">&times;</button>
+          </div>
+          <div class="drawer-body">
+            <div class="leave-detail-row">
+              <span class="leave-detail-label">Staff</span>
+              <span class="leave-detail-value">{{ selectedLeave.staff?.fullName || 'Unknown' }}</span>
+            </div>
+            <div class="leave-detail-row">
+              <span class="leave-detail-label">Type</span>
+              <span class="leave-detail-value leave-type-badge" [style.background]="leaveTypeColors[selectedLeave.leaveType] + '20'" [style.color]="leaveTypeColors[selectedLeave.leaveType]">
+                {{ getLeaveTypeLabel(selectedLeave.leaveType) }}
+              </span>
+            </div>
+            <div class="leave-detail-row">
+              <span class="leave-detail-label">Status</span>
+              <span class="leave-detail-value leave-status-badge" [style.background]="leaveStatusColors[selectedLeave.status] + '20'" [style.color]="leaveStatusColors[selectedLeave.status]">
+                {{ getLeaveStatusLabel(selectedLeave.status) }}
+              </span>
+            </div>
+            <div class="leave-detail-row">
+              <span class="leave-detail-label">Duration</span>
+              <span class="leave-detail-value">{{ selectedLeave.startDate | date:'MMM d, y' }} — {{ selectedLeave.endDate | date:'MMM d, y' }}{{ selectedLeave.halfDay ? ' (Half Day)' : '' }}</span>
+            </div>
+            <div class="leave-detail-row" *ngIf="selectedLeave.reason">
+              <span class="leave-detail-label">Reason</span>
+              <span class="leave-detail-value">{{ selectedLeave.reason }}</span>
+            </div>
+            <div class="leave-detail-row" *ngIf="selectedLeave.notes">
+              <span class="leave-detail-label">Notes</span>
+              <span class="leave-detail-value">{{ selectedLeave.notes }}</span>
+            </div>
+            <div class="leave-detail-row" *ngIf="selectedLeave.rejectReason">
+              <span class="leave-detail-label">Rejection Reason</span>
+              <span class="leave-detail-value" style="color:#ef4444">{{ selectedLeave.rejectReason }}</span>
+            </div>
+            <div class="leave-detail-row" *ngIf="selectedLeave.approvedAt">
+              <span class="leave-detail-label">Approved At</span>
+              <span class="leave-detail-value">{{ selectedLeave.approvedAt | date:'MMM d, y h:mm a' }}</span>
+            </div>
+            <div class="drawer-actions" *ngIf="selectedLeave.status === 'PENDING'">
+              <button class="btn-leave-approve" (click)="openApproveReject(selectedLeave, 'approve')">Approve</button>
+              <button class="btn-leave-reject" (click)="openApproveReject(selectedLeave, 'reject')">Reject</button>
+            </div>
+            <div class="drawer-actions" *ngIf="selectedLeave.status === 'APPROVED'">
+              <button class="btn-leave-cancel" (click)="cancelLeave(selectedLeave)">Cancel Leave</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CREATE LEAVE DIALOG ===== -->
+      <div class="drawer-overlay" *ngIf="showCreateLeave" (click)="closeCreateLeave()">
+        <div class="create-panel" (click)="$event.stopPropagation()">
+          <div class="drawer-header">
+            <h2>Create Leave Request</h2>
+            <button class="close-btn" (click)="closeCreateLeave()" aria-label="Close">&times;</button>
+          </div>
+          <div class="drawer-body">
+            <div class="form-group">
+              <label>Staff Member *</label>
+              <select [(ngModel)]="createLeaveForm.staffId" class="form-input">
+                <option value="">Select staff...</option>
+                <option *ngFor="let s of staffList" [value]="s.id">{{ s.fullName }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Leave Type *</label>
+              <select [(ngModel)]="createLeaveForm.leaveType" class="form-input">
+                <option *ngFor="let type of ['CASUAL','SICK','MEDICAL','VACATION','MATERNITY','PATERNITY','UNPAID','EMERGENCY','PUBLIC_HOLIDAY','HALF_DAY']" [value]="type">{{ leaveTypeLabels[type] }}</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Start Date *</label>
+                <input type="date" [(ngModel)]="createLeaveForm.startDate" class="form-input">
+              </div>
+              <div class="form-group">
+                <label>End Date</label>
+                <input type="date" [(ngModel)]="createLeaveForm.endDate" class="form-input">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" [(ngModel)]="createLeaveForm.halfDay"> Half Day
+              </label>
+            </div>
+            <div class="form-group">
+              <label>Reason</label>
+              <textarea [(ngModel)]="createLeaveForm.reason" class="form-input" rows="2" placeholder="Reason for leave..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea [(ngModel)]="createLeaveForm.notes" class="form-input" rows="2" placeholder="Additional notes..."></textarea>
+            </div>
+            <div class="form-error" *ngIf="createLeaveError">{{ createLeaveError }}</div>
+            <div class="drawer-actions">
+              <button class="btn-leave-cancel" (click)="closeCreateLeave()">Cancel</button>
+              <button class="btn-leave-approve" [disabled]="createLeaveBusy" (click)="submitCreateLeave()">
+                {{ createLeaveBusy ? 'Submitting...' : 'Submit Request' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== APPROVE/REJECT DIALOG ===== -->
+      <div class="drawer-overlay" *ngIf="showApproveReject" (click)="closeApproveReject()">
+        <div class="create-panel" (click)="$event.stopPropagation()" style="max-width:400px">
+          <div class="drawer-header">
+            <h2>{{ approveRejectMode === 'approve' ? 'Approve' : 'Reject' }} Leave</h2>
+            <button class="close-btn" (click)="closeApproveReject()" aria-label="Close">&times;</button>
+          </div>
+          <div class="drawer-body">
+            <p style="color:#64748b;margin:0 0 16px;font-size:14px">
+              {{ approveRejectMode === 'approve' ? 'Approve' : 'Reject' }} leave for <strong>{{ selectedLeave?.staff?.fullName || 'Staff' }}</strong>?
+            </p>
+            <div class="form-group">
+              <label>{{ approveRejectMode === 'approve' ? 'Notes (optional)' : 'Reason *' }}</label>
+              <textarea [(ngModel)]="approveRejectNotes" class="form-input" rows="3"
+                [placeholder]="approveRejectMode === 'approve' ? 'Optional notes...' : 'Reason for rejection...'"></textarea>
+            </div>
+            <div class="form-error" *ngIf="approveRejectError">{{ approveRejectError }}</div>
+            <div class="drawer-actions">
+              <button class="btn-leave-cancel" (click)="closeApproveReject()">Cancel</button>
+              <button [class]="approveRejectMode === 'approve' ? 'btn-leave-approve' : 'btn-leave-reject'"
+                [disabled]="approveRejectBusy" (click)="submitApproveReject()">
+                {{ approveRejectBusy ? 'Processing...' : (approveRejectMode === 'approve' ? 'Approve' : 'Reject') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   `,
   styles: [`
-    .page{display:flex;flex-direction:column;gap:20px;flex:1;min-height:0}
-    h1{font-size:34px;margin:0}
+    .page{display:flex;flex-direction:column;gap:20px;flex:1;min-height:0;position:relative;background:radial-gradient(1200px 600px at 0% 0%,rgba(99,102,241,.05),transparent 55%),radial-gradient(1000px 600px at 100% 100%,rgba(168,85,247,.05),transparent 55%)}
+    h1{font-size:34px;margin:0;background:linear-gradient(120deg,#1e1b4b 0%,#4338ca 45%,#7c3aed 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.02em}
     p{color:#6b7280;margin:6px 0 0}
     .today-btn,.nav-btn{border:1px solid #e5e7eb;border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:white}
     .tabs-divider{width:1px;height:28px;background:#e5e7eb;margin:0 8px}
@@ -1457,7 +1668,7 @@ import {
       border-radius:50%;animation:spin .7s linear infinite;
     }
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    
     .error{
       background:linear-gradient(135deg,rgba(254,242,242,.9),rgba(254,226,226,.9));
       border:1px solid rgba(239,68,68,.2);border-radius:20px;padding:28px;
@@ -1488,18 +1699,14 @@ import {
     .staff-filter-pill{border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#6366f1;transition:all .2s;box-shadow:0 2px 6px rgba(0,0,0,.04)}
     .staff-filter-pill.active{background:linear-gradient(135deg,#4f46e5,#6366f1);color:white;border-color:#4f46e5;box-shadow:0 4px 14px rgba(79,70,229,.3)}
     .staff-filter-pill:hover:not(.active){background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.3);box-shadow:0 2px 8px rgba(99,102,241,.12)}
-    .staff-filter-pill:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .sf-spacer{flex:1}
     .walkin-btn{border:0;border-radius:20px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;background:linear-gradient(120deg,#059669,#10b981);color:white;transition:background .15s,box-shadow .15s,transform .15s;box-shadow:0 3px 10px rgba(5,150,105,.3)}
     .walkin-btn:hover{background:linear-gradient(120deg,#047857,#059669);box-shadow:0 5px 14px rgba(5,150,105,.4);transform:translateY(-1px)}
-    .walkin-btn:focus-visible{outline:2px solid #059669;outline-offset:2px}
     .waitlist-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#6366f1;transition:all .2s;margin-left:6px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .waitlist-toggle-btn:hover{background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.3);box-shadow:0 4px 12px rgba(99,102,241,.12)}
-    .waitlist-toggle-btn:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
     .waitlist-toggle-btn.active{background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(168,85,247,.08));border-color:#6366f1;color:#4338ca;box-shadow:0 4px 12px rgba(99,102,241,.2)}
     .ai-toggle-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.9);color:#6366f1;transition:all .2s;margin-left:6px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .ai-toggle-btn:hover{background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.3);box-shadow:0 4px 12px rgba(99,102,241,.12)}
-    .ai-toggle-btn:focus-visible{outline:2px solid #7c3aed;outline-offset:2px}
     .ai-toggle-btn.active{background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(167,139,250,.06));border-color:#7c3aed;color:#6d28d9;box-shadow:0 4px 12px rgba(124,58,237,.2)}
     .ai-icon{font-size:14px}
     .dv-sidebar-stack{display:flex;flex-direction:column;border-left:1px solid rgba(99,102,241,.08);overflow-y:auto}
@@ -1516,27 +1723,46 @@ import {
       background:linear-gradient(180deg,#ffffff 0%,#f8faff 50%,#f0f4ff 100%);
       border:1px solid rgba(99,102,241,.15);border-radius:24px;display:flex;flex-direction:column;
       min-height:520px;flex:1;box-shadow:0 12px 40px rgba(79,70,229,.08),0 4px 12px rgba(0,0,0,.04);
-      overflow:hidden;
+      overflow:hidden;position:relative;
     }
+    .day-view::after{
+      content:'';position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border-radius:inherit;
+      background:
+        radial-gradient(ellipse 500px 300px at 15% 10%,rgba(99,102,241,.05),transparent 60%),
+        radial-gradient(ellipse 400px 250px at 85% 90%,rgba(168,85,247,.04),transparent 60%);
+      opacity:0;transition:opacity .4s ease;z-index:0;
+    }
+    .day-view:hover::after{opacity:1}
+    .day-view > *{position:relative;z-index:1}
     .dv-container{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c7d2fe transparent}
-    .dv-container::-webkit-scrollbar{width:6px;height:6px}
-    .dv-container::-webkit-scrollbar-track{background:transparent}
-    .dv-container::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#c7d2fe,#a5b4fc);border-radius:999px}
+    .dv-container::-webkit-scrollbar{width:8px;height:8px}
+    .dv-container::-webkit-scrollbar-track{background:rgba(99,102,241,.03);border-radius:4px}
+    .dv-container::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#c7d2fe,#a5b4fc);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+    .dv-container::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#a5b4fc,#818cf8);border:2px solid transparent;background-clip:padding-box}
     .dv-time-col{flex-shrink:0;width:64px;border-right:2px solid rgba(99,102,241,.12);background:linear-gradient(180deg,#fafbff,#f0f4ff);position:sticky;left:0;z-index:3;box-shadow:4px 0 16px rgba(79,70,229,.06)}
-    .dv-header-gap{height:56px;border-bottom:2px solid rgba(99,102,241,.1)}
-    .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(99,102,241,.06);cursor:pointer;transition:all .15s}
+    .dv-header-gap{height:56px;border-bottom:2px solid rgba(99,102,241,.1);position:sticky;top:0;z-index:4;background:linear-gradient(180deg,#fafbff,#f0f4ff)}
+    .dv-time-row{height:56px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(99,102,241,.06);cursor:pointer;transition:all .15s;position:relative}
+    .dv-time-row::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(99,102,241,.04),transparent)}
     .dv-time-row:hover{background:linear-gradient(90deg,rgba(99,102,241,.08),transparent)}
     .dv-time-label{font-size:11px;color:#6366f1;font-weight:700;letter-spacing:.02em}
-    .dv-staff-scroll{display:flex;flex:1;min-width:0}
-    .dv-staff-col{min-width:240px;flex:0 0 240px;border-right:1px solid rgba(99,102,241,.08);transition:all .2s}
-    .dv-staff-col:hover{background:rgba(248,250,252,.6)}
+    .dv-staff-scroll{display:flex;flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#c7d2fe transparent}
+    .dv-staff-scroll::-webkit-scrollbar{height:8px}
+    .dv-staff-scroll::-webkit-scrollbar-track{background:rgba(99,102,241,.03);border-radius:4px}
+    .dv-staff-scroll::-webkit-scrollbar-thumb{background:linear-gradient(90deg,#c7d2fe,#a5b4fc);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+    .dv-staff-scroll::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,#a5b4fc,#818cf8);border:2px solid transparent;background-clip:padding-box}
+    .dv-staff-col{min-width:240px;flex:0 0 240px;border-right:1px solid rgba(99,102,241,.08);transition:all .2s;position:relative}
+    .dv-staff-col::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,rgba(99,102,241,.12),rgba(99,102,241,.04),transparent);pointer-events:none}
+    .dv-staff-col:last-child::after{display:none}
+    .dv-staff-col:nth-child(odd){background:rgba(248,250,252,.2)}
+    .dv-staff-col:nth-child(even){background:rgba(99,102,241,.015)}
+    @media(hover:hover){.dv-staff-col:hover{background:rgba(248,250,252,.5)}}
     .dv-staff-col:last-child{border-right:0}
     .dv-staff-header{
       min-height:56px;display:flex;align-items:center;font-weight:700;font-size:13px;
       border-bottom:2px solid rgba(99,102,241,.1);
       background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(248,250,252,.9));
       position:sticky;top:0;z-index:2;padding:10px 14px;
-      box-shadow:0 2px 8px rgba(79,70,229,.06);backdrop-filter:blur(8px);
+      box-shadow:0 2px 8px rgba(79,70,229,.06);backdrop-filter:blur(12px);
     }
     .staff-header-content{display:flex;align-items:center;gap:10px;width:100%}
     .staff-avatar{
@@ -1558,27 +1784,39 @@ import {
     .dv-hour-row{
       height:56px;border-bottom:1px solid rgba(99,102,241,.06);padding:3px 8px;
       display:flex;flex-wrap:wrap;align-content:flex-start;gap:2px;overflow:hidden;
-      cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1);
+      cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1);position:relative;
     }
-    .dv-hour-row:hover{
-      background:linear-gradient(90deg,rgba(99,102,241,.06),rgba(168,85,247,.04),transparent);
-      box-shadow:inset 0 0 0 1px rgba(99,102,241,.15),0 0 20px rgba(99,102,241,.08);
+    .dv-hour-row::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;opacity:0;transition:opacity .2s ease;pointer-events:none}
+    @media(hover:hover){
+      .dv-hour-row:hover{
+        background:linear-gradient(90deg,rgba(99,102,241,.06),rgba(168,85,247,.04),transparent);
+        box-shadow:inset 0 0 0 1px rgba(99,102,241,.15),0 0 20px rgba(99,102,241,.08);
+      }
+      .dv-hour-row:hover::before{opacity:1;background:linear-gradient(90deg,rgba(99,102,241,.04),transparent 40%)}
     }
     .dv-hour-row-alt{background:rgba(248,250,252,.5)}
-    .dv-hour-row-alt:hover{
-      background:linear-gradient(90deg,rgba(99,102,241,.08),rgba(168,85,247,.05),transparent);
-      box-shadow:inset 0 0 0 1px rgba(99,102,241,.18),0 0 24px rgba(99,102,241,.1);
+    @media(hover:hover){
+      .dv-hour-row-alt:hover{
+        background:linear-gradient(90deg,rgba(99,102,241,.08),rgba(168,85,247,.05),transparent);
+        box-shadow:inset 0 0 0 1px rgba(99,102,241,.18),0 0 24px rgba(99,102,241,.1);
+      }
     }
     .dv-hour-busy{background:rgba(99,102,241,.04)!important}
-    .dv-hour-busy:hover{background:rgba(99,102,241,.08)!important}
+    @media(hover:hover){.dv-hour-busy:hover{background:rgba(99,102,241,.08)!important}}
     .dv-unassigned-col{background:#fafcff}
-    .dv-unassigned-col .dv-staff-header{background:#eef2ff;color:#4338ca;font-style:italic;border-left:3px solid #6366f1}
+    .dv-unassigned-col .dv-staff-header{background:linear-gradient(180deg,rgba(238,242,255,.95),rgba(224,231,255,.9));color:#4338ca;font-style:italic;border-left:3px solid #6366f1}
     .dv-unassigned-col .booking-chip{opacity:.85}
     .dv-unassigned-col .dv-bookings-layer .booking-chip{opacity:.85}
-    .dv-empty-staff{padding:48px;text-align:center;color:#6366f1}
+    .dv-empty-staff{padding:48px 32px;text-align:center;color:#6366f1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
     .dv-empty-staff strong{display:block;font-size:16px;color:#1e1b4b;margin-bottom:4px}
-    .dv-empty-staff p{font-size:13px;color:#a5b4fc}
-    .dv-empty-bookings{padding:32px 24px;text-align:center;color:#6366f1;background:rgba(255,255,255,.8);border-radius:16px;border:1px solid rgba(99,102,241,.08);margin:12px;backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(79,70,229,.06)}
+    .dv-empty-staff p{font-size:13px;color:#a5b4fc;margin:0}
+    .dv-empty-bookings{
+      padding:40px 32px;text-align:center;color:#6366f1;
+      background:linear-gradient(135deg,rgba(255,255,255,.85),rgba(248,250,252,.8));
+      border-radius:20px;border:1px dashed rgba(99,102,241,.15);margin:16px;
+      backdrop-filter:blur(12px);
+      box-shadow:0 4px 20px rgba(79,70,229,.06),inset 0 1px 0 rgba(255,255,255,.8);
+    }
     .dv-empty-bookings strong{display:block;font-size:14px;color:#1e1b4b;margin-bottom:4px}
     .dv-empty-bookings p{margin:0 0 12px}
     .empty-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px}
@@ -1615,21 +1853,49 @@ import {
     .dv-bookings-layer .booking-chip span{display:block;font-size:9px;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
     @media(hover:hover){.dv-bookings-layer .booking-chip:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:20}}
     .dv-bookings-layer .booking-chip:active{transform:scale(.97)}
-    .booking-chip:focus-visible,.week-booking:focus-visible,.month-preview-chip:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:6px}
-    .dv-bookings-layer .booking-chip:focus-visible{outline:2px solid #6366f1;outline-offset:1px;z-index:3}
     .current-time-line{
       position:absolute;left:0;right:0;height:3px;
-      background:linear-gradient(90deg,#ef4444,#f97316,#ef4444);
+      background:linear-gradient(90deg,rgba(239,68,68,.6),#ef4444 10%,#f97316 50%,#ef4444 90%,rgba(239,68,68,.6));
       z-index:5;pointer-events:none;border-radius:2px;
-      box-shadow:0 0 12px rgba(239,68,68,.5),0 0 4px rgba(239,68,68,.8);
+      box-shadow:0 0 12px rgba(239,68,68,.5),0 0 4px rgba(239,68,68,.8),0 0 28px 2px rgba(239,68,68,.28);
+    }
+    .current-time-line::before{
+      content:'';position:absolute;left:0;top:-6px;width:100%;height:15px;
+      background:linear-gradient(90deg,transparent,rgba(239,68,68,.06),transparent);
+      pointer-events:none;
+    }
+    .current-time-line::after{
+      content:'';position:absolute;left:-4px;top:50%;transform:translateY(-50%);
+      width:11px;height:11px;border-radius:50%;
+      background:radial-gradient(circle,#ef4444,#dc2626);
+      box-shadow:0 0 8px rgba(239,68,68,.6),0 0 2px rgba(239,68,68,.9);
+      animation:timeDotPulse 2s ease-in-out infinite;
+    }
+    @keyframes timeDotPulse{
+      0%,100%{box-shadow:0 0 8px rgba(239,68,68,.6),0 0 2px rgba(239,68,68,.9);transform:translateY(-50%) scale(1)}
+      50%{box-shadow:0 0 16px rgba(239,68,68,.8),0 0 4px rgba(239,68,68,1);transform:translateY(-50%) scale(1.15)}
     }
     .current-time-label{
-      position:absolute;right:6px;top:-10px;
+      position:absolute;right:6px;top:-12px;
       background:linear-gradient(135deg,#ef4444,#f97316);
       color:white;font-size:10px;font-weight:800;padding:2px 8px;
       border-radius:999px;pointer-events:none;line-height:1.4;
       box-shadow:0 2px 8px rgba(239,68,68,.4);
+      animation:labelFloat 3s ease-in-out infinite;
     }
+    @keyframes labelFloat{
+      0%,100%{transform:translateY(0)}
+      50%{transform:translateY(-1px)}
+    }
+    .has-conflict{
+      box-shadow:0 0 0 2px rgba(239,68,68,.4),0 0 12px rgba(239,68,68,.15)!important;
+      animation:conflictPulse 2s ease-in-out infinite;
+    }
+    @keyframes conflictPulse{
+      0%,100%{box-shadow:0 0 0 2px rgba(239,68,68,.4),0 0 12px rgba(239,68,68,.15)}
+      50%{box-shadow:0 0 0 3px rgba(239,68,68,.25),0 0 20px rgba(239,68,68,.1)}
+    }
+    .conflict-badge{position:absolute;top:2px;right:2px;font-size:12px;color:#e53935;z-index:2;filter:drop-shadow(0 1px 2px rgba(229,57,53,.3))}
     .dv-bookings-layer .booking-chip{touch-action:none;cursor:grab}
     .dv-bookings-layer .booking-chip.dragging-booking{opacity:.35;pointer-events:none;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.12)}
     .calendar-dragging{cursor:grabbing!important;-webkit-user-select:none;user-select:none}
@@ -1698,7 +1964,10 @@ import {
       background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;
       box-shadow:0 2px 8px rgba(99,102,241,.3);
     }
-    .week-body{display:grid;grid-template-columns:repeat(7,1fr);min-height:320px;position:relative;z-index:1}
+    .week-body{display:grid;grid-template-columns:repeat(7,1fr);min-height:320px;position:relative;z-index:1;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#c7d2fe transparent}
+    .week-body::-webkit-scrollbar{height:8px}
+    .week-body::-webkit-scrollbar-track{background:rgba(99,102,241,.03);border-radius:4px}
+    .week-body::-webkit-scrollbar-thumb{background:linear-gradient(90deg,#c7d2fe,#a5b4fc);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
     .week-day-col{
       padding:10px;border-right:1px solid rgba(99,102,241,.05);min-height:220px;
       transition:background .25s ease;
@@ -1834,7 +2103,10 @@ import {
       opacity:0;transition:opacity .4s ease;
     }
     .month-view:hover::after{opacity:1}
-    .month-grid{display:grid;grid-template-columns:repeat(7,1fr);position:relative;z-index:1}
+    .month-grid{display:grid;grid-template-columns:repeat(7,1fr);position:relative;z-index:1;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#c7d2fe transparent}
+    .month-grid::-webkit-scrollbar{height:8px}
+    .month-grid::-webkit-scrollbar-track{background:rgba(99,102,241,.03);border-radius:4px}
+    .month-grid::-webkit-scrollbar-thumb{background:linear-gradient(90deg,#c7d2fe,#a5b4fc);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
     .weekday-label{
       padding:14px 12px;text-align:center;font-size:12px;font-weight:700;
       color:#6366f1;
@@ -2005,7 +2277,12 @@ import {
       background:linear-gradient(180deg,#ffffff,#f8faff);width:min(460px,100%);max-height:100dvh;overflow-y:auto;
       -webkit-overflow-scrolling:touch;animation:slideIn .25s ease;
       box-shadow:-8px 0 32px rgba(79,70,229,.1),-2px 0 8px rgba(0,0,0,.05);
+      scrollbar-width:thin;scrollbar-color:#c7d2fe transparent;
     }
+    .drawer-panel::-webkit-scrollbar{width:8px}
+    .drawer-panel::-webkit-scrollbar-track{background:rgba(99,102,241,.03);border-radius:4px}
+    .drawer-panel::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#c7d2fe,#a5b4fc);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+    .drawer-panel::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#a5b4fc,#818cf8);border:2px solid transparent;background-clip:padding-box}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
     .drawer-header{
       display:flex;justify-content:space-between;align-items:center;padding:24px 28px;
@@ -2220,17 +2497,15 @@ import {
     }
     @media(max-width:768px){
       .today-btn,.nav-btn{padding:8px 12px;font-size:13px;min-height:40px}
-      .refresh-btn{padding:8px 12px;font-size:12px;min-height:40px}
-      .updated-text{font-size:10px}
       .tabs button{padding:8px 14px;font-size:12px;min-height:40px}
-      .vm-btn{padding:6px 12px!important}
       .dv-staff-col{min-width:150px;flex:0 0 150px}
       .dv-hour-row{height:44px}
       .dv-time-row{height:44px}
       .dv-time-col{width:48px}
       .dv-time-label{font-size:10px}
-      .day-view{border-radius:12px}
-      .week-view,.month-view{border-radius:12px;border-left:0;border-right:0}
+      .dv-header-gap{height:48px}
+      .day-view{border-radius:16px}
+      .week-view,.month-view{border-radius:14px;border-left:0;border-right:0}
       .week-day-header{padding:12px 6px}
       .week-day-header strong{font-size:11px}
       .week-day-date{font-size:10px}
@@ -2266,24 +2541,27 @@ import {
       .sf-spacer{display:none}
       .walkin-btn,.waitlist-toggle-btn,.ai-toggle-btn{padding:4px 10px;font-size:11px}
       .waitlist-toggle-btn,.ai-toggle-btn{margin-left:0}
-      .dv-sidebar-stack{min-width:200px;max-width:260px;border-left-width:0;border-top:1px solid #e0e0e0}
+      .dv-sidebar-stack{min-width:200px;max-width:260px;border-left-width:0;border-top:1px solid rgba(99,102,241,.1)}
       .dv-content-wrapper{flex-direction:column}
       .dv-container{overflow:auto;-webkit-overflow-scrolling:touch}
       .drawer-panel{max-height:100dvh}
       .res-filter{font-size:12px;padding:6px 10px}
+      .premium-header{border-radius:16px;padding:16px 18px}
+      .header-branding h1{font-size:22px}
+      .header-branding p{font-size:12px}
+      .nav-section{padding:3px 6px;gap:4px}
+      .view-selector{padding:2px;gap:1px}
+      .view-btn,.mode-btn{padding:6px 10px;font-size:11px}
     }
     @media(max-width:640px){
       .page{gap:12px}
       .today-btn,.nav-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1;text-align:center}
-      .refresh-btn{padding:6px 10px;font-size:11px;min-height:34px;flex:1}
-      .updated-text{display:none}
-      .vm-btn{padding:4px 8px!important}
       .filter-bar{flex-wrap:wrap;gap:4px}
       .branch-filter,.status-filter{font-size:11px;min-width:0;width:100%;padding:6px 10px}
       .staff-filter-bar{padding:6px;gap:3px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;justify-content:flex-start}
       .staff-filter-pill{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
       .walkin-btn,.waitlist-toggle-btn,.ai-toggle-btn{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0}
-      .day-view{border-radius:10px;border-left:0;border-right:0}
+      .day-view{border-radius:12px;border-left:0;border-right:0}
       .dv-time-col{width:36px}
       .dv-time-label{font-size:9px}
       .dv-staff-col{min-width:130px;flex:0 0 130px}
@@ -2294,7 +2572,7 @@ import {
       .staff-avatar{width:22px;height:22px;font-size:10px}
       .staff-header-name{font-size:11px}
       .staff-header-meta{font-size:8px}
-      .dv-empty-bookings{padding:16px;font-size:12px}
+      .dv-empty-bookings{padding:16px;font-size:12px;border-radius:14px;margin:8px}
       .dv-empty-staff{padding:24px;font-size:12px}
       .week-view,.month-view{border-radius:10px;border-left:0;border-right:0}
       .week-day-header{padding:8px 4px}
@@ -2321,13 +2599,21 @@ import {
       .month-add-empty{font-size:8px;padding:2px;border-radius:6px}
       .drawer-panel{max-height:100dvh;border-radius:0}
       .drawer-centered .create-panel{width:100%;max-height:100dvh;border-radius:0}
-      .dv-sidebar-stack{min-width:100%;max-width:100%;border-top:1px solid #e0e0e0;max-height:300px}
+      .dv-sidebar-stack{min-width:100%;max-width:100%;border-top:1px solid rgba(99,102,241,.1);max-height:300px}
+      .premium-header{border-radius:12px;padding:14px 16px}
+      .header-top{flex-direction:column;gap:10px}
+      .header-branding h1{font-size:20px}
+      .header-branding p{font-size:11px}
+      .header-toolbar{flex-direction:column;gap:8px}
+      .nav-section{width:100%;justify-content:center}
+      .view-selector{width:100%;justify-content:center;flex-wrap:wrap}
+      .view-btn,.mode-btn{padding:5px 8px;font-size:10px}
+      .date-display{font-size:12px;min-width:auto}
     }
     .slot-toggle{display:inline-flex;gap:2px;background:rgba(99,102,241,.06);border-radius:8px;padding:2px;border:1px solid rgba(99,102,241,.08)}
     .slot-btn{border:0;background:transparent;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;color:#6b7280;transition:all .12s}
     .slot-btn.active{background:#4f46e5;color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
     .slot-btn:hover:not(.active){color:#4f46e5}
-    .slot-btn:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .slot-label{font-size:11px;font-weight:700;color:#6b7280;margin-right:2px}
     .dh-left{flex:1;min-width:0}
     .dh-left h2{margin:0;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2346,7 +2632,6 @@ import {
     }
     .action-menu-dropdown button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:all .15s}
     .action-menu-dropdown button:hover{background:rgba(99,102,241,.06);color:#4f46e5}
-    .action-menu-dropdown button:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .am-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
     .client-summary-card{display:flex;align-items:center;gap:14px}
     .cs-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#0b0b0b,#1e1b4b);color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;box-shadow:0 4px 12px rgba(11,11,11,.3)}
@@ -2360,7 +2645,6 @@ import {
     .bill-tabs button{border:0;background:transparent;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#6366f1;transition:all .15s}
     .bill-tabs button.active{background:rgba(99,102,241,.08);color:#0b0b0b;box-shadow:0 1px 4px rgba(99,102,241,.1)}
     .bill-tabs button:hover:not(.active){color:#4f46e5}
-    .bill-tabs button:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:4px}
     .bill-svc-header{display:flex;gap:8px;padding:6px 0;font-size:10px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid rgba(99,102,241,.08)}
     .bsh-item{flex:2}
     .bsh-qty{width:36px;text-align:center}
@@ -2398,7 +2682,6 @@ import {
     .sw-buttons{display:flex;flex-wrap:wrap;gap:6px}
     .sw-btn{border:1px solid rgba(99,102,241,.15);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.9);color:#374151;transition:all .2s;flex:1;min-width:80px;text-align:center}
     .sw-btn:hover:not(:disabled){background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.3)}
-    .sw-btn:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
     .sw-btn:disabled{opacity:.4;cursor:default}
     .sw-btn.sw-active{background:linear-gradient(135deg,#0b0b0b,#1e1b4b);color:white;border-color:#1e1b4b;box-shadow:0 4px 12px rgba(11,11,11,.3)}
     .sw-confirmed.sw-active{background:linear-gradient(135deg,#2563eb,#3b82f6);border-color:#3b82f6;box-shadow:0 4px 12px rgba(59,130,246,.3)}
@@ -2451,7 +2734,6 @@ import {
     }
     .sd-option{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151;text-align:left;transition:all .15s}
     .sd-option:hover:not(:disabled){background:rgba(99,102,241,.06)}
-    .sd-option:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .sd-option:disabled{opacity:.35;cursor:default}
     .sd-option .sd-dot{width:8px;height:8px}
     .sd-option.sd-current{background:rgba(99,102,241,.06);font-weight:700}
@@ -2582,7 +2864,6 @@ import {
     .client-search-results,.service-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.98));border:1px solid rgba(99,102,241,.12);border-radius:12px;box-shadow:0 12px 32px rgba(79,70,229,.12),0 4px 12px rgba(0,0,0,.06);z-index:20;max-height:220px;overflow-y:auto;backdrop-filter:blur(12px)}
     .csr-item,.ssr-item{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;border:0;background:transparent;font-size:13px;cursor:pointer;text-align:left;transition:all .15s}
     .csr-item:hover,.ssr-item:hover{background:rgba(99,102,241,.06)}
-    .csr-item:focus-visible,.ssr-item:focus-visible{outline:2px solid #6366f1;outline-offset:-2px;border-radius:6px}
     .csr-main,.ssr-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
     .csr-name,.ssr-name{font-weight:700;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .csr-email,.ssr-category{color:#6366f1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2784,7 +3065,6 @@ import {
     .secondary-btn{background:rgba(255,255,255,.2);color:#fff}
     .secondary-btn:hover{background:rgba(255,255,255,.34)}
     .action-btn.active{background:#fff;color:#4f46e5}
-    .today-btn:focus-visible,.nav-btn:focus-visible,.action-btn:focus-visible,.primary-btn:focus-visible,.secondary-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
     .today-btn,.nav-btn,.action-btn,.primary-btn,.secondary-btn{box-shadow:0 4px 12px rgba(0,0,0,.12)}
     .today-btn:hover,.nav-btn:hover{box-shadow:0 6px 16px rgba(0,0,0,.22);transform:translateY(-1px)}
 
@@ -2889,7 +3169,6 @@ import {
       transition:all .12s;
     }
     .lsb-cal-day:hover{background:#eef2ff;color:#4f46e5}
-    .lsb-cal-day:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
     .lsb-cal-day.today{background:#4f46e5;color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(79,70,229,.35)}
     .lsb-cal-day.selected{background:#7c3aed;color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(124,58,237,.35)}
     .lsb-cal-day.today.selected{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
@@ -2925,7 +3204,6 @@ import {
       background:transparent;cursor:pointer;transition:all .2s;text-align:left;
     }
     .lsb-staff-item:hover{background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.15)}
-    .lsb-staff-item:focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:8px}
     .lsb-staff-item.active{
       background:linear-gradient(135deg,#eef2ff,#e0e7ff);
       border-color:#a5b4fc;box-shadow:0 2px 8px rgba(99,102,241,.18);
@@ -3621,6 +3899,91 @@ import {
       .sf-avatar:hover{transform:none!important}
     }
 
+    /* ===== STAFF LEAVE STYLES ===== */
+    .leave-block{
+      position:relative;z-index:2;pointer-events:auto;cursor:pointer;
+      transition:all .15s ease;margin:1px 4px;
+    }
+    @media(hover:hover){.leave-block:hover{transform:translateX(2px);filter:brightness(1.05)}}
+    .week-leave-block{
+      padding:3px 6px;margin:2px 4px;border-radius:8px;font-size:10px;font-weight:700;
+      cursor:pointer;transition:all .15s ease;pointer-events:auto;
+    }
+    @media(hover:hover){.week-leave-block:hover{transform:translateX(2px);filter:brightness(1.05)}}
+    .month-leave-dots{display:flex;gap:3px;align-items:center;margin-top:3px;flex-wrap:wrap}
+    .month-leave-dot{cursor:pointer;transition:transform .15s}
+    @media(hover:hover){.month-leave-dot:hover{transform:scale(1.4)}}
+    .month-leave-more{font-size:8px;color:#94a3b8;font-weight:700}
+
+    /* Leave Sidebar Cards */
+    .lsb-leave-card,.lsb-leave-legend-card{margin-top:0}
+    .lsb-leave-count{
+      background:linear-gradient(135deg,#f59e0b,#d97706);color:white;
+      font-size:10px;font-weight:800;min-width:20px;height:20px;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;padding:0 6px;
+    }
+    .lsb-leave-list{display:flex;flex-direction:column;gap:4px;padding:0 10px 10px}
+    .lsb-leave-item{
+      display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;
+      cursor:pointer;transition:all .15s;border:1px solid transparent;
+    }
+    .lsb-leave-item:hover{background:rgba(99,102,241,.05);border-color:rgba(99,102,241,.1)}
+    .lsb-leave-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px rgba(0,0,0,.1)}
+    .lsb-leave-info{display:flex;flex-direction:column;min-width:0;flex:1}
+    .lsb-leave-name{font-size:12px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .lsb-leave-type{font-size:10px;color:#64748b}
+    .lsb-leave-legend-list{display:flex;flex-direction:column;gap:4px;padding:0 10px 10px}
+    .lsb-leave-legend-item{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:#374151}
+    .lsb-leave-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px rgba(0,0,0,.1)}
+    .lsb-leave-legend-label{font-weight:600}
+
+    /* Leave Drawer */
+    .leave-detail-row{
+      display:flex;justify-content:space-between;align-items:flex-start;
+      padding:12px 0;border-bottom:1px solid rgba(99,102,241,.06);gap:12px;
+    }
+    .leave-detail-row:last-child{border-bottom:0}
+    .leave-detail-label{font-size:13px;color:#64748b;font-weight:500;flex-shrink:0}
+    .leave-detail-value{font-size:14px;font-weight:600;color:#0f172a;text-align:right}
+    .leave-type-badge,.leave-status-badge{
+      padding:4px 12px;border-radius:100px;font-size:12px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.03em;
+    }
+    .drawer-actions{display:flex;gap:10px;margin-top:20px}
+    .btn-leave-approve{
+      flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;
+      font-size:13px;min-height:44px;transition:all .2s;
+      background:linear-gradient(135deg,#10b981,#059669);color:white;
+      box-shadow:0 4px 12px rgba(16,185,129,.3);
+    }
+    .btn-leave-approve:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,185,129,.4)}
+    .btn-leave-approve:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .btn-leave-reject{
+      flex:1;border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;
+      font-size:13px;min-height:44px;transition:all .2s;
+      background:linear-gradient(135deg,#ef4444,#dc2626);color:white;
+      box-shadow:0 4px 12px rgba(239,68,68,.3);
+    }
+    .btn-leave-reject:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(239,68,68,.4)}
+    .btn-leave-reject:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .btn-leave-cancel{
+      flex:1;border:1px solid rgba(99,102,241,.15);border-radius:12px;padding:12px 16px;
+      font-weight:700;cursor:pointer;font-size:13px;min-height:44px;transition:all .2s;
+      background:rgba(99,102,241,.06);color:#374151;
+    }
+    .btn-leave-cancel:hover{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.25)}
+    .form-group{margin-bottom:14px}
+    .form-group label{display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+    .form-input{
+      width:100%;border:1px solid rgba(99,102,241,.12);border-radius:10px;padding:10px 14px;
+      font-size:13px;color:#0f172a;background:rgba(255,255,255,.8);transition:all .15s;
+    }
+    .form-input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .checkbox-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#0f172a;cursor:pointer;text-transform:none;letter-spacing:0}
+    .checkbox-label input[type=checkbox]{width:18px;height:18px;accent-color:#6366f1}
+    .form-error{color:#ef4444;font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.06);border-radius:10px;border:1px solid rgba(239,68,68,.15)}
+
     /* --- BONUS: SMOOTH FOCUS RING TRANSITION --- */
     :focus-visible{
       transition:outline-offset .15s ease,box-shadow .15s ease;
@@ -3635,6 +3998,7 @@ export class CalendarComponent {
   private servicesApi = inject(ServicesService);
   private http = inject(HttpClient);
   private auth = inject(AuthService);
+  private leaveApi = inject(LeaveService);
 
   get currentUser(): any {
     return this.auth.getUser();
@@ -3833,6 +4197,30 @@ export class CalendarComponent {
   lastUpdated = '';
   private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
+  /* ===== Staff Leave ===== */
+  staffLeaves: StaffLeave[] = [];
+  todayLeaves: StaffLeave[] = [];
+  leaveLoading = false;
+  showLeavePanel = false;
+  showLeaveDrawer = false;
+  selectedLeave: StaffLeave | null = null;
+  leaveFilterType = '';
+  leaveFilterStatus = '';
+  showCreateLeave = false;
+  createLeaveBusy = false;
+  createLeaveError = '';
+  createLeaveForm: { staffId: string; leaveType: LeaveType; startDate: string; endDate: string; halfDay: boolean; reason: string; notes: string } = {
+    staffId: '', leaveType: 'CASUAL', startDate: '', endDate: '', halfDay: false, reason: '', notes: ''
+  };
+  showApproveReject = false;
+  approveRejectMode: 'approve' | 'reject' = 'approve';
+  approveRejectNotes = '';
+  approveRejectBusy = false;
+  approveRejectError = '';
+  readonly leaveTypeLabels = LEAVE_TYPE_LABELS;
+  readonly leaveTypeColors = LEAVE_TYPE_COLORS;
+  readonly leaveStatusColors = LEAVE_STATUS_COLORS;
+
   get visibleStaffList(): Staff[] {
     if (!this.selectedStaffFilter) return this.staffList;
     return this.staffList.filter(s => s.id === this.selectedStaffFilter);
@@ -3988,6 +4376,7 @@ export class CalendarComponent {
         error: () => { this.error = 'Calendar data unavailable.'; this.loading = false; },
       });
     }
+    this.loadLeaves();
 
     this.api.getCalendarSummary({ date: dateStr, ...(this.selectedBranchId ? { branchId: this.selectedBranchId } : {}) }).subscribe({
       next: (d) => this.summary = d,
@@ -4943,6 +5332,14 @@ export class CalendarComponent {
     this.dropConfirmError = '';
     this.dragGhostVisible = false;
     this.dragGhostBooking = null;
+  }
+
+  trackById(_index: number, item: any): string { return item?.id ?? _index; }
+  trackByIndex(index: number): number { return index; }
+  trackByDate(_index: number, d: { date?: Date | string } | Date): string {
+    if (d instanceof Date) return d.toISOString();
+    if (d && 'date' in d) return typeof d.date === 'string' ? d.date : d.date?.toISOString?.() ?? String(_index);
+    return String(_index);
   }
 
   staffInitials(staff: Staff): string {
@@ -6012,5 +6409,197 @@ export class CalendarComponent {
       const svc = this.serviceList.find(s => s.id === line.serviceId);
       if (svc) this.applyServiceToLine(index, svc);
     });
+  }
+
+  /* ===== Staff Leave Methods ===== */
+  loadLeaves() {
+    this.leaveLoading = true;
+    const dateStr = this.toLocalDateString(this.currentDate);
+    const query: any = {};
+    if (this.selectedBranchId) query.branchId = this.selectedBranchId;
+    query.from = dateStr;
+    const d = new Date(this.currentDate);
+    d.setDate(d.getDate() + (this.view === 'week' ? 7 : this.view === 'month' ? 45 : 1));
+    query.to = this.toLocalDateString(d);
+    this.leaveApi.getAll(query).subscribe({
+      next: (leaves) => { this.staffLeaves = leaves || []; this.leaveLoading = false; },
+      error: () => { this.staffLeaves = []; this.leaveLoading = false; },
+    });
+    this.leaveApi.getTodayLeaves(this.selectedBranchId || undefined).subscribe({
+      next: (leaves) => { this.todayLeaves = leaves || []; },
+      error: () => { this.todayLeaves = []; },
+    });
+  }
+
+  getLeavesForStaff(staffId: string): StaffLeave[] {
+    const today = new Date(this.currentDate);
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return this.staffLeaves.filter(l => {
+      if (l.staffId !== staffId) return false;
+      if (l.status === 'CANCELLED' || l.status === 'REJECTED') return false;
+      const start = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      return start < tomorrow && end >= today;
+    });
+  }
+
+  getLeaveBlockStyle(leave: StaffLeave): any {
+    const today = new Date(this.currentDate);
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(leave.startDate);
+    const end = new Date(leave.endDate);
+    const startDay = start < today ? 0 : Math.floor((start.getTime() - today.getTime()) / 86400000);
+    const endDay = end < today ? 0 : Math.floor((end.getTime() - today.getTime()) / 86400000);
+    const color = LEAVE_TYPE_COLORS[leave.leaveType] || '#6b7280';
+    if (leave.halfDay) {
+      return { 'background': color + '30', 'border-left': `3px solid ${color}`, 'color': color, 'font-size': '10px', 'padding': '2px 6px', 'border-radius': '6px', 'margin': '1px 4px', 'font-weight': '600', 'white-space': 'nowrap', 'overflow': 'hidden', 'text-overflow': 'ellipsis' };
+    }
+    return { 'background': color + '20', 'border-left': `3px solid ${color}`, 'color': color, 'font-size': '10px', 'padding': '2px 6px', 'border-radius': '6px', 'margin': '1px 4px', 'font-weight': '600', 'white-space': 'nowrap', 'overflow': 'hidden', 'text-overflow': 'ellipsis' };
+  }
+
+  getLeaveWeekBlockStyle(leave: StaffLeave, dayDate: Date): any {
+    const start = new Date(leave.startDate);
+    const end = new Date(leave.endDate);
+    const color = LEAVE_TYPE_COLORS[leave.leaveType] || '#6b7280';
+    const dayStr = this.toLocalDateString(dayDate);
+    const startStr = this.toLocalDateString(start);
+    const endStr = this.toLocalDateString(end);
+    const isStart = dayStr === startStr;
+    const isEnd = dayStr === endStr;
+    const borderRadius = `${isStart ? '8px' : '0'} ${isEnd ? '8px' : '0'} ${isEnd ? '8px' : '0'} ${isStart ? '8px' : '0'}`;
+    return { 'background': color + '25', 'border-left': isStart ? `3px solid ${color}` : 'none', 'border-right': isEnd ? `3px solid ${color}` : 'none', 'border-radius': borderRadius, 'padding': '3px 6px', 'font-size': '10px', 'font-weight': '600', 'color': color, 'white-space': 'nowrap', 'overflow': 'hidden', 'text-overflow': 'ellipsis' };
+  }
+
+  getLeaveMonthDotStyle(leave: StaffLeave): any {
+    const color = LEAVE_TYPE_COLORS[leave.leaveType] || '#6b7280';
+    return { 'background': color, 'width': '6px', 'height': '6px', 'border-radius': '50%', 'display': 'inline-block', 'box-shadow': `0 0 4px ${color}40` };
+  }
+
+  getLeaveCountForDay(dayDate: Date): number {
+    const dayStr = this.toLocalDateString(dayDate);
+    return this.staffLeaves.filter(l => {
+      if (l.status === 'CANCELLED' || l.status === 'REJECTED') return false;
+      const start = this.toLocalDateString(new Date(l.startDate));
+      const end = this.toLocalDateString(new Date(l.endDate));
+      return dayStr >= start && dayStr <= end;
+    }).length;
+  }
+
+  getStaffLeavesForDay(dayDate: Date): StaffLeave[] {
+    const dayStr = this.toLocalDateString(dayDate);
+    return this.staffLeaves.filter(l => {
+      if (l.status === 'CANCELLED' || l.status === 'REJECTED') return false;
+      const start = this.toLocalDateString(new Date(l.startDate));
+      const end = this.toLocalDateString(new Date(l.endDate));
+      return dayStr >= start && dayStr <= end;
+    });
+  }
+
+  get filteredStaffLeaves(): StaffLeave[] {
+    let leaves = this.staffLeaves;
+    if (this.leaveFilterType) leaves = leaves.filter(l => l.leaveType === this.leaveFilterType);
+    if (this.leaveFilterStatus) leaves = leaves.filter(l => l.status === this.leaveFilterStatus);
+    return leaves;
+  }
+
+  openLeaveDrawer(leave: StaffLeave) {
+    this.selectedLeave = leave;
+    this.showLeaveDrawer = true;
+  }
+
+  closeLeaveDrawer() {
+    this.selectedLeave = null;
+    this.showLeaveDrawer = false;
+  }
+
+  openCreateLeave() {
+    this.showCreateLeave = true;
+    this.createLeaveBusy = false;
+    this.createLeaveError = '';
+    const today = new Date();
+    this.createLeaveForm = {
+      staffId: this.staffList[0]?.id || '',
+      leaveType: 'CASUAL',
+      startDate: this.toLocalDateString(today),
+      endDate: this.toLocalDateString(today),
+      halfDay: false,
+      reason: '',
+      notes: ''
+    };
+  }
+
+  closeCreateLeave() {
+    this.showCreateLeave = false;
+    this.createLeaveError = '';
+  }
+
+  submitCreateLeave() {
+    if (!this.createLeaveForm.staffId || !this.createLeaveForm.startDate) {
+      this.createLeaveError = 'Staff and start date are required.';
+      return;
+    }
+    this.createLeaveBusy = true;
+    this.createLeaveError = '';
+    this.leaveApi.create({
+      staffId: this.createLeaveForm.staffId,
+      leaveType: this.createLeaveForm.leaveType,
+      startDate: this.createLeaveForm.startDate,
+      endDate: this.createLeaveForm.endDate || this.createLeaveForm.startDate,
+      halfDay: this.createLeaveForm.halfDay,
+      reason: this.createLeaveForm.reason,
+      notes: this.createLeaveForm.notes,
+    }).subscribe({
+      next: () => { this.createLeaveBusy = false; this.closeCreateLeave(); this.loadLeaves(); },
+      error: (e) => { this.createLeaveBusy = false; this.createLeaveError = e.error?.message || 'Failed to create leave.'; },
+    });
+  }
+
+  openApproveReject(leave: StaffLeave, mode: 'approve' | 'reject') {
+    this.selectedLeave = leave;
+    this.approveRejectMode = mode;
+    this.approveRejectNotes = '';
+    this.approveRejectBusy = false;
+    this.approveRejectError = '';
+    this.showApproveReject = true;
+  }
+
+  closeApproveReject() {
+    this.showApproveReject = false;
+    this.approveRejectError = '';
+  }
+
+  submitApproveReject() {
+    if (!this.selectedLeave) return;
+    this.approveRejectBusy = true;
+    this.approveRejectError = '';
+    if (this.approveRejectMode === 'approve') {
+      this.leaveApi.approve(this.selectedLeave.id, this.approveRejectNotes).subscribe({
+        next: () => { this.approveRejectBusy = false; this.closeApproveReject(); this.loadLeaves(); },
+        error: (e) => { this.approveRejectBusy = false; this.approveRejectError = e.error?.message || 'Failed to approve.'; },
+      });
+    } else {
+      this.leaveApi.reject(this.selectedLeave.id, this.approveRejectNotes || 'Rejected').subscribe({
+        next: () => { this.approveRejectBusy = false; this.closeApproveReject(); this.loadLeaves(); },
+        error: (e) => { this.approveRejectBusy = false; this.approveRejectError = e.error?.message || 'Failed to reject.'; },
+      });
+    }
+  }
+
+  cancelLeave(leave: StaffLeave) {
+    if (!confirm('Cancel this leave request?')) return;
+    this.leaveApi.cancel(leave.id).subscribe({
+      next: () => { this.loadLeaves(); this.closeLeaveDrawer(); },
+      error: (e) => { alert(e.error?.message || 'Failed to cancel leave.'); },
+    });
+  }
+
+  getLeaveStatusLabel(status: LeaveStatus): string {
+    return status.charAt(0) + status.slice(1).toLowerCase();
+  }
+
+  getLeaveTypeLabel(type: LeaveType): string {
+    return LEAVE_TYPE_LABELS[type] || type;
   }
 }
